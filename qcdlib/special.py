@@ -11,8 +11,7 @@ def get_psi(i,N):
 def beta(a,b):
     return gamma(a)*gamma(b)/gamma(a+b)
 
-
-
+euler = fp.euler
 
 
 

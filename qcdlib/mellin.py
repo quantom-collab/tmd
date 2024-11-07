@@ -53,6 +53,7 @@ class MELLIN:
             F = array of Mellin moments; type = array(complex float); len(F) = len(self.N)
         """
         #print 'MELL:',len(self.W),len(self.JAC)
+        #print(type(self.phase),type(x),type(self.N),type(F))
         return np.sum(np.imag(self.phase * x**(-self.N) * F)/np.pi * self.W * self.JAC)
     
     def invert_ein(self,xs,F):

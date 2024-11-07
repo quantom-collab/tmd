@@ -1,11 +1,11 @@
 import numpy as np
-from qcd.theory.qcdlib import params as par
-from qcd.theory.qcdlib import cfg
-from qcd.theory.qcdlib.alphaS  import ALPHAS
-from qcd.theory.qcdlib.dglap   import DGLAP
-from qcd.theory.qcdlib.kernels import KERNELS
-from qcd.theory.qcdlib.mellin  import MELLIN
-from qcd.theory.qcdlib.special import beta
+from qcdlib import params as par
+from qcdlib import cfg
+from qcdlib.alphaS  import ALPHAS
+from qcdlib.dglap   import DGLAP
+from qcdlib.kernels import KERNELS
+from qcdlib.mellin  import MELLIN
+from qcdlib.special import beta
 
 class PDF:
     

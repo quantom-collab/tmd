@@ -1,6 +1,6 @@
 import numpy as np
-from qcd.theory.qcdlib import params as par 
-from qcd.theory.qcdlib import cfg
+from qcdlib import params as par 
+from qcdlib import cfg
 
 class ALPHAS:
     """
