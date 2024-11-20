@@ -1,5 +1,12 @@
-# Vs Code
+# VSCode
+.vscode/
 *.code-workspace
+
+# Ignore output folders
+_*/
+
+# Mac
+.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
