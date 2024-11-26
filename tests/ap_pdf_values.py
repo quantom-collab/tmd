@@ -10,7 +10,7 @@ os.makedirs(output_folder, exist_ok=True)
 print(f"Creating folder '{output_folder}' to store the output.\n")
 
 # LHAPDF set
-lhapdf_set = "MMHT2014nnlo68cl"
+lhapdf_set = "MMHT2014lo68cl"
 
 # Initalise LHAPDF set
 pdf = lh.mkPDF(lhapdf_set, 0)
