@@ -3,6 +3,8 @@
  *          Chiara Bissolotti: chiara.bissolotti01@gmail.com
  */
 
+#if 0 // Guard to avoid vscode intellisense to show errors
+
 #include <LHAPDF/LHAPDF.h>
 #include <apfel/apfelxx.h>
 #include <yaml-cpp/yaml.h>
@@ -490,3 +492,4 @@ int main(int argc, char* argv[])
   return 0;
 }
 
+#endif #if 0

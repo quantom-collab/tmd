@@ -1,0 +1,13 @@
+u:
+  init_params: [0.25, 0.15, 0.12]
+  free_mask: [true, false, true]
+d:
+  init_params: [0.22, 0.12, 0.11, 0.05]
+  free_mask: [true, false, true, true]
+ubar:
+  init_params: [0.10, 0.10, 0.10]
+  free_mask: [true, false, true]
+dbar:
+  init_params: [0.10, 0.10, 0.10]
+  free_mask: [true, false, true]
+
