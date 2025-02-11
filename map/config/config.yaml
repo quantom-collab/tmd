@@ -1,13 +1,29 @@
-u:
-  init_params: [0.25, 0.15, 0.12]
-  free_mask: [true, false, true]
-d:
-  init_params: [0.22, 0.12, 0.11, 0.05]
-  free_mask: [true, false, true, true]
-ubar:
-  init_params: [0.10, 0.10, 0.10]
-  free_mask: [true, false, true]
-dbar:
-  init_params: [0.10, 0.10, 0.10]
-  free_mask: [true, false, true]
+hadron: proton
+zeta: 1.0  # The energy scale in GeV at which fNP is parametrized
+
+flavors:
+  u:
+    init_params: [0.25, 0.15, 0.12]
+    free_mask: [true, false, true]
+  d:
+    init_params: [0.22, 0.12, 0.11, 0.05]
+    free_mask: [true, false, true, true]
+  ubar:
+    init_params: [0.10, 0.10, 0.10]
+    free_mask: [true, false, true]
+  dbar:
+    init_params: [0.10, 0.10, 0.10]
+    free_mask: [true, false, true]
+  # c:
+  #   init_params: [0.30, 0.20, 0.15]
+  #   free_mask: [true, true, false]
+  # cbar:
+  #   init_params: [0.30, 0.20, 0.15]
+  #   free_mask: [true, true, false]
+  # s:
+  #   init_params: [0.20, 0.10, 0.10]
+  #   free_mask: [true, false, true]
+  # sbar:
+  #   init_params: [0.20, 0.10, 0.10]
+  #   free_mask: [true, false, true]
 

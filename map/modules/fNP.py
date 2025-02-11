@@ -105,7 +105,7 @@ class TMDPDFBase(nn.Module):
 # 2. Flavor-Specific Subclasses
 ###############################################################################
 # For example, you might want a different parameterization (even a different number of parameters)
-# for each flavor. Below are two examples.
+# for each flavor. It is assumed that flavors not explicitly subclassed use the base class.
 
 class TMDPDF_u(TMDPDFBase):
     def __init__(self, n_flavors: int = 1, init_params: list = None, free_mask: list = None):
@@ -152,9 +152,6 @@ class TMDPDF_d(TMDPDFBase):
         mask_val = (x < 1).type_as(result)
         return result * mask_val
 
-# Similarly define TMDPDF_ubar, TMDPDF_dbar, TMDPDF_c, TMDPDF_cbar, TMDPDF_s, TMDPDF_sbar.
-# We assume that flavors not explicitly subclassed use the base class.
-
 ###############################################################################
 # 3. Top-Level fNP Module
 ###############################################################################
@@ -184,6 +181,14 @@ class fNP(nn.Module):
         # to initialize internal machinery.
         super().__init__()
         
+        # Extract global settings.
+        self.hadron = config.get("hadron", "not_specified")
+        # Convert zeta to a torch.Tensor so that torch.log will work properly.
+        self.zeta = torch.tensor(config.get("zeta", 2.0), dtype=torch.float32)
+        
+        # Get the flavor-specific configuration dictionary.
+        flavor_config = config.get("flavors", {})
+       
         # Define the order of the flavors we want to support.
         # The order here is important because later we will update parameters using a tensor
         # where each row corresponds to a flavor in this specific order.
@@ -196,7 +201,7 @@ class fNP(nn.Module):
         for key in self.flavor_keys:
             # Retrieve the configuration for the current flavor.
             # If it is not provided in the config, use a default configuration.
-            cfg = config.get(key, None)
+            cfg = flavor_config.get(key, None)
             
             if cfg is None:
                 # If a flavor is not defined in the config, use a default 3-parameter parameterization.
@@ -243,9 +248,10 @@ class fNP(nn.Module):
             # Retrieve the module corresponding to the current flavor.
             module = self.flavors[key]
             
-            print(f"i: {i}")
-            print(f"key: {key}")
-            print(f"module: {module}")
+            # Check that the module (TMDPDFBase, TMDPDF_d(), etc. etc.) 
+            # is correctly registered. module is the parametrization class for
+            # the current flavor.
+            print(f"key: {key}, module: {module}")
             
             # Get the number of parameters that this flavor's module expects.
             n_params = module.n_params
@@ -266,18 +272,35 @@ class fNP(nn.Module):
             # For free parameters, we multiply by mask so that only free entries are updated.
             module.free_params.data.copy_( new_params.unsqueeze(0) * mask )
     
-    def forward(self, x: torch.Tensor, b: torch.Tensor, zeta: torch.Tensor, flavors: list = None):
+    def forward(self, x: torch.Tensor, b: torch.Tensor, flavors: list = None):
         """
         Evaluate the TMD PDF for the specified flavors.
         
-        If flavors is None, evaluate for all flavors (u, ubar, d, dbar, c, cbar, s, sbar).
-        Returns a dictionary mapping each flavor key to its computed TMD PDF.
+        Parameters:
+          - x, b: Input tensors for the computation.
+          - flavors (list, optional): A list of flavor keys to evaluate (e.g. ['u', 'd']).
+                                      If None, the module evaluates all flavors (i.e. all keys in self.flavor_keys).
+                                    
+        This method returns a dictionary mapping each flavor key to its computed TMD PDF.
+        Each submodule's forward method is called with flavor_idx = 0 (since each module was instantiated with n_flavors = 1).
         """
+        
+        # Initialize an empty dictionary to hold the outputs.
         outputs = {}
+        
+        # If no specific flavors are provided, default to all flavors.
         if flavors is None:
             flavors = self.flavor_keys
+            
+        # Loop over the requested flavors.    
         for key in flavors:
-            outputs[key] = self.flavors[key](x, b, zeta, flavor_idx=0)
+            # Call the forward method of the module corresponding to the current flavor.
+            # The flavor_idx argument is 0 because each flavor module was created with n_flavors = 1.
+            # Note that each module (TMDPDFBase, TMDPDF_u, TMDPDF_d) is called with the same zeta value
+            # stored in the fNP instance and read from the configuration file.
+            outputs[key] = self.flavors[key](x, b, self.zeta, flavor_idx = 0)
+        
+        # Return the dictionary mapping flavor keys to their computed outputs.    
         return outputs
 
 ###############################################################################
