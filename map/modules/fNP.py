@@ -183,10 +183,9 @@ class fNP(nn.Module):
         
         # Extract global settings.
         self.hadron = config.get("hadron", "not_specified")
-        # Convert zeta to a torch.Tensor so that torch.log will work properly.
-        self.zeta = torch.tensor(config.get("zeta", 2.0), dtype=torch.float32)
+        self.zeta = torch.tensor(config.get("zeta", 2.0), dtype=torch.float32) # Convert zeta to a torch.Tensor 
+                                                                               # so that torch.log will work properly.
         
-        # Get the flavor-specific configuration dictionary.
         flavor_config = config.get("flavors", {})
        
         # Define the order of the flavors we want to support.
@@ -302,18 +301,3 @@ class fNP(nn.Module):
         
         # Return the dictionary mapping flavor keys to their computed outputs.    
         return outputs
-
-###############################################################################
-# 4. YAML Configuration Loader
-###############################################################################
-def load_yaml_config(yaml_file_path: str) -> dict:
-    """
-    Load a YAML configuration file.
-    
-    The file should contain entries for each flavor.
-    """
-    
-    with open(yaml_file_path, 'r') as f:
-        config = yaml.safe_load(f)
-    return config
-
