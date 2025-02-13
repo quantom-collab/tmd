@@ -64,7 +64,7 @@ class TMDPDFBase(nn.Module):
         self.free_params.register_hook(lambda grad: grad * mask)
         
     @property
-    def params_tensor(self):
+    def get_params_tensor(self):
         """Return the full parameter tensor (shape: n_flavors x n_params)."""
         return self.fixed_params + self.free_params
 
@@ -86,7 +86,7 @@ class TMDPDFBase(nn.Module):
         """
         
         # Extract parameters for the flavor (p has shape (n_params,))
-        p = self.params_tensor[flavor_idx]
+        p = self.get_params_tensor[flavor_idx]
         
         # Default: use the first three parameters.
         g2 = p[0]
@@ -139,7 +139,7 @@ class TMDPDF_d(TMDPDFBase):
         Then:
             result = evolution * gaussian * modulation * x^alpha
         """
-        p = self.params_tensor[flavor_idx]  # shape (4,)
+        p = self.get_params_tensor[flavor_idx]  # shape (4,)
         g2 = p[0]
         a = p[1]
         alpha = p[2]
