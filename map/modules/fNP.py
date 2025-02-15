@@ -183,7 +183,7 @@ class fNP(nn.Module):
         
         # Extract global settings.
         self.hadron = config.get("hadron", "not_specified")
-        self.zeta = torch.tensor(config.get("zeta", 2.0), dtype=torch.float32) # Convert zeta to a torch.Tensor 
+        self.zeta = torch.tensor(config.get("zeta", 0.0), dtype=torch.float32) # Convert zeta to a torch.Tensor 
                                                                                # so that torch.log will work properly.
         
         flavor_config = config.get("flavors", {})
@@ -301,3 +301,4 @@ class fNP(nn.Module):
         
         # Return the dictionary mapping flavor keys to their computed outputs.    
         return outputs
+
