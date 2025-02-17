@@ -8,6 +8,7 @@ This file contains utility functions that are used in the map module
 import yaml
 import torch
 import matplotlib.pyplot as plt
+from IPython.display import display, Latex
 
 ###############################################################################
 # YAML Configuration Loader
@@ -67,3 +68,13 @@ def plot_fNP(model_fNP, x, flavors=None):
     plt.title('fNP vs. b for all flavors')
     plt.legend()
     plt.show()
+    
+ 
+###############################################################################
+# Show Latex Formulas in Jupyter Notebooks
+###############################################################################    
+def show_latex_formula(latex_formula: str):
+    """
+    Automatically render the LaTeX formula in a Jupyter notebook.
+    """
+    display(Latex(latex_formula))     

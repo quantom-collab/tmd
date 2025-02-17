@@ -18,13 +18,7 @@ class TMDPDFBase(nn.Module):
         """
         Base TMD PDF parametrization for a specific quark flavor.
         
-        The (default) forward function uses a simple model:
-        
-            evolution = NP_evol
-            gaussian  = exp(- N1 * b^2)
-            N(x)      = N0 * x^alpha * (1-x)^beta
-            f_NP(x, b_T) = evolution * N(x) * gaussian(bT)
-           
+        The (default) forward function uses a simple model.
         NP_evol is the shared evolution factor computed outside this class, 
         from the fNP_evolution module.   
         
@@ -72,7 +66,7 @@ class TMDPDFBase(nn.Module):
     def forward(self, x: torch.Tensor, b: torch.Tensor, zeta: torch.Tensor, 
             NP_evol: torch.Tensor, flavor_idx: int = 0) -> torch.Tensor:
         """
-        Forward pass for the pure Gaussian parametrization with x-dependent normalization.
+        Forward pass for the pure Gaussian parametrization.
         This is the default functional form; subclasses may override forward.
         
         For the given flavor (selected by flavor_idx, usually 0), extract the parameters
@@ -80,17 +74,11 @@ class TMDPDFBase(nn.Module):
         This implementation of the non-perturbative function f_{NP} for the unpolarized TMD PDF 
         assumes the following form:
         
-            f_{NP}(x, b_T) = NP_evol * N(x) * exp(-λ * b_T^2),
+            f_{NP}(x, b_T) = NP_evol * exp(-λ * b_T^2) * exp( g1 * ln(1/x)),
         
-        where the x-dependent normalization is defined as:
-        
-            N(x) = N_0 * x^(α) * (1-x)^(β),
-        
-        with the following parameter mapping:
-        - p[0] = N_0    : Overall normalization factor.
-        - p[1] = alpha  : Exponent governing the behavior at small x.
-        - p[2] = beta   : Exponent governing the behavior at large x.
-        - p[3] = lambda : Gaussian width parameter controlling the fall-off in b_T space.
+        Parameter mapping:
+        - p[0] = g1     : Exponent governing the x behavior.
+        - p[1] = lambda : Gaussian width parameter controlling the fall-off in b_T space.
         
         The shared evolution factor NP_evol is computed externally (from the fNP_evolution module)
         and is applied to all flavors to ensure a consistent evolution factor across the board.
@@ -108,19 +96,16 @@ class TMDPDFBase(nn.Module):
         A mask is applied so that if x ≥ 1 the result is forced to zero.
         """
         # Extract the parameter vector for the given flavor.
-        # We assume the parameter vector has 4 elements:
-        # [N_0, α, β, λ]
+        # We assume the parameter vector has 2 elements.
         p = self.get_params_tensor[flavor_idx]
         
         # Unpack the parameters.
-        N0    = p[0]  # Overall normalization factor.
-        alpha = p[1]  # Exponent for x.
-        beta  = p[2]  # Exponent for (1-x).
-        lam   = p[3]  # Gaussian width parameter (λ).
-        
-        # Compute the x-dependent normalization:
-        # N(x) = N0 * x^(α) * (1-x)^(β)
-        N_x = N0 * torch.pow(x, alpha) * torch.pow((1 - x), beta)
+        g1   = p[0]  # For x-dependence.
+        lam  = p[1]  # Gaussian width parameter (λ).
+         
+        # Compute the x-dependent width factor:
+        # T(x) = exp( g1 * ln(1/x))
+        T_x = torch.exp(g1 * torch.log(1/x))
         
         # Compute the Gaussian factor in b_T space:
         # G(b) = exp(-λ * b^2)
@@ -128,8 +113,8 @@ class TMDPDFBase(nn.Module):
         
         # Combine the factors with the shared evolution factor.
         # The final non-perturbative function is given by:
-        # f_NP(x, b_T) = NP_evol * N(x) * G(b)
-        result = NP_evol * N_x * G_b
+        # f_NP(x, b_T) = NP_evol * T(x) * G(b)
+        result = NP_evol * T_x * G_b
         
         # Create a mask so that if x >= 1 the output is forced to zero.
         # This is done elementwise: for each element, (x < 1) returns True (1.0) if x < 1, or False (0.0) otherwise.
@@ -138,6 +123,38 @@ class TMDPDFBase(nn.Module):
         # Return the masked result.
         return result * mask_val
 
+    @property
+    def latex_formula(self):
+        r"""
+        Returns a LaTeX string representing the analytic form of the non-perturbative function f_{NP}(x, b_T)
+        used in this parametrization.
+
+        The parametrization implemented in the forward method is given by:
+        
+            f_{NP}(x, b_T) = NP_{evol} \cdot \exp\left[-\lambda\, b_T^2\right] \cdot \exp\left[g_1\, \ln\frac{1}{x}\right]
+                           = NP_{evol} \cdot \exp\left[-\lambda\, b_T^2 + g_1\, \ln\frac{1}{x}\right],
+        
+        where:
+        - \(g_1\) is the parameter governing the x-dependence,
+        - \(\lambda\) is the Gaussian width parameter,
+        - \(NP_{evol}\) is the shared evolution factor computed externally.
+        
+        Note: This form ensures that at \(b_T = 0\),
+            \(\exp\left[-\lambda\, 0^2 + g_1\, \ln\frac{1}{x}\right] = \exp\left[g_1\, \ln\frac{1}{x}\right]\),
+            so if NP_{evol} is normalized to 1 and if one wishes to impose \(f_{NP}(x,0)=1\),
+            further normalization may be applied.
+        """
+        return r"""$$
+        f_{NP}(x,b_T) = NP_{evol} \cdot \exp\left[-\lambda\, b_T^2 + g_1\, \ln\frac{1}{x}\right]\,
+        $$
+        """
+
+    @property    
+    def show_latex_formula(self):
+        """
+        Automatically render the LaTeX formula in a Jupyter notebook.
+        """
+        display(Latex(self.latex_formula)) 
 
 ###############################################################################
 # 2. fNP Evolution Module
@@ -275,10 +292,7 @@ class TMDPDF_u(TMDPDFBase):
         sigma2 = p[9]
         sigma3 = p[10]
         
-        # Compute the three g-functions using the analytic expressions:
-        # g1  = N1  * (x/xhat)^(sigma1)  * ((1-x)/(1-xhat))^(alpha1^2)
-        # g1B = N1B * (x/xhat)^(sigma2)  * ((1-x)/(1-xhat))^(alpha2^2)
-        # g1C = N1C * (x/xhat)^(sigma3)  * ((1-x)/(1-xhat))^(alpha3^2)
+        # Compute the three g-functions 
         g1  = N1  * torch.pow(x / xhat, sigma1)  * torch.pow((1 - x) / (1 - xhat), alpha1 ** 2)
         g1B = N1B * torch.pow(x / xhat, sigma2)  * torch.pow((1 - x) / (1 - xhat), alpha2 ** 2)
         g1C = N1C * torch.pow(x / xhat, sigma3)  * torch.pow((1 - x) / (1 - xhat), alpha3 ** 2)
@@ -286,16 +300,12 @@ class TMDPDF_u(TMDPDFBase):
         # Compute (b/2)^2
         b_half_sq = (b / 2) ** 2
         
-        # Compute the numerator according to the formula:
-        # Numerator = g1 * exp(-g1 * (b/2)^2)
-        #           + (lam^2) * (g1B)^2 * (1 - g1B*(b/2)^2) * exp(-g1B*(b/2)^2)
-        #           + g1C * (lam2^2) * exp(-g1C*(b/2)^2)
+        # Compute the numerator
         num = (g1 * torch.exp(-g1 * b_half_sq)
                + (lam ** 2) * (g1B ** 2) * (1 - g1B * b_half_sq) * torch.exp(-g1B * b_half_sq)
                + g1C * (lam2 ** 2) * torch.exp(-g1C * b_half_sq))
         
-        # Compute the denominator according to the formula:
-        # Denom = g1 + (lam^2) * (g1B)^2 + g1C * (lam2^2)
+        # Compute the denominator
         den = g1 + (lam ** 2) * (g1B ** 2) + g1C * (lam2 ** 2)
         
         # Multiply by the shared evolution factor (NPevol) and divide by the denominator.
@@ -307,32 +317,11 @@ class TMDPDF_u(TMDPDFBase):
     
     @property
     def latex_formula(self):
-        """
+        r"""
         Return a LaTeX string representing the analytic form of the u-quark TMD PDF
-        parameterization. This formula is based on the C++ code provided.
+        parameterization. This formula is based on the C++ code of MAP22.
         
-        The formula is:
-        
-            f(x,b) = N_{Pevol} \cdot \frac{
-                g_1 \, \exp\left(-g_1\left(\frac{b}{2}\right)^2\right)
-              + \lambda^2 \, g_{1B}^2 \left(1 - g_{1B}\left(\frac{b}{2}\right)^2\right)
-                \exp\left(-g_{1B}\left(\frac{b}{2}\right)^2\right)
-              + g_{1C} \, \lambda_2^2 \, \exp\left(-g_{1C}\left(\frac{b}{2}\right)^2\right)
-            }{
-                g_1 + \lambda^2 \, g_{1B}^2 + g_{1C} \, \lambda_2^2
-            }
-            
-        with:
-        
-            g_1  = N_1 \left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_1}
-                     \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_1^2},\\[1mm]
-            g_{1B} = N_{1B} \left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_2}
-                     \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_2^2},\\[1mm]
-            g_{1C} = N_{1C} \left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_3}
-                     \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_3^2},\quad
-            x_{\text{hat}} = 0.1.
-        """
-        return r"""
+        $$
         f(x,b) = N_{Pevol} \cdot \frac{
             g_1 \, \exp\left(-g_1\left(\frac{b}{2}\right)^2\right)
           + \lambda^2 \, g_{1B}^2 \left(1 - g_{1B}\left(\frac{b}{2}\right)^2\right)
@@ -341,24 +330,52 @@ class TMDPDF_u(TMDPDFBase):
         }{
             g_1 + \lambda^2 \, g_{1B}^2 + g_{1C} \, \lambda_2^2
         }
-        
+        \\
         \text{where } 
+        \\
         g_1 = N_1 \left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_1}
             \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_1^2},\\[1mm]
+        \\    
         g_{1B} = N_{1B} \left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_2}
             \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_2^2},\\[1mm]
+        \\    
         g_{1C} = N_{1C} \left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_3}
             \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_3^2},\quad
+        \\    
         x_{\text{hat}} = 0.1.
+        $$
+        """
+        return r"""$$
+        f(x,b) = N_{Pevol} \cdot \frac{
+            g_1 \, \exp\left(-g_1\left(\frac{b}{2}\right)^2\right)
+          + \lambda^2 \, g_{1B}^2 \left(1 - g_{1B}\left(\frac{b}{2}\right)^2\right)
+            \exp\left(-g_{1B}\left(\frac{b}{2}\right)^2\right)
+          + g_{1C} \, \lambda_2^2 \, \exp\left(-g_{1C}\left(\frac{b}{2}\right)^2\right)
+        }{
+            g_1 + \lambda^2 \, g_{1B}^2 + g_{1C} \, \lambda_2^2
+        }
+        \\
+        \text{where } 
+        \\
+        g_1 = N_1 \left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_1}
+            \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_1^2},\\[1mm]
+        \\    
+        g_{1B} = N_{1B} \left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_2}
+            \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_2^2},\\[1mm]
+        \\    
+        g_{1C} = N_{1C} \left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_3}
+            \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_3^2},\quad
+        \\    
+        x_{\text{hat}} = 0.1.
+        $$
         """
         
     @property    
-    def show_formula(self):
+    def show_latex_formula(self):
         """
         Automatically render the LaTeX formula in a Jupyter notebook.
         """
-        display(Latex(self.latex_formula))    
-
+        display(Latex(self.latex_formula)) 
 
 class TMDPDF_d(TMDPDFBase):
     """
@@ -463,9 +480,9 @@ class fNP(nn.Module):
             cfg = flavor_config.get(key, None)
             
             if cfg is None:
-                # If a flavor is not defined in the config, use a default 3-parameter parameterization.
-                # Default: 3 parameters with all of them set as free (trainable)
-                cfg = {"init_params": [0.2, 0.1, 0.1], "free_mask": [True, True, True]}
+                # If a flavor is not defined in the config, use a default 2-parameter parameterization.
+                # Default: 2 parameters with all of them set as free (trainable)
+                cfg = {"init_params": [0.1, 0.1], "free_mask": [True, True]}
             
             # Create the fNP module, with a specific parameterization for each flavor.
             # For demonstration, use specific subclasses for 'u' and 'd'; otherwise use the base class.

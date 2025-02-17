@@ -18,11 +18,11 @@ flavors:
     init_params: [0.22, 0.12, 0.11, 0.05]
     free_mask: [true, false, true, true]
   ubar:
-    # ubar: using a 4‐parameter default
-    init_params: [0.10, 0.10, 0., 0.10]
-    free_mask: [true, false, true, true]
+    # ubar: using a 2‐parameter default
+    init_params: [0.50, 0.50]
+    free_mask: [true, false]
   dbar:
-    # dbar: using a 4‐parameter default
-    init_params: [0.10, 0.10, 0.10, 0.10]
-    free_mask: [true, false, true, true]
+    # dbar: using a 2‐parameter default
+    init_params: [0.50, 0.50]
+    free_mask: [true, false]
 
