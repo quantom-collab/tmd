@@ -688,7 +688,7 @@ class fNP(nn.Module):
         # First, update the shared evolution parameter,
         # assuming g2 is a scalar.
         new_g2 = param_tensor[0, 0]  
-        self.NPevolution.g2.data.copy_(torch.tensor(new_g2))
+        self.NPevolution.g2.data.copy_(new_g2.clone().detach())
         
         # Loop over the flavors in the same order as self.flavor_keys.
         for i, key in enumerate(self.flavor_keys):
