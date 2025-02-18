@@ -104,17 +104,17 @@ class TMDPDFBase(nn.Module):
         lam  = p[1]  # Gaussian width parameter (λ).
          
         # Compute the x-dependent width factor:
-        # T(x) = exp( g1 * ln(1/x))
-        T_x = torch.exp(g1 * torch.log(1/x))
+        # T(x) = g1 * ln(1/x)
+        T_x = g1 * torch.log(1/x)
         
         # Compute the Gaussian factor in b_T space:
         # G(b) = exp(-λ * b^2)
-        G_b = torch.exp(-lam * (b ** 2))
+        G_b = torch.exp(- lam * (b ** 2) - T_x * (b ** 2))
         
         # Combine the factors with the shared evolution factor.
         # The final non-perturbative function is given by:
         # f_NP(x, b_T) = NP_evol * T(x) * G(b)
-        result = NP_evol * T_x * G_b
+        result = NP_evol * G_b
         
         # Create a mask so that if x >= 1 the output is forced to zero.
         # This is done elementwise: for each element, (x < 1) returns True (1.0) if x < 1, or False (0.0) otherwise.
@@ -131,8 +131,8 @@ class TMDPDFBase(nn.Module):
 
         The parametrization implemented in the forward method is given by:
         
-            f_{NP}(x, b_T) = NP_{evol} \cdot \exp\left[-\lambda\, b_T^2\right] \cdot \exp\left[g_1\, \ln\frac{1}{x}\right]
-                           = NP_{evol} \cdot \exp\left[-\lambda\, b_T^2 + g_1\, \ln\frac{1}{x}\right],
+            f_{NP}(x, b_T) = NP_{evol} \cdot \exp\left[-\lambda\, b_T^2\right] 
+                                       \cdot \exp\left[- g_1\, \ln\frac{1}{x}\, b_T^2\right]
         
         where:
         - \(g_1\) is the parameter governing the x-dependence,
@@ -145,7 +145,7 @@ class TMDPDFBase(nn.Module):
             further normalization may be applied.
         """
         return r"""$$
-        f_{NP}(x,b_T) = NP_{evol} \cdot \exp\left[-\lambda\, b_T^2 + g_1\, \ln\frac{1}{x}\right]\,
+        f_{NP}(x,b_T) = NP_{evol} \cdot \exp\left[-\lambda\, b_T^2 - g_1\, \ln\frac{1}{x}\, b_T^2\right]\,
         $$
         """
 
@@ -153,6 +153,8 @@ class TMDPDFBase(nn.Module):
     def show_latex_formula(self):
         """
         Automatically render the LaTeX formula in a Jupyter notebook.
+        NOTE: this is a property, not a method.
+        NOTE: all the classes that inherit from this class will have this property.
         """
         display(Latex(self.latex_formula)) 
 
@@ -369,57 +371,219 @@ class TMDPDF_u(TMDPDFBase):
         x_{\text{hat}} = 0.1.
         $$
         """
-        
-    @property    
-    def show_latex_formula(self):
-        """
-        Automatically render the LaTeX formula in a Jupyter notebook.
-        """
-        display(Latex(self.latex_formula)) 
 
 class TMDPDF_d(TMDPDFBase):
     """
-    d-quark TMD PDF parameterization.
+    d-quark TMD PDF parameterization using the MAP24 form.
     
-    This parameterization implements A DUMB analytic form at the moment. 
+    This parameterization implements the following analytic form (MAP24):
+    
+    Let \(x_{\text{hat}} = 0.1\). Define the intermediate functions:
+    
+    \[
+    \begin{aligned}
+    g_{1d} &= N_{1d}\,\Biggl(\frac{x}{x_{\text{hat}}}\Biggr)^{\sigma_{1d}}
+    \Biggl(\frac{1-x}{1-x_{\text{hat}}}\Biggr)^{\alpha_{1d}^2},\\[1mm]
+    g_{2d} &= N_{2d}\,\Biggl(\frac{x}{x_{\text{hat}}}\Biggr)^{\sigma_{2d}}
+    \Biggl(\frac{1-x}{1-x_{\text{hat}}}\Biggr)^{\alpha_{2d}^2},\\[1mm]
+    g_{3d} &= N_{3d}\,\Biggl(\frac{x}{x_{\text{hat}}}\Biggr)^{\sigma_{3d}}
+    \Biggl(\frac{1-x}{1-x_{\text{hat}}}\Biggr)^{\alpha_{3d}^2},
+    \end{aligned}
+    \]
+    
+    with \(\sigma_{3d}\) taken equal to \(\sigma_{2d}\).
+    
+    Then the d-quark non-perturbative function is given by:
+    
+    \[
+    f_{NP}^{d}(x,b_T) = N_{Pevol}\cdot\frac{
+        g_{1d}\, \exp\Bigl[-g_{1d}\Bigl(\frac{b_T}{2}\Bigr)^2\Bigr]
+      + \lambda_{1d}^2\, g_{2d}^2\,\Bigl(1-g_{2d}\Bigl(\frac{b_T}{2}\Bigr)^2\Bigr)\,
+        \exp\Bigl[-g_{2d}\Bigl(\frac{b_T}{2}\Bigr)^2\Bigr]
+      + g_{3d}\, \lambda_{2d}^2\, \exp\Bigl[-g_{3d}\Bigl(\frac{b_T}{2}\Bigr)^2\Bigr]
+    }{
+        g_{1d} + \lambda_{1d}^2\, g_{2d}^2 + g_{3d}\, \lambda_{2d}^2
+    }.
+    \]
+    
+    The shared evolution factor \(N_{Pevol}\) is provided externally.
+    
+    Parameter mapping (from the d-quark parameter vector \(p\)):
+      - \(p[0] = N_{1d}\)
+      - \(p[1] = N_{2d}\)
+      - \(p[2] = N_{3d}\)
+      - \(p[3] = \alpha_{1d}\)
+      - \(p[4] = \alpha_{2d}\)
+      - \(p[5] = \alpha_{3d}\)
+      - \(p[6] = \sigma_{1d}\)
+      - \(p[7] = \sigma_{2d}\)  (and \(\sigma_{3d} = \sigma_{2d}\))
+      - \(p[8] = \lambda_{1d}\)
+      - \(p[9] = \lambda_{2d}\)
+    
+    The forward method receives the shared evolution factor (NP_evol) as an argument and uses it directly.
     """
+    
     def __init__(self, n_flavors: int = 1, init_params: list = None, free_mask: list = None):
+        # Set default parameters for the d-quark if none are provided.
+        # The default parameter vector should have 10 elements as described above.
         if init_params is None:
-            init_params = [0.22, 0.12, 0.11, 0.05]
+            init_params = [0.22, 0.12, 0.11, 0.05, 0.06, 0.06, 0.10, 0.08, 0.03, 0.02]
         if free_mask is None:
-            free_mask = [True, False, True, True]
+            free_mask = [True] * 10
         super().__init__(n_flavors, init_params, free_mask)
     
     def forward(self, x: torch.Tensor, b: torch.Tensor, zeta: torch.Tensor,
                 NP_evol: torch.Tensor, flavor_idx: int = 0) -> torch.Tensor:
         """
-        An example forward for the d quark that uses 4 parameters and the shared evolution factor.
+        Compute the d-quark TMD PDF using the MAP24 parametrization.
         
-        Let:
-          - shared_g2 = the shared evolution parameter (g2) provided externally,
-          - p[1] = a, p[2] = alpha, p[3] = delta.
-        Define a modulation factor:
-            modulation = 1 + delta * b
+        Parameters:
+          x (torch.Tensor): The Bjorken x variable.
+          b (torch.Tensor): The impact parameter (b_T).
+          zeta (torch.Tensor): The energy scale (included for consistency).
+          NP_evol (torch.Tensor): The shared evolution factor computed externally.
+          flavor_idx (int): The row index for this flavor's parameter vector (default is 0).
         
-        Then:
-            result = evolution * gaussian * modulation * x^alpha,
-        where evolution is computed using the shared g2.
+        Returns:
+          torch.Tensor: The computed d-quark TMD PDF.
+        
+        The computation follows:
+        
+        1. Define \(x_{\text{hat}} = 0.1\).
+        2. Compute:
+           \[
+           \begin{aligned}
+           g_{1d} &= N_{1d}\,\Bigl(\frac{x}{x_{\text{hat}}}\Bigr)^{\sigma_{1d}}
+                    \Bigl(\frac{1-x}{1-x_{\text{hat}}}\Bigr)^{\alpha_{1d}^2},\\[1mm]
+           g_{2d} &= N_{2d}\,\Bigl(\frac{x}{x_{\text{hat}}}\Bigr)^{\sigma_{2d}}
+                    \Bigl(\frac{1-x}{1-x_{\text{hat}}}\Bigr)^{\alpha_{2d}^2},\\[1mm]
+           g_{3d} &= N_{3d}\,\Bigl(\frac{x}{x_{\text{hat}}}\Bigr)^{\sigma_{3d}}
+                    \Bigl(\frac{1-x}{1-x_{\text{hat}}}\Bigr)^{\alpha_{3d}^2},
+           \end{aligned}
+           \]
+           with \(\sigma_{3d}=\sigma_{2d}\).
+        
+        3. Compute the numerator:
+           \[
+           \text{num} = g_{1d}\,\exp\Bigl[-g_{1d}\Bigl(\frac{b}{2}\Bigr)^2\Bigr]
+           + \lambda_{1d}^2\, g_{2d}^2\,\Bigl(1-g_{2d}\Bigl(\frac{b}{2}\Bigr)^2\Bigr)
+             \exp\Bigl[-g_{2d}\Bigl(\frac{b}{2}\Bigr)^2\Bigr]
+           + g_{3d}\,\lambda_{2d}^2\, \exp\Bigl[-g_{3d}\Bigl(\frac{b}{2}\Bigr)^2\Bigr]
+           \]
+        
+        4. Compute the denominator:
+           \[
+           \text{den} = g_{1d} + \lambda_{1d}^2\, g_{2d}^2 + g_{3d}\,\lambda_{2d}^2.
+           \]
+        
+        5. The d-quark TMD PDF is then:
+           \[
+           f_{NP}^d(x,b_T) = NP_{evol} \cdot \frac{\text{num}}{\text{den}}.
+           \]
+        
+        A mask is applied so that if \(x \ge 1\), the output is forced to zero.
         """
-        # Do not extract g2 from p; use the shared one.
-        p = self.get_params_tensor[flavor_idx]  
+        # Define the fixed constant.
+        xhat = 0.1
         
-        N1 = p[0]
-        a = p[1]
-        alpha = p[2]
-        delta = p[3]
+        # Extract the parameter vector for this flavor.
+        # p is a 1D tensor with 10 elements.
+        p = self.get_params_tensor[flavor_idx]
         
-        evolution = NP_evol
-        gaussian = torch.exp(- a * (b ** 2))
-        modulation = N1 + delta * b
-        x_dep = x ** alpha
-        result = evolution * gaussian * modulation * x_dep
+        # Unpack the parameters.
+        N1d     = p[0]
+        N2d     = p[1]
+        N3d     = p[2]
+        alpha1d = p[3]
+        alpha2d = p[4]
+        alpha3d = p[5]
+        sigma1d = p[6]
+        sigma2d = p[7]   # And sigma3d is taken equal to sigma2d.
+        lambda1d = p[8]
+        lambda2d = p[9]
+        
+        # Compute the three g-functions:
+        g1d = N1d * torch.pow(x / xhat, sigma1d) * torch.pow((1 - x) / (1 - xhat), alpha1d ** 2)
+        g2d = N2d * torch.pow(x / xhat, sigma2d) * torch.pow((1 - x) / (1 - xhat), alpha2d ** 2)
+        g3d = N3d * torch.pow(x / xhat, sigma2d) * torch.pow((1 - x) / (1 - xhat), alpha3d ** 2)
+        
+        # Compute (b/2)^2.
+        b_half_sq = (b / 2) ** 2
+        
+        # Compute the numerator:
+        num = (g1d * torch.exp(-g1d * b_half_sq)
+               + (lambda1d ** 2) * (g2d ** 2) * (1 - g2d * b_half_sq) * torch.exp(-g2d * b_half_sq)
+               + g3d * (lambda2d ** 2) * torch.exp(-g3d * b_half_sq))
+        
+        # Compute the denominator:
+        den = g1d + (lambda1d ** 2) * (g2d ** 2) + g3d * (lambda2d ** 2)
+        
+        # Multiply by the shared evolution factor NP_evol and divide by the denominator.
+        result = NP_evol * num / den
+        
+        # Apply a mask so that if x ≥ 1 the output is forced to zero.
         mask_val = (x < 1).type_as(result)
         return result * mask_val
+
+    @property
+    def latex_formula(self):
+        r"""
+        Returns a LaTeX string representing the analytic form of the d-quark TMD PDF
+        parameterization using the MAP24 parametrization.
+        
+        The parametrization is given by:
+        
+        $$
+        f_{NP}^d(x,b_T) = NP_{evol} \cdot \frac{
+            g_{1d}\, \exp\left[-g_{1d}\left(\frac{b_T}{2}\right)^2\right]
+        + \lambda_{1d}^2\, g_{2d}^2\, \Bigl(1 - g_{2d}\left(\frac{b_T}{2}\right)^2\Bigr)
+            \exp\left[-g_{2d}\left(\frac{b_T}{2}\right)^2\right]
+        + g_{3d}\, \lambda_{2d}^2\, \exp\left[-g_{3d}\left(\frac{b_T}{2}\right)^2\right]
+        }{
+            g_{1d} + \lambda_{1d}^2\, g_{2d}^2 + g_{3d}\, \lambda_{2d}^2
+        }
+        $$
+        
+        with the intermediate functions defined as:
+        
+        $$
+        \begin{aligned}
+        g_{1d} &= N_{1d}\left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_{1d}}
+                \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_{1d}^2},\\[1mm]
+        g_{2d} &= N_{2d}\left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_{2d}}
+                \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_{2d}^2},\\[1mm]
+        g_{3d} &= N_{3d}\left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_{3d}}
+                \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_{3d}^2},
+        \end{aligned}
+        $$
+        
+        with the identification \( \sigma_{3d} = \sigma_{2d} \) and the constant 
+        \( x_{\text{hat}} = 0.1 \).
+        """
+        return r"""$$
+        f_{NP}^d(x,b_T) = NP_{evol} \cdot \frac{
+            g_{1d}\, \exp\left[-g_{1d}\left(\frac{b_T}{2}\right)^2\right]
+        + \lambda_{1d}^2\, g_{2d}^2\, \Bigl(1 - g_{2d}\left(\frac{b_T}{2}\right)^2\Bigr)
+            \exp\left[-g_{2d}\left(\frac{b_T}{2}\right)^2\right]
+        + g_{3d}\, \lambda_{2d}^2\, \exp\left[-g_{3d}\left(\frac{b_T}{2}\right)^2\right]
+        }{
+            g_{1d} + \lambda_{1d}^2\, g_{2d}^2 + g_{3d}\, \lambda_{2d}^2
+        }
+        \\
+        \quad
+        \\      
+        \begin{aligned}
+        g_{1d} &= N_{1d}\left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_{1d}}
+                \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_{1d}^2},\\[1mm]
+        g_{2d} &= N_{2d}\left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_{2d}}
+                \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_{2d}^2},\\[1mm]
+        g_{3d} &= N_{3d}\left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_{3d}}
+                \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_{3d}^2},\quad \sigma_{3d}=\sigma_{2d},\\[1mm]
+        x_{\text{hat}} &= 0.1.
+        \end{aligned}
+        $$
+        """
+
     
 ###############################################################################
 # 4. Top-Level fNP Module

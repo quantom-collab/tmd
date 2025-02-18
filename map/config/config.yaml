@@ -14,9 +14,9 @@ flavors:
     init_params: [0.25, 0.15, 0.12, 0.10, 0.20, 0.18, 0.08, 0.14, 0.13, 0.11, 0.09]
     free_mask: [true, true, true, true, true, true, true, true, true, true, true]
   d:
-    # d‐quark parametrization (4 parameters: e.g., [N1, a, alpha, delta])
-    init_params: [0.22, 0.12, 0.11, 0.05]
-    free_mask: [true, false, true, true]
+    # d‐quark parametrization (10 parameters)
+    init_params: [0.25, 0.15, 0.12, 0.10, 0.20, 0.18, 0.08, 0.14, 0.13, 0.11]
+    free_mask: [true, true, true, true, true, true, true, true, true, true]
   ubar:
     # ubar: using a 2‐parameter default
     init_params: [0.50, 0.50]
