@@ -26,7 +26,8 @@ class PDF:
         self.kernel=KERNELS(mellin,self.spl) #--contains splitting functions needed for evolution in Q2
         self.dglap=DGLAP(mellin,alphaS,self.kernel,'truncated',cfg.dglap_order) #--describes the evolution in Q2 of the 1d QCF
         self.mellin=mellin
- 
+
+        self.storage_flag = False
         self.set_params()
         self.get_current_par_array()
         self.setup(self.current_par)
@@ -38,21 +39,30 @@ class PDF:
         self.params={}
   
         #--first shapes -- individual flavors
-        self.params['g1']    = [0.34,-2.90894908e-01,7.72674081e+00,-4.02107315e+00,4.76081096e+00]
-        self.params['uv1']   = [0.32, -3.28890238e-01,3.82058068e+00,-1.05868529e+00,4.37098961e+00]
-        self.params['dv1']   = [0.13, -3.03741745e-01,5.23372407e+00,-1.87590993e+00,5.42226697e+00]
-        self.params['sea1']  = [9.79286114e-03,-1.23298904e+00,1.33229770e+01,0,0]
-        self.params['sea2']  = [2.74708644e-16,-1.01121824e+00,7.98311674e+00,0,0]
-        self.params['db1']   = [2.63798102e-02,-4.69991550e-03,1.18897922e+01,-2.41437431e+00,3.68046877e+00]
-        self.params['ub1']   = [1.81068519e-02,-7.43295868e-01,8.46880730e+00,4.71288212e+01,-4.74386706e+01]
-        self.params['s1']    = [ 0.02117505,6.81144697e-01,3.30045407e+01,0.,0.]
-        self.params['sb1']   = [ 1.98280158e-02,9.10105915e-01,9.18201684e-01,0.,0.]
+        # self.params['g1']    = [0.34,-2.90894908e-01,7.72674081e+00,-4.02107315e+00,4.76081096e+00]
+        # self.params['uv1']   = [0.32, -3.28890238e-01,3.82058068e+00,-1.05868529e+00,4.37098961e+00]
+        # self.params['dv1']   = [0.13, -3.03741745e-01,5.23372407e+00,-1.87590993e+00,5.42226697e+00]
+        # self.params['sea1']  = [9.79286114e-03,-1.23298904e+00,1.33229770e+01,0,0]
+        # self.params['sea2']  = [2.74708644e-16,-1.01121824e+00,7.98311674e+00,0,0]
+        # self.params['db1']   = [2.63798102e-02,-4.69991550e-03,1.18897922e+01,-2.41437431e+00,3.68046877e+00]
+        # self.params['ub1']   = [1.81068519e-02,-7.43295868e-01,8.46880730e+00,4.71288212e+01,-4.74386706e+01]
+        # self.params['s1']    = [ 0.02117505,6.81144697e-01,3.30045407e+01,0.,0.]
+        # self.params['sb1']   = [ 1.98280158e-02,9.10105915e-01,9.18201684e-01,0.,0.]
+        self.params['g1']    = [0.4511555220588061,-0.7479399956270526,3.943843794618495,0,0]
+        self.params['uv1']   = [0.23758879160997412,-0.4999999999951971,2.708952759228073,0,0]
+        self.params['dv1']   = [0.1393613625422388,-0.21775099274221138,3.830849149849408,0,0]
+        self.params['sea1']  = [0.012151495794153568,-1.2067112111619667,9.999999995299095,0,0]
+        self.params['sea2']  = [0.012151495794153568,-1.2067112111619667,9.999999995299095,0,0]
+        self.params['db1']   = [0.008022219474813377,-0.5798555976424421,9.999993719022873,0,0]
+        self.params['ub1']   = [0.041470455036675444,0.9999999999950149,3.8437892887894787,0,0]
+        self.params['s1']    = [3.417881040344377e-13,0.9336529938251918,9.611837449340957,0.,0.]
+        self.params['sb1']   = [7.401748636422422e-13,-0.49846439303651136,0.0010301468915427936,0.,0.]
         #--mix parameters
         self.params['mix']   = [0.0,0.0,0.0,0.0,0.0]
  
         #--second shapes
-        self.params['uv2']   = [0.00, -0.71,3.48,1.34,23.3]
-        self.params['dv2']   = [0.00, -0.78,4.87,-5.80,47.1]
+        self.params['uv2']   = [0.00, 0,0,0,0]
+        self.params['dv2']   = [0.00, 0,0,0,0]
  
         """
         These fixed parameters are not to be changed during the fit.
@@ -79,8 +89,8 @@ class PDF:
         
         self.features=['g1','uv1','dv1','sea1','sea2','db1','ub1','s1','sb1','uv2','dv2']
         
-        self._parmin=[0,-1.89, 2,-0.5,-0.5] #--previously [-10,-2, 0,-10,-10]
-        self._parmax=[1, 0,12,+10,+10] #--previously [+10,10,10,+10,+10]
+        self._parmin=[0,-1.89, 0,-0.5,-0.5] #--previously [-10,-2, 0,-10,-10]
+        self._parmax=[1, 1,12,+10,+10] #--previously [+10,10,10,+10,+10]
         
     def get_current_par_array(self):
         
@@ -337,14 +347,15 @@ class PDF:
         Evolve the moments of the QCFs up to the input Q2, for the appropriate number of flavors, Nf.
         """
         Q2 = float(Q2) #--avoid errors in Python 3
-        self.storage={} #--this is to avoid huge memory allocation to the storages of these dictionaries.
+        if self.storage_flag == False: self.storage={} #--this is to avoid huge memory allocation to the storages of these dictionaries.
         if Q2 not in self.storage:
-            if self.mb2<Q2: 
-                self.storage[Q2]=self.dglap.evolve(self.BC5,self.mb2,Q2,5)
-            elif self.mc2<=Q2 and Q2<=self.mb2: 
-                self.storage[Q2]=self.dglap.evolve(self.BC4,self.mc2,Q2,4)
-            elif Q2<self.mc2: 
-                self.storage[Q2]=self.dglap.evolve(self.BC3,self.Q20,Q2,3)
+            # if self.mb2<Q2: 
+            #     self.storage[Q2]=self.dglap.evolve(self.BC5,self.mb2,Q2,5)
+            # elif self.mc2<=Q2 and Q2<=self.mb2: 
+            #     self.storage[Q2]=self.dglap.evolve(self.BC4,self.mc2,Q2,4)
+            # elif Q2<self.mc2: 
+            #     self.storage[Q2]=self.dglap.evolve(self.BC3,self.Q20,Q2,3)
+            self.storage[Q2] = self.dglap.evolve(self.BC4,self.mc2,Q2,4)
     
     def get_xF(self,x,Q2,flav,evolve=True):
         """

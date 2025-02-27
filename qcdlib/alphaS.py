@@ -23,9 +23,10 @@ class ALPHAS:
             self.beta[Nf,2]=2857.0/2.0-5033.0/18.0*Nf+325.0/54.0*Nf**2 
   
             self.aZ  = par.alphaSMZ/(4*np.pi)
-            self.ab=self.evolve_a(par.mZ2,self.aZ,par.mb2,5)
-            self.ac=self.evolve_a(par.mb2,self.ab,par.mc2,4)
-            self.a0=self.evolve_a(par.mc2,self.ac,cfg.Q20,3)
+            self.a0 = self.evolve_a(par.mZ2,self.aZ,cfg.Q20,4)
+            # self.ab=self.evolve_a(par.mZ2,self.aZ,par.mb2,5)
+            # self.ac=self.evolve_a(par.mb2,self.ab,par.mc2,4)
+            # self.a0=self.evolve_a(par.mc2,self.ac,cfg.Q20,3)
 
         #--can be stored because there are no free parameters in this calculation
         self.storage={}
@@ -34,9 +35,9 @@ class ALPHAS:
         """
         Returns the number of active flavors used for the calculation; input is a float Q2
         """
-        Nf=3
-        if Q2>=(par.mc2): Nf+=1
-        if Q2>=(par.mb2): Nf+=1
+        Nf=4
+        #if Q2>=(par.mc2): Nf+=1
+        #if Q2>=(par.mb2): Nf+=1
         return Nf
   
     def beta_func(self,a,Nf):
@@ -64,12 +65,13 @@ class ALPHAS:
         This calls the evolution for particular Q2, which also determines the number of flavors.
         """
         if Q2 not in self.storage:
-            if par.mb2<=Q2:
-                Q20,a0,Nf=par.mb2,self.ab,5
-            elif par.mc2<=Q2 and Q2<par.mb2: 
-                Q20,a0,Nf=par.mc2,self.ac,4
-            elif Q2<par.mc2:
-                Q20,a0,Nf=cfg.Q20,self.a0,3
+            Q20,a0,Nf=cfg.Q20,self.a0,4
+            # if par.mb2<=Q2:
+            #     Q20,a0,Nf=par.mb2,self.ab,4
+            # elif par.mc2<=Q2 and Q2<par.mb2: 
+            #     Q20,a0,Nf=par.mc2,self.ac,4
+            # elif Q2<par.mc2:
+            #     Q20,a0,Nf=cfg.Q20,self.a0,4
             self.storage[Q2]=self.evolve_a(Q20,a0,Q2,Nf)
         return self.storage[Q2]
   
