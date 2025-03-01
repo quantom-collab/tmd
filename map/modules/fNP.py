@@ -427,7 +427,7 @@ class TMDPDF_d(TMDPDFBase):
         # Set default parameters for the d-quark if none are provided.
         # The default parameter vector should have 10 elements as described above.
         if init_params is None:
-            init_params = [0.22, 0.12, 0.11, 0.05, 0.06, 0.06, 0.10, 0.08, 0.03, 0.02]
+            init_params = [0.21, 0.015, 4e-3, 0.86, 5.50, 2.38, -0.21, 9.91, 0.32, 0.052]
         if free_mask is None:
             free_mask = [True] * 10
         super().__init__(n_flavors, init_params, free_mask)
