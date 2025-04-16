@@ -24,8 +24,7 @@
 //_________________________________________________________________________________
 int main(int argc, char* argv[])
 {
-  // Check that the input is correct; now we expect 6 parameters:
-  // <configuration file> <output file> <pdf/ff> <flavour ID> <Scale in GeV> <parameters file>
+  // Check that the input is correct; 6 parameters are expected.
   if (argc < 7 || strcmp(argv[1], "--help") == 0)
     {
       std::cout << "\nInvalid Parameters:" << std::endl;
@@ -33,7 +32,7 @@ int main(int argc, char* argv[])
       exit(-10);
     }
 
-  // Read the configuration file
+  // Read the configuration file (config.yaml)
   const YAML::Node config = YAML::LoadFile(argv[1]);
 
   // Get the output file name
@@ -70,12 +69,32 @@ int main(int argc, char* argv[])
 
   // Define the x-space grid: 100 logarithmically spaced x values between x_min and x_max.
   double x_min = 1e-5;
-  double x_max = 0.9;
+  double x_max = 0.99;
   int nx = 100;
+
+  // Check if the configuration file contains a grid definition for the TMDs. 
+  // If so, use it.
+  if (config["tmdxgrid"].IsDefined())
+    {
+      nx = config["tmdxgrid"]["n"].as<int>();
+      x_min = config["tmdxgrid"]["xmin"].as<double>();
+      x_max = config["tmdxgrid"]["xmax"].as<double>();
+    }
+
   std::vector<double> xvec(nx);
   for (int i = 0; i < nx; i++)
     {
+      // Compute a normalized parameter 't' that varies linearly from 0 to 1.
+      // Static_cast<double>(i) converts the integer i into a double, to ensure that 
+      // the division is done in floating point, not integer arithmetic.
+      // Without static_cast<double>(i), if both 'i' and 'nx - 1' are integers, 
+      // the division would truncate to zero for most of the iterations, which is not desired.
       double t = static_cast<double>(i) / (nx - 1);
+
+      // Compute xvec[i] using an exponential interpolation in log-space.
+      // First, find the logarithms of x_min and x_max.
+      // Then, interpolate linearly in the logarithmic domain: log(x[i]) = log(x_min) + t * (log(x_max) - log(x_min))
+      // Finally, exponentiate to obtain the logarithmically spaced x value.
       xvec[i] = std::exp(std::log(x_min) + t * (std::log(x_max) - std::log(x_min)));
     }
 
@@ -83,6 +102,18 @@ int main(int argc, char* argv[])
   double bTmin = 0.01;
   double bTmax = 4.0;
   int nbT = 50;
+
+  // Check if the configuration file contains a grid definition for bT.
+  // If so, use it.
+  if (config["bTgrid"].IsDefined())
+    {
+      nbT = config["bTgrid"]["n"].as<int>();
+      bTmin = config["bTgrid"]["bTmin"].as<double>();
+      bTmax = config["bTgrid"]["bTmax"].as<double>();
+    }
+
+  // Create a vector to hold the bT values. 
+  // The vector is filled with values from bTmin to bTmax, spaced evenly.
   std::vector<double> bTvec(nbT);
   double bTstep = (bTmax - bTmin) / (nbT - 1);
   for (int j = 0; j < nbT; j++)
@@ -96,7 +127,7 @@ int main(int argc, char* argv[])
       vsg.push_back({sg[0].as<int>(), sg[1].as<double>(), sg[2].as<int>()});
   const apfel::Grid g{vsg};
 
-  // Lambda to construct evolved distributions at scale mu
+  // Lambda function to construct evolved distributions at scale mu
   const auto EvolvedDists = [=,&g] (double const& mu) -> apfel::Set<apfel::Distribution>
   {
       return apfel::Set<apfel::Distribution>{
@@ -141,11 +172,13 @@ int main(int argc, char* argv[])
   NangaParbat::Parameterisation *NPFunc = NangaParbat::GetParametersation(parfile["Parameterisation"].as<std::string>());
   const std::vector<std::vector<double>> pars = parfile["Parameters"].as<std::vector<std::vector<double>>>();
 
-  // For simplicity, use the first set of parameters
+  // For simplicity, use the first set of parameters. 
+  // So this is ONLY replica 0.
   NPFunc->SetParameters(pars[0]);
 
   // Create a 2D table to store the TMD value for each (x, bT) pair.
   // tmdTable[i][j] will correspond to the value at xvec[i] and bTvec[j]
+  // The table is initialized to zero.
   std::vector<std::vector<double>> tmdTable(nx, std::vector<double>(nbT, 0.0));
 
   // Define the function to compute the TMD at a given (x, bT).
@@ -156,12 +189,9 @@ int main(int argc, char* argv[])
 
   // Loop over the x and bT grids, filling the TMD table.
   for (int i = 0; i < nx; i++)
-    {
       for (int j = 0; j < nbT; j++)
-        {
           tmdTable[i][j] = tmdFunc(xvec[i], bTvec[j]);
-        }
-    }
+        
 
   // Write the 2D table to a plain text file, tab-delimited.
   // The first row is a header: first column is "x" and then the bT values.
@@ -173,17 +203,14 @@ int main(int argc, char* argv[])
     }
 
   // Write header
-  fout << "x\tbT\tTMD" << "\n";
+  fout << "x" << "       "   << "bT" << "      "<< "TMD" << "\n";
   
   // Output each (x, bT, TMD) combination on its own line.
   for (int i = 0; i < nx; i++)
-  {
       for (int j = 0; j < nbT; j++)
-      {
           fout << xvec[i] << "\t" << bTvec[j] << "\t" << tmdTable[i][j] << "\n";
-      }
-  }
-  fout.close();
+  
+          fout.close();
 
   // Clean up: Delete the LHAPDF set
   delete dist;
