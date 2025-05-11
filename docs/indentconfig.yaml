@@ -1,0 +1,6 @@
+# localSettings.yaml
+
+modifyLineBreaks:
+  textWrapOptions:
+    columns: 150
+# lineLength: 50 # Attempt to break lines after 80 characters
