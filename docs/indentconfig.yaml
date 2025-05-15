@@ -2,4 +2,9 @@
 
 modifyLineBreaks:
   textWrapOptions:
+    # If we set columns to -1 then latexindent.pl remove line breaks within the text wrap block,
+    # and will not perform text wrapping. We can use this to undo text wrapping.
+    # See https://latexindentpl.readthedocs.io/en/latest/sec-the-m-switch.html#lst-textwrap1
     columns: 150
+# This sets the indent to two spaces instead of a tab
+indent: 2

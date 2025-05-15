@@ -1,0 +1,98 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+
+\usepackage[scale=0.8]{geometry}
+
+\title{Understanding Transverse Momentum Distributions and Their Evolution Equations}
+\author{Chiara Bissolotti\\
+        Physics Division, Argonne National Laboratory \\
+        cbissolotti@anl.gov}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+Transverse Momentum Distributions (TMDs) are fundamental theoretical tools that provide a three-dimensional picture of the internal structure of
+hadrons, such as protons and neutrons. They describe the probability of finding a parton (a quark or a gluon) within a hadron not only with a certain
+fraction of the hadron's longitudinal momentum ($x$) but also with a specific momentum component transverse to the hadron's overall direction of
+motion ($k_T$ or $k_\perp$). This level of detail goes beyond the `simpler', one-dimensional picture offered by collinear Parton Distribution
+Functions (PDFs).
+
+\subsection{Definition}
+
+An unrenormalized unpolarized TMD, $\hat{f}_i^{h}(x, \mathbf{k}_T)$, is defined as:
+
+\begin{equation}
+  \hat{f}_i^{h}(x, \mathbf{k}_T) = \int \frac{d^2 \mathbf{b}_T}{{(2\pi)}^2} e^{-i \mathbf{b}_T \cdot \mathbf{k}_T} \int \frac{db^-}{4\pi}
+  e^{-ix P^+ b^-} \langle P | \bar{\psi}(b) \gamma^+ {\mathcal{W}{(b,0)}} \psi(0) | P \rangle
+  \label{eq:correlator_definition}
+\end{equation}
+
+where $\mathbf{k}_T$ is the intrinsic transverse momentum of parton $i$ in hadron $h$.
+
+\begin{equation}
+  b = (0^{+}, b^-, \mathbf{b}_T)
+\end{equation}
+%
+where the displacement of the quark field $\psi$ is not only in the ``$-$'' direction but also in the transverse direction, $\mathbf{b}_T$.
+
+$\mathcal{W}$ is the Wilson line to ensure SU (3) color gauge invariance, and it is understood to be the staple-shape link.
+
+Look also at Ref.\cite{Collins:2011zzd} for a more detailed discussion of TMDs.
+
+\subsection{Collins-Soper Equation}
+
+The Collins-Soper equation describes the evolution of TMDs with respect to the rapidity scale $\zeta$. Rapidity is a convenient variable in
+high-energy physics that relates to the longitudinal momentum of a particle. The CS equation arises from the requirement that physical observables
+should be independent of the choice of factorization scheme, which separates the hard scattering part of a process from the non-perturbative TMDs.
+
+To derive the CS equation, one typically starts by considering a physical process where TMDs are relevant, such as Drell-Yan lepton pair production
+or semi-inclusive deep inelastic scattering (SIDIS). In these processes, the cross-section can be factorized into a hard part, calculable in
+perturbative QCD, and TMDs, which describe the non-perturbative structure of the hadrons.
+
+The key insight is that the TMDs themselves depend on two scales: the renormalization scale $\mu$ and a rapidity scale $\zeta$. The CS equation
+describes how the TMDs change as $\zeta$ varies. It can be written as:
+
+\begin{equation}
+  \frac{d \ln f(x, k_T, \mu, \zeta)}{d \ln \zeta} = K(k_T, \mu)
+  \label{eq:CS}
+\end{equation}
+
+Here, $f(x, k_T, \mu, \zeta)$ is a generic TMD, and $K(k_T, \mu)$ is the Collins-Soper kernel (also known as the rapidity anomalous dimension). The
+kernel $K$ depends on the transverse momentum $k_T$ and the renormalization scale $\mu$. It can be calculated perturbatively in QCD.\@
+
+The derivation of the CS equation involves analyzing the operator definition of TMDs and their behavior under changes in the rapidity scale. This
+often involves techniques from effective field theories like Soft-Collinear Effective Theory (SCET), which provides a systematic framework for
+separating different momentum scales in QCD processes.
+
+\subsection{Renormalization Group Equations}
+
+In addition to the rapidity evolution, TMDs also evolve with the renormalization scale $\mu$. This evolution is described by standard Renormalization
+Group Equations (RGEs), similar to those for collinear Parton Distribution Functions (PDFs). The RGEs for TMDs account for the scale dependence
+arising from ultraviolet divergences in the quantum field theory calculations.
+
+The RGE for a TMD $f$ can be written as:
+
+\begin{equation}
+  \frac{d f(x, k_T; \mu, \zeta)}{d \ln \mu^2} = P(x, \alpha_s(\mu)) \otimes f(x, k_T; \mu, \zeta)
+  \label{eq:RGE}
+\end{equation}
+
+Here, $P(x, \alpha_s(\mu))$ represents the splitting functions (analogous to the DGLAP splitting functions for collinear PDFs), and $\otimes$ denotes
+a convolution in the appropriate variables (typically $x$ and $k_T$). These splitting functions describe how partons can split into other partons,
+changing the momentum distribution. They are calculable in perturbative QCD.\@
+
+The combined effect of the CS equation and the RGEs determines the full evolution of TMDs with energy. These equations are crucial for making precise
+predictions for a wide range of high-energy scattering processes and for understanding the three-dimensional structure of hadrons.
+
+\bibliography{biblio}
+\bibliographystyle{JHEP}
+\end{document}
+
