@@ -1,7 +1,7 @@
 hadron: proton
 
 # Energy scale in GeV at which fNP is parametrized
-zeta: 1.0  
+zeta: 1.0
 
 # Shared evolution parameters
 evolution:
@@ -25,4 +25,3 @@ flavors:
     # dbar: using a 2‐parameter default
     init_params: [0.50, 0.50]
     free_mask: [true, false]
-

@@ -94,7 +94,7 @@ tmdxgrid:
   xmax: 1
   InterDegree: 3
   eps: 1e-3
-  
+
 # Parameters of the grid in x space for the TMDs.
 bTgrid:
   n: 500
