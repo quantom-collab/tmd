@@ -10,7 +10,7 @@
 #include <yaml-cpp/yaml.h>
 #include <cstring>
 #include <functional> // std::divides
-#include <algorithm> // std::transform
+#include <algorithm>  // std::transform
 #include <sys/stat.h>
 #include <fstream>
 #include <numeric> // std::accumulate
@@ -93,15 +93,6 @@ int main(int argc, char* argv[])
   // Tabulate collinear PDFs
   const apfel::TabulateObject<apfel::Set<apfel::Distribution>> TabPDFs{EvolvedPDFs, 100, distpdf->qMin() * 0.9, distpdf->qMax(), 3, Thresholds};
   const auto CollPDFs = [&] (double const& mu) -> apfel::Set<apfel::Distribution> { return TabPDFs.Evaluate(mu); };
-
-  /*
-  // Check
-  // std::cout << TabPDFs.EvaluatexQ(0, 0.1, 0.9) << std::endl;
-
-  // Check to see which points in Q are tabulated
-  for (auto f : TabPDFs.GetQGrid())
-    std::cout << f << std::endl;
-  */
 
   // Initialize TMD PDF objects
   const auto TmdObjPDF = apfel::InitializeTmdObjects(gpdf, Thresholds);
