@@ -89,15 +89,15 @@ cutParams: [0.2, 0.7, 0.5]
 
 # Parameters of the grid in x space for the TMDs.
 tmdxgrid:
-  n: 2000
-  xmin: 1e-5
+  n: 500
+  xmin: 1e-2
   xmax: 1
   InterDegree: 3
   eps: 1e-3
 
 # Parameters of the grid in x space for the TMDs.
 bTgrid:
-  n: 2000
+  n: 500
   bTmin: 0
   bTmax: 20
   InterDegree: 3

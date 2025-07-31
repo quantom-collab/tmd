@@ -1,0 +1,30 @@
+{
+  "printWidth": 120,
+  "tabWidth": 2,
+  "useTabs": false,
+  "singleQuote": false,
+  "quoteProps": "as-needed",
+  "trailingComma": "es5",
+  "bracketSpacing": true,
+  "proseWrap": "preserve",
+  "overrides": [
+    {
+      "files": "*.yaml",
+      "options": {
+        "printWidth": 200,
+        "singleQuote": false,
+        "bracketSpacing": true,
+        "proseWrap": "never"
+      }
+    },
+    {
+      "files": "*.yml",
+      "options": {
+        "printWidth": 200,
+        "singleQuote": false,
+        "bracketSpacing": true,
+        "proseWrap": "never"
+      }
+    }
+  ]
+} 
