@@ -7,7 +7,7 @@ This script runs the SIDIS computation with the mock data and configuration file
 
 import os
 import sys
-from modules.sidis_computation import SIDISComputation
+from sidis_computation import SIDISComputation
 
 
 def main():

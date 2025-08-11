@@ -1,0 +1,5 @@
+# localSettings.yaml
+
+modifyLineBreaks:
+  textWrapOptions:
+    columns: 150

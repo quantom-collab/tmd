@@ -1,5 +1,5 @@
 # VSCode
-.vscode/
+#.vscode/
 *.code-workspace
 
 # Ignore output folders
@@ -44,3 +44,6 @@ venv/
 # C++ executables
 GridTMDbT
 CollinsSoperKernel
+
+# Chiara
+output/

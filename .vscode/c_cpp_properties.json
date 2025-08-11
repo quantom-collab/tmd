@@ -1,0 +1,26 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/local/include/**",
+                "/opt/homebrew/include/**"
+            ],
+            "compilerArgs": [
+                "-nostdinc++",
+                "-I/opt/homebrew/Cellar/llvm/20.1.2/include/c++/v1",
+                "-I/opt/homebrew/Cellar/llvm/20.1.2/lib/clang/20/include"
+            ],
+            "defines": [],
+            "macFrameworkPath": [
+                "/Library/Developer/CommandLineTools/SDKs/MacOSX14.sdk/System/Library/Frameworks"
+            ],
+            "compilerPath": "/opt/homebrew/opt/llvm/bin/clang",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "macos-clang-arm64"
+        }
+    ],
+    "version": 4
+}

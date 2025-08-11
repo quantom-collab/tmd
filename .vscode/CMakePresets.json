@@ -1,0 +1,12 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "default",
+      "generator": "Unix Makefiles",
+      "cacheVariables": {
+        "Python3_EXECUTABLE": "/opt/homebrew/bin/python3.10"
+      }
+    }
+  ]
+}

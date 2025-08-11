@@ -1,0 +1,63 @@
+{
+    "cmake.configureSettings": {
+        "Python3_EXECUTABLE": "/opt/homebrew/bin/python3.10"
+    },
+    "python.analysis.extraPaths": [
+        "/opt/homebrew/lib/python3.10/site-packages"
+      ],
+    "[cpp]": {
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true
+    },
+  
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": false,
+    
+    // YAML specific settings for inline arrays
+    "[yaml]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true
+    },
+    
+    // Prettier configuration for YAML
+    "prettier.printWidth": 120,
+    "prettier.tabWidth": 2,
+    "prettier.useTabs": false,
+    "prettier.proseWrap": "preserve",
+    
+    "[latex]": {
+      "editor.wordWrap": "on",
+      "editor.rulers": [150],
+      "editor.defaultFormatter": "James-Yu.latex-workshop",
+    },
+    "latex-workshop.latex.autoClean.run": "onBuilt",
+    "latex-workshop.synctex.afterBuild.enabled": true,
+    "latex-workshop.latex.clean.method": "glob",
+    "latex-workshop.latex.clean.fileTypes": [
+      "*.aux",
+      "*.bbl",
+      "*.blg",
+      "*.fdb_latexmk",
+      "*.fls",
+      "*.log",
+      "*.out","*.toc",
+      "*.synctex.gz",
+      "*.bcf",
+      "*.run.xml",
+      "*.bak*",
+      "mainNotes.bib"
+    ],
+    "cursorpyright.analysis.extraPaths": [
+      "/opt/homebrew/lib/python3.10/site-packages"
+    ],
+    
+    // Python-specific settings
+    "[python]": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        }
+    }
+}

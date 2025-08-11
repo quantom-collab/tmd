@@ -5,7 +5,10 @@ SIDIS Cross Section Computation using APFEL++ Python wrapper
 This script computes SIDIS differential cross sections for given kinematic points.
 
 Usage:
-    python3.10 sidis_computation.py <config_file> <kinematic_data_file> <output_file>
+    python3.10 sidis_computation.py <config_file> <kinematic_data_file> <fnp_config_file> <output_folder> <output_filename>
+
+Example:
+    python3.10 sidis_computation.py inputs/config.yaml inputs/kinematics.yaml inputs/fNPconfig.yaml results/ sidis_results.yaml
 """
 
 import os
@@ -40,14 +43,36 @@ class SIDISComputation:
     Main class for SIDIS cross section computation
     This class initializes all necessary APFEL++ objects and configurations,
     and provides methods to compute the SIDIS cross sections based on input kinematic data.
+
+    MAPPING TO C++ CODE (SIDISMultiplicities.cc):
+    =============================================
+
+    Key differences from C++ implementation:
+    - This Python version computes DIFFERENTIAL CROSS SECTIONS (numerator only)
+    - C++ version computes MULTIPLICITIES = differential_cross_section / inclusive_cross_section
+    - Missing: Denominator calculation (ll. 344-366 in C++)
+    - TODO: Proper fNP model integration (ll. 425-426 in C++)
+
+    Main correspondence:
+    - setup_computation() ↔ ll. 41-105: Initial setup
+    - _setup_pdf() ↔ ll. 49-70: PDF setup
+    - _setup_couplings() ↔ ll. 61-64, 82-85: Coupling setup
+    - _setup_tmd_*() ↔ ll. 87-105, 161-174: TMD object setup
+    - setup_isoscalar_tmds() ↔ ll. 268-313: Isoscalar target handling
+    - compute_sidis_cross_section() ↔ ll. 376-480: Main computation loop
+    - b_integrand() ↔ ll. 430-470: Core b-space integration
     """
 
-    def __init__(self, config_file: str):
+    def __init__(self, config_file: str, fnp_config_file: str):
         """
-        Initialize the computation with configuration file.
-        @param config_file: Path to the configuration YAML file
+        Initialize the computation with configuration files.
+
+        Args:
+            config_file: Path to the main configuration YAML file
+            fnp_config_file: Path to the fNP configuration YAML file
         """
         self.config = self._load_config(config_file)
+        self.fnp_config_file = fnp_config_file
         self.setup_computation()
 
     def _load_config(self, config_file: str) -> Dict:
@@ -75,9 +100,9 @@ class SIDISComputation:
         self.PerturbativeOrder = self.config["PerturbativeOrder"]
         self.Ci = self.config["TMDscales"]["Ci"]
         self.Cf = self.config["TMDscales"]["Cf"]
-        # If the key qToQcut exists, getattr returns its value;
+        # If the key qToQcut exists in config, use its value;
         # 0.3 is the fallback value
-        self.qToQcut = getattr(self.config, "qToQcut", 0.3)
+        self.qToQcut = self.config.get("qToQcut", 0.3)
 
         # Setup PDF
         self._setup_pdf()
@@ -108,7 +133,11 @@ class SIDISComputation:
         This function initializes the PDF set and rotates it into the QCD evolution basis.
         It also sets up the x-space grid for PDFs and initializes the scale.
 
-        It is the python implementation of ll. 49 - 59 and 66 -70 in SIDISMultiplicities.cc
+        Corresponds to C++ code:
+        - ll. 49-50: Open LHAPDF sets (LHAPDF::PDF* distpdf = LHAPDF::mkPDF(...))
+        - ll. 52-53: Rotate PDF set into QCD evolution basis (const auto RotPDFs = [=] ...)
+        - ll. 55-59: Get heavy-quark thresholds from PDF LHAPDF set
+        - ll. 66-70: Setup APFEL++ x-space grid for PDFs
         """
 
         # Read the PDF set name and member from the config file
@@ -150,8 +179,9 @@ class SIDISComputation:
         This function initializes the QCD coupling and the electromagnetic coupling.
         It also sets up the grid for the couplings.
 
-        It is the python implementation of ll. 61 - 64 (for Alpha_s) and 82 - 85
-        (for Alpha_em) in SIDISMultiplicities.cc
+        Corresponds to C++ code:
+        - ll. 61-64: Alpha_s (from PDFs). Get it from the LHAPDF set and tabulate it
+        - ll. 82-85: Electromagnetic coupling squared (provided by APFEL++)
         """
         # Alpha_s
         Alphas = lambda mu: self.pdf.alphasQ(mu)
@@ -182,7 +212,26 @@ class SIDISComputation:
 
     def _setup_tmd_pdf_objects(self):
         """
-        Setup TMD PDF objects
+        Setup TMD PDF objects. This actually involves also some manipulations of the colinear PDFs:
+        - initializing DGLAP objects, with the proper collinear PDF grids (self.gpdf), and the proper Masses and Thresholds,
+          which come from the collinear PDFs setup function, _setup_pdf(self), defined above.
+        - evolving and tabulating the collinear PDFs,
+
+        Then, there is the part for the actual TMDs
+        - initializing TMD PDF objects,
+        - building the evolved TMD PDFs
+        - matching the TMD PDFs to the collinear PDFs
+
+        This function also takes care of initializing the Sudakov factor and the hard factor.
+
+        ========================
+        Corresponds to C++ code:
+        - ll. 87-90: Construct set of distributions as a function of the scale to be tabulated
+        - ll. 92-94: Tabulate collinear PDFs
+        - ll. 96: Initialize TMD PDF objects
+        - ll. 98-101: Build evolved TMD PDFs
+        - ll. 103: QuarkSudakov evolution factor
+        - ll. 105: Get hard-factor
         """
 
         # Initialize QCD evolution objects
@@ -233,6 +282,7 @@ class SIDISComputation:
             1e5,
         )
 
+        # Hard factor for SIDIS, at the right perturbative order.
         self.Hf = ap.tmd.HardFactor(
             "SIDIS",
             self.TmdObjPDF,
@@ -244,6 +294,11 @@ class SIDISComputation:
     def _setup_ff(self):
         """
         Setup fragmentation function objects
+
+        Corresponds to C++ code:
+        - ll. 150-151: Open LHAPDF FFs sets (LHAPDF::PDF* distff = LHAPDF::mkPDF(...))
+        - ll. 153: Rotate FF set into the QCD evolution basis
+        - ll. 155-159: Setup APFEL++ x-space grid for FFs
         """
         ff_name = self.config["ffset"]["name"]
         ff_member = self.config["ffset"]["member"]
@@ -260,7 +315,15 @@ class SIDISComputation:
         )
 
     def _setup_tmd_ff_objects(self):
-        """Setup TMD FF objects"""
+        """
+        Setup TMD FF objects
+
+        Corresponds to C++ code:
+        - ll. 161-165: Construct set of FF distributions as a function of the scale to be tabulated
+        - ll. 167-169: Tabulate collinear FFs
+        - ll. 171: Initialize TMD FF objects
+        - ll. 173-174: Build evolved TMD FFs
+        """
         # Initialize QCD evolution objects for FFs
         DglapObjFF = ap.initializers.InitializeDglapObjectsQCD(
             self.gff, self.Masses, self.Thresholds
@@ -305,32 +368,67 @@ class SIDISComputation:
         )
 
     def _setup_fnp(self):
-        """Setup non-perturbative functions"""
+        """
+        Setup non-perturbative functions using the provided configuration file.
+
+        Corresponds to C++ code:
+        - ll. 76-77: Get non-perturbative functions (const NangaParbat::Parameterisation* fNP = ...)
+        """
         try:
-            config_file_path = "config/config.yaml"
-            if os.path.exists(config_file_path):
-                config_fnp = utl.load_yaml_config(config_file_path)
+            if os.path.exists(self.fnp_config_file):
+                print(f"Loading fNP configuration from {self.fnp_config_file}")
+                config_fnp = utl.load_yaml_config(self.fnp_config_file)
                 self.model_fNP = fNP(config_fnp)
+                print("✅ fNP model loaded successfully")
             else:
                 # Use simple Gaussian form as fallback
                 self.model_fNP = None
-                print("Warning: fNP config not found, using simple Gaussian form")
+                print(
+                    f"Warning: fNP config not found at {self.fnp_config_file}, using simple Gaussian form"
+                )
         except Exception as e:
             print(f"Warning: Could not load fNP model: {e}")
             self.model_fNP = None
 
     def bstar_min(self, b: float, Q: float) -> float:
         """
-        Simple bstar prescription (bstar_min variant)
-        b: impact parameter (float)
-        Q: hard scale (float)
+        Implement bstar prescription. In the c++ code, the bstar prescription is called
+        from NangaParbat, [ll. 392: auto bs = NangaParbat::bstarmin(b, Qm);].
+        Here the bstar prescription is implemented from scratch in python with the same
+        formulas, in a consistent way.
+        TODO: transition this in pytorch
+
+        @ param b: impact parameter (float)
+        @ param Q: hard scale (float)
         """
-        bmax = 1.5  # GeV^-1, typical value used in TMD phenomenology
-        gamma_E = 0.5772156649015329  # Euler-Mascheroni constant
-        return b / np.sqrt(1 + (b / bmax) ** 2) * 2 * np.exp(-gamma_E) / Q
+
+        # Final scale, typically 1 GeV
+        muF = 1.0  # GeV
+
+        # Euler-Mascheroni constant
+        gamma_E = 0.5772156649015329
+
+        bmax = 2 * np.exp(-gamma_E) / muF  # GeV^-1
+        bmin = bmax / Q  # GeV^-1
+        power = 4
+
+        num = 1 - np.exp(-((b / bmax) ** power))
+        den = 1 - np.exp(-((b / bmin) ** power))
+
+        return bmax * (num / den) ** (1 / power)
 
     def setup_isoscalar_tmds(self, Vs: float, targetiso: float):
-        """Setup isoscalar TMD PDFs and FFs"""
+        """
+        Take into account the isoscalarity of the target. This has a direct impact on how
+        the TMD PDFs and TMD FFs are combined together.
+        Once we have the right combinations, TMD PDFs and TMD FFs are tabulated in b-space.
+
+        Corresponds to C++ code:
+        - ll. 207-208: Get the isoscalarity of the target
+        - ll. 246-268: Take into account the isoscalarity of the target
+        - ll. 269-272: Tabulate initial scale TMD PDFs in b in the physical basis
+        - ll. 273-279: Tabulate initial scale TMD FFs in b in the physical basis
+        """
         # Convert targetiso to tensor for consistent operations
         targetiso_tensor = torch.tensor(targetiso, dtype=torch.float32)
 
@@ -387,13 +485,19 @@ class SIDISComputation:
         )
 
     def load_kinematic_data(self, data_file: str) -> Dict:
-        """Load kinematic data from file"""
+        """
+        Load kinematic data from file
+        """
         with open(data_file, "r") as f:
             data = yaml.safe_load(f)
         return data if isinstance(data, dict) else {}
 
     def compute_sidis_cross_section(self, data_file: str, output_file: str):
-        """Main computation function"""
+        """
+        Main computation function
+        This function loads the kinematic data, extracts the necessary parameters,
+        and computes the SIDIS differential cross sections for each kinematic point.
+        """
         print(f"Loading kinematic data from {data_file}")
         dataset = self.load_kinematic_data(data_file)
 
@@ -435,6 +539,7 @@ class SIDISComputation:
             zm = float(z_tens[iqT].item())
 
             # Skip if qT > cut * Q
+            # Corresponds to C++ ll. 376-377: if (qTv[iqT] > qToQcut * Qav) continue;
             if qTm > self.qToQcut * Qm:
                 print(f"Skipping qT = {qTm:.3f} (above cut)")
                 continue
@@ -444,32 +549,37 @@ class SIDISComputation:
             )
 
             # Scales
+            # [Corresponds to C++ ll. 372-373.]
             mu = self.Cf * Qm
             zeta = Qm * Qm
 
             # Yp factor for SIDIS kinematics
+            # [Corresponds to C++ ll. 375: const double Yp = 1 + pow(1 - pow(Qm / Vs, 2) / xm, 2);]
             Yp = 1 + (1 - (Qm / Vs) ** 2 / xm) ** 2
 
             # Number of active flavors
             nf = int(ap.utilities.NF(mu, self.Thresholds))
 
             # Define b-integrand function
+            # [Corresponds to C++ code ll. 389-408: bIntProva function]
             def b_integrand(b):
                 # bstar prescription
                 bs = self.bstar_min(b, Qm)
 
-                # TMD luminosity: sum over active quark flavors
+                # Luminosity: sum contributions from active quark flavors
                 lumiq = 0.0
                 for q in range(-nf, nf + 1):
                     if q == 0:  # Skip gluon
                         continue
 
                     # Get TMD PDF and FF
+                    # [Corresponds to C++ ll. 402: lumibsq calculation]
                     try:
                         tmd_pdf = self.TabMatchTMDPDFs.EvaluatexQ(q, xm, bs)
                         tmd_ff = self.TabMatchTMDFFs.EvaluatexQ(q, zm, bs)
 
                         # Electric charge squared
+                        # Corresponds to C++ ll. 456: apfel::QCh2[std::abs(q)-1]
                         qch2 = (
                             ap.constants.QCh2[abs(q) - 1]
                             if abs(q) <= len(ap.constants.QCh2)
@@ -477,13 +587,18 @@ class SIDISComputation:
                         )
 
                         # Luminosity contribution
+                        # [Corresponds to C++ ll. 402 AND 403, because there is the sum sign += here in python.]
+                        # [Yp * TabMatchTMDPDFs.EvaluatexQ(...) * apfel::QCh2[...] * TabMatchTMDFFs.EvaluatexQ(...)]
                         lumiq += Yp * tmd_pdf / xm * qch2 * tmd_ff
+
                     except Exception as e:
                         print(f"Warning: Error evaluating TMDs for q={q}: {e}")
                         continue
 
-                # Non-perturbative evolution factors
+                # Non-perturbative evolution functions
+                # [Corresponds to C++ ll. 383-386: tf1NP.Evaluate(b) and tf2NP.Evaluate(b)]
                 if self.model_fNP is not None:
+                    # TODO: Implement fNP model evaluation
                     # Use actual fNP model
                     fnp1 = 1.0  # Placeholder - would need proper fNP evaluation
                     fnp2 = 1.0
@@ -493,15 +608,19 @@ class SIDISComputation:
                     fnp2 = np.exp(-0.05 * b**2)
 
                 # Sudakov factor
+                # [Corresponds to the call to the Sudakov at C++ ll. 406: pow(QuarkSudakov(bs, mu, zeta), 2)]
                 sudakov_factor = self.QuarkSudakov(bs, mu, zeta) ** 2
 
                 # Hard factor
+                # [Corresponds to the call to the hard factor at C++ ll. 402: Hf(mu)]
                 hard_factor = self.Hf(mu)
 
                 # Alpha_em^2 factor
+                # Corresponds to the call at C++ ll. 462: pow(TabAlphaem.Evaluate(Qm), 2)
                 alphaem2 = self.TabAlphaem.Evaluate(Qm) ** 2
 
                 # Full integrand
+                # Corresponds to C++ ll. 406: return b * tf1NP.Evaluate(b) * tf2NP.Evaluate(b) * Lumiq * pow(QuarkSudakov(bs, mu, zeta), 2) / zm * pow(TabAlphaem.Evaluate(Qm), 2) * Hf(mu) / pow(Qm, 3);
                 integrand = (
                     b
                     * fnp1
@@ -510,16 +629,21 @@ class SIDISComputation:
                     * sudakov_factor
                     * alphaem2
                     * hard_factor
-                    / (Qm**3 * zm)
+                    / (Qm**3)
+                    / zm
                 )
 
                 return integrand
 
             # Perform b-space integration
+            # [Corresponds to the call to the HERMES case at C++ l. 411-412: DEObj.transform(bIntProva, qTm)]
             try:
+                # Perform the Hankel transform using the Ogata quadrature.
+                # From bT space to qT space.
                 integral_result = self.DEObj.transform(b_integrand, qTm)
 
                 # Differential cross section (numerator only, no denominator)
+                # HERMES case, meaning cross section differential in PhT and not PhT2
                 differential_xsec = (
                     ap.constants.ConvFact
                     * ap.constants.FourPi
@@ -529,6 +653,8 @@ class SIDISComputation:
                     / zm
                 )
 
+                # Fill the vector with the results in PhT space
+                # TODO check the space, qT or PhT
                 theo_xsec[iqT] = differential_xsec
 
                 print(f"  -> σ = {differential_xsec:.6e}")
@@ -563,22 +689,34 @@ class SIDISComputation:
 
 
 def main():
-    """Main function"""
+    """
+    Main function
+    """
     parser = argparse.ArgumentParser(description="Compute SIDIS cross sections")
     parser.add_argument("config_file", help="Configuration YAML file")
     parser.add_argument("data_file", help="Kinematic data YAML file")
-    parser.add_argument("output_file", help="Output YAML file")
+    parser.add_argument("fnp_config_file", help="fNP configuration YAML file")
+    parser.add_argument("output_folder", help="Output folder for results")
+    parser.add_argument("output_filename", help="Output YAML filename")
 
     args = parser.parse_args()
 
+    # Create output folder if it doesn't exist
+    os.makedirs(args.output_folder, exist_ok=True)
+
+    # Construct full output path
+    output_file = os.path.join(args.output_folder, args.output_filename)
+
     # Check Python version
     print(f"Python version: {sys.version}")
+    print(f"Output folder: {args.output_folder}")
+    print(f"Output file: {output_file}")
 
     # Initialize computation
-    sidis_comp = SIDISComputation(args.config_file)
+    sidis_comp = SIDISComputation(args.config_file, args.fnp_config_file)
 
     # Run computation
-    sidis_comp.compute_sidis_cross_section(args.data_file, args.output_file)
+    sidis_comp.compute_sidis_cross_section(args.data_file, output_file)
 
     print("SIDIS computation completed successfully!")
 
