@@ -132,13 +132,13 @@ class SIDISComputationPyTorch:
         if device is None:
             if torch.cuda.is_available():
                 self.device = torch.device("cuda")
-                print("Using CUDA GPU")
+                print(f"\033[94mUsing CUDA GPU\n\033[0m")
             elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 self.device = torch.device("mps")
-                print("Using Apple Metal GPU")
+                print(f"\033[94mUsing Apple Metal GPU\n\033[0m")
             else:
                 self.device = torch.device("cpu")
-                print("Using CPU")
+                print(f"\033[94mUsing CPU\n\033[0m")
         else:
             self.device = torch.device(device)
 
@@ -208,7 +208,7 @@ class SIDISComputationPyTorch:
         # Revisit for precision/perf tuning
         self.DEObj = ap.ogata.OgataQuadrature(0, 1e-9, 0.00001)
 
-        print("PyTorch SIDIS computation setup successful!")
+        print(f"\033[92m\n --- PyTorch SIDIS computation setup successful!\n\033[0m")
 
     def _setup_pdf(self):
         """
@@ -263,7 +263,7 @@ class SIDISComputationPyTorch:
         # Initial scale for evolution (typically \mu_0 ~ 1 GeV)
         self.mu0 = np.sqrt(self.pdf.q2Min)
 
-        print("PDF setup successful")
+        print(f"\033[92m\n --- PDF setup successful, PDF set: {pdf_name}\n\033[0m")
 
     def _setup_couplings(self):
         """
@@ -271,9 +271,7 @@ class SIDISComputationPyTorch:
 
         Notes:
             - TabulateObject: (N=100, μ-range scaled) cubic interpolation
-            - LeptThresholds: e, μ taken massless; τ included
-        TODO:
-            - Expose tabulation density & μ range to config
+            - LeptThresholds: e, μ taken massless; τ included. Hardcoded as in NangaParbat.
         """
         # Extract alpha strong from PDF set
         Alphas = lambda mu: self.pdf.alphasQ(mu)
@@ -422,6 +420,9 @@ class SIDISComputationPyTorch:
             [ap.SubGrid(*subgrids) for subgrids in self.config["xgridff"]]
         )
 
+        # Print
+        print(f"\033[92m\n --- FF setup successful, FF set: {ff_name}\n\033[0m")
+
     def _setup_tmd_ff_objects(self):
         """
         Build TMD FF evolution & matching objects.
@@ -488,7 +489,10 @@ class SIDISComputationPyTorch:
         try:
             # Use the provided fNP config file
             if os.path.exists(self.fnp_config_file):
-                print(f"Loading fNP configuration from {self.fnp_config_file}")
+                # Print the path of the fNP configuration file being loaded in green
+                print(
+                    f"\033[95m\nLoading fNP configuration from {self.fnp_config_file}\033[0m"
+                )
                 config_fnp = utl.load_yaml_config(self.fnp_config_file)
 
                 # Initialize PyTorch fNP model.
@@ -501,20 +505,29 @@ class SIDISComputationPyTorch:
                 self.model_fNP = fNP(config_fnp).to(self.device)
                 print("✅ PyTorch fNP model loaded successfully")
 
-                # Print model info
+                # Use the enhanced parameter analysis from the fNP module
+                self.model_fNP.print_parameter_summary()
+
+                # Additional information for debugging/development
+                print("📊 Additional PyTorch Information:")
                 total_params = sum(p.numel() for p in self.model_fNP.parameters())
-                trainable_params = sum(
+                pytorch_trainable = sum(
                     p.numel() for p in self.model_fNP.parameters() if p.requires_grad
                 )
-                print(f"   Total parameters: {total_params}")
-                print(f"   Trainable parameters: {trainable_params}")
+                print(f"   PyTorch total parameters: {total_params}")
+                print(f"   PyTorch requires_grad=True: {pytorch_trainable}")
+
+                # # Check
+                # # Print parameter names and values
+                # for name, param in self.model_fNP.named_parameters():
+                #     print(f"   - {name}: {param.numel()}, {param}: {param.data}")
 
             else:
                 print(f"Warning: fNP config not found at {self.fnp_config_file}")
                 self.model_fNP = None
 
         except Exception as e:
-            print(f"Warning: Could not load PyTorch fNP model: {e}")
+            print(f"⚠️  Warning: Could not load PyTorch fNP model: {e}")
             self.model_fNP = None
 
     def bstar_min(self, b: float, Q: float) -> float:
@@ -806,7 +819,7 @@ class SIDISComputationPyTorch:
             - Refine Yp computation (explicit y variable)
         """
         # print in green to indicate the start of computation
-        print(f"\033[92mLoading kinematic data from {data_file}\033[0m")
+        print(f"\033[93m\nLoading kinematic data from {data_file}\033[0m")
         kinematic_data = self.load_kinematic_data_pytorch(data_file)
 
         # Check that the data file contains the required keys and has the proper header.
@@ -1154,11 +1167,11 @@ def main():
     # Construct full output path
     output_file = os.path.join(args.output_folder, args.output_filename)
 
-    # Check Python version
-    print(f"Python version: {sys.version}")
-    print(f"PyTorch version: {torch.__version__}")
-    print(f"Output folder: {args.output_folder}")
-    print(f"Output file: {output_file}")
+    # Print out in purple some features
+    print(f"\033[94m\nPython version: {sys.version}\033[0m")
+    print(f"\033[94mPyTorch version: {torch.__version__}\033[0m")
+    print(f"\033[94mOutput folder: {args.output_folder}\033[0m")
+    print(f"\033[94mOutput file: {output_file}\033[0m")
 
     # Initialize PyTorch computation
     sidis_comp = SIDISComputationPyTorch(

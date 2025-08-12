@@ -8,7 +8,7 @@ This file contains the fNP parametrization for the TMDPDFs.
 # fNP.py
 import torch
 import torch.nn as nn
-from typing import Optional, Union, List, Dict
+from typing import Optional, Union, List, Dict, Any
 
 # IPython imports - handle gracefully if not available
 # Try to import IPython display functionality for notebook environments
@@ -658,6 +658,13 @@ class fNP(nn.Module):
                        are trainable (True) and which are fixed (False).
         """
 
+        # Print a message to indicate that the fNP module is being initialized.
+        print(
+            "\033[94m"
+            + "[fNP.py] Initializing fNP module. Reading fNPconfig file"
+            + "\033[0m"
+        )
+
         # First, call the constructor of the parent class (nn.Module)
         # to initialize internal machinery.
         super().__init__()
@@ -682,7 +689,11 @@ class fNP(nn.Module):
             )
 
         # Print a message to indicate that the shared g2 is being initialized.
-        print("\033[94m" + f"Initializing shared g2 with value {init_g2}." + "\033[0m")
+        print(
+            "\033[94m"
+            + f"[fNP.py] Initializing shared g2 with value {init_g2}."
+            + "\033[0m"
+        )
 
         # Create the shared evolution module.
         self.NPevolution = fNP_evolution(init_g2=init_g2)
@@ -829,3 +840,167 @@ class fNP(nn.Module):
 
         # Return the dictionary mapping flavor keys to their computed outputs.
         return outputs
+
+    def get_parameter_info(self) -> Dict[str, Any]:
+        """
+        Get detailed information about model parameters including trainability status.
+
+        Returns:
+            Dict containing parameter counts, breakdowns by flavor, and trainability info
+        """
+        info = {
+            "total_parameters": 0,
+            "truly_trainable_parameters": 0,
+            "pytorch_trainable_parameters": sum(
+                p.numel() for p in self.parameters() if p.requires_grad
+            ),
+            "flavors": {},
+            "evolution": {},
+        }
+
+        # Evolution parameter (g2)
+        if hasattr(self, "NPevolution") and hasattr(self.NPevolution, "g2"):
+            info["evolution"] = {"total": 1, "trainable": 1, "fixed": 0}
+            info["total_parameters"] += 1
+            info["truly_trainable_parameters"] += 1
+
+        # Flavor parameters
+        for flavor_key in self.flavor_keys:
+            flavor_module = self.flavors[flavor_key]
+            n_params = flavor_module.n_params
+            info["total_parameters"] += n_params
+
+            if hasattr(flavor_module, "mask"):
+                free_count = int(flavor_module.mask.sum().item())
+                fixed_count = n_params - free_count
+                info["truly_trainable_parameters"] += free_count
+
+                info["flavors"][flavor_key] = {
+                    "total": n_params,
+                    "trainable": free_count,
+                    "fixed": fixed_count,
+                    "mask": flavor_module.mask.squeeze().tolist(),
+                }
+            else:
+                info["truly_trainable_parameters"] += n_params
+                info["flavors"][flavor_key] = {
+                    "total": n_params,
+                    "trainable": n_params,
+                    "fixed": 0,
+                    "mask": [True] * n_params,
+                }
+
+        return info
+
+    def print_parameter_summary(self):
+        """Print a formatted summary of model parameters and their trainability."""
+        info = self.get_parameter_info()
+
+        print("\n" + "=" * 60)
+        print("fNP MODEL PARAMETER SUMMARY")
+        print("=" * 60)
+        print(f"Total parameters: {info['total_parameters']}")
+        print(f"Truly trainable parameters: {info['truly_trainable_parameters']}")
+        print(f"PyTorch trainable parameters: {info['pytorch_trainable_parameters']}")
+        print(
+            f"Fixed parameters: {info['total_parameters'] - info['truly_trainable_parameters']}"
+        )
+
+        print("\nEvolution parameter:")
+        evo = info["evolution"]
+        print(
+            f"  g2: {evo['total']} total ({evo['trainable']} trainable, {evo['fixed']} fixed)"
+        )
+
+        print("\nFlavor parameters:")
+        for flavor, data in info["flavors"].items():
+            print(
+                f"  {flavor}: {data['total']} total ({data['trainable']} trainable, {data['fixed']} fixed)"
+            )
+            if data["total"] <= 15:  # Show mask for small parameter sets
+                mask_str = ["T" if m else "F" for m in data["mask"]]
+                print(f"      mask: [{', '.join(mask_str)}]")
+
+        print("=" * 60 + "\n")
+
+    def get_trainable_parameters_dict(self) -> Dict[str, torch.Tensor]:
+        """
+        Extract only the truly trainable parameters (considering masks) for optimization.
+
+        This method is useful for:
+        - Saving only parameters that should be fitted
+        - Creating optimizers with only trainable parameters
+        - Parameter transfer between models with different fixed/free configurations
+
+        Returns:
+            Dict mapping parameter names to tensors containing only trainable values
+        """
+        trainable_params = {}
+
+        # Evolution parameter (always trainable)
+        if hasattr(self, "NPevolution") and hasattr(self.NPevolution, "g2"):
+            trainable_params["evolution.g2"] = self.NPevolution.g2.data.clone()
+
+        # Flavor parameters (only free ones according to mask)
+        for flavor_key in self.flavor_keys:
+            flavor_module = self.flavors[flavor_key]
+            if hasattr(flavor_module, "mask"):
+                # Get full parameters and apply mask to extract only trainable ones
+                full_params = (
+                    flavor_module.get_params_tensor.squeeze()
+                )  # Remove flavor dimension
+                mask = flavor_module.mask.squeeze().bool()  # Convert to boolean mask
+                trainable_values = full_params[
+                    mask
+                ]  # Extract only trainable parameters
+                trainable_params[f"flavors.{flavor_key}.trainable"] = (
+                    trainable_values.clone()
+                )
+            else:
+                # If no mask, all are trainable
+                full_params = flavor_module.get_params_tensor.squeeze()
+                trainable_params[f"flavors.{flavor_key}.trainable"] = (
+                    full_params.clone()
+                )
+
+        return trainable_params
+
+    def set_trainable_parameters_dict(self, trainable_params: Dict[str, torch.Tensor]):
+        """
+        Update model with trainable parameters only.
+
+        This method allows updating only the trainable parameters while leaving
+        fixed parameters unchanged. Useful for loading fitted parameters.
+
+        Args:
+            trainable_params: Dict from get_trainable_parameters_dict()
+        """
+        # Update evolution parameter
+        if "evolution.g2" in trainable_params:
+            self.NPevolution.g2.data.copy_(trainable_params["evolution.g2"])
+
+        # Update flavor parameters
+        for flavor_key in self.flavor_keys:
+            param_key = f"flavors.{flavor_key}.trainable"
+            if param_key in trainable_params:
+                flavor_module = self.flavors[flavor_key]
+                trainable_values = trainable_params[param_key]
+
+                if hasattr(flavor_module, "mask"):
+                    # Create full parameter tensor and set trainable values
+                    full_params = flavor_module.get_params_tensor.squeeze()
+                    mask = flavor_module.mask.squeeze().bool()
+
+                    # Update only the trainable parameters
+                    full_params[mask] = trainable_values
+
+                    # Update the module's parameters
+                    fixed_part = full_params * (~mask).float()
+                    free_part = full_params * mask.float()
+
+                    flavor_module.fixed_params.data.copy_(fixed_part.unsqueeze(0))
+                    flavor_module.free_params.data.copy_(free_part.unsqueeze(0))
+                else:
+                    # If no mask, all parameters are trainable
+                    full_params = trainable_values
+                    flavor_module.free_params.data.copy_(full_params.unsqueeze(0))
