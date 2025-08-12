@@ -10,24 +10,29 @@ Usage:
     python test_sidis_parameter_masking.py
     python -m pytest test_sidis_parameter_masking.py -v
 
-Author: Generated for TMD analysis framework
+Author: chiara bissolotti
 """
 
-import os
 import sys
 import torch
 import yaml
 import unittest
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
+from pathlib import Path  # OS-agnostic path object
 
-# Add the parent directory to the path to import modules
-sys.path.append("/Users/cbissolotti/anl/projects/tmd/map")
+# Dynamic path resolution based on test file location
+TEST_DIR = Path(__file__).parent
+MAP_DIR = TEST_DIR.parent
+PROJECT_ROOT = MAP_DIR.parent
+
+# Add the map directory to the path to import modules
+sys.path.insert(0, str(MAP_DIR))
 
 from modules.fNP import fNP
 
 # Check if SIDIS computation is available (optional)
 try:
-    from sidis_computation_pytorch import SIDISComputationPyTorch
+    from sidis_crossect_torch import SIDISComputationPyTorch
 
     SIDIS_AVAILABLE = True
 except ImportError:
@@ -39,23 +44,20 @@ class TestParameterMasking(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures before each test method."""
-        self.config_file = "/Users/cbissolotti/anl/projects/tmd/map/inputs/config.yaml"
-        self.fnp_config_file = (
-            "/Users/cbissolotti/anl/projects/tmd/map/inputs/fNPconfig.yaml"
-        )
-        self.fnp_config_test_file = (
-            "/Users/cbissolotti/anl/projects/tmd/map/inputs/fNPconfig_test.yaml"
-        )
+        self.config_file = MAP_DIR / "inputs" / "config.yaml"
+        self.fnp_config_file = MAP_DIR / "inputs" / "fNPconfig.yaml"
+        self.fnp_config_test_file = MAP_DIR / "inputs" / "fNPconfig_test.yaml"
 
         # Check if required files exist
-        if not os.path.exists(self.config_file):
+        if not self.config_file.exists():
             self.skipTest(f"Config file not found: {self.config_file}")
-        if not os.path.exists(self.fnp_config_file):
+        if not self.fnp_config_file.exists():
             self.skipTest(f"fNP config file not found: {self.fnp_config_file}")
 
-    def load_yaml_config(self, config_file: str) -> Dict[str, Any]:
+    def load_yaml_config(self, config_file: Union[str, Path]) -> Dict[str, Any]:
         """Load YAML configuration file."""
-        with open(config_file, "r") as f:
+        config_path = Path(config_file)
+        with open(config_path, "r") as f:
             config = yaml.safe_load(f)
         return config if isinstance(config, dict) else {}
 
@@ -82,7 +84,7 @@ class TestParameterMasking(unittest.TestCase):
 
     def test_fnp_mixed_masking_configuration(self):
         """Test fNP with mixed fixed/trainable configuration."""
-        if not os.path.exists(self.fnp_config_test_file):
+        if not self.fnp_config_test_file.exists():
             self.skipTest(f"Test config file not found: {self.fnp_config_test_file}")
 
         print("\n🧪 Testing fNP mixed masking configuration...")
@@ -292,17 +294,17 @@ def run_parameter_masking_integration_test():
 
     configs = [
         (
-            "/Users/cbissolotti/anl/projects/tmd/map/inputs/fNPconfig.yaml",
+            MAP_DIR / "inputs" / "fNPconfig.yaml",
             "Original (all trainable)",
         ),
         (
-            "/Users/cbissolotti/anl/projects/tmd/map/inputs/fNPconfig_test.yaml",
+            MAP_DIR / "inputs" / "fNPconfig_test.yaml",
             "Test (mixed fixed/trainable)",
         ),
     ]
 
     for config_file, description in configs:
-        if not os.path.exists(config_file):
+        if not config_file.exists():
             print(f"❌ Config file not found: {config_file}")
             continue
 

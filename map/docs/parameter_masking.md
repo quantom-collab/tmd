@@ -2,11 +2,28 @@
 
 ## Overview
 
-The `fNP.py` module implements a sophisticated parameter masking system that allows users to control which parameters are trainable during optimization and which remain fixed. This is controlled through the `free_mask` configuration in `fNPconfig.yaml`.
+The `fNP.py` module implements a sophisticated parameter masking system that allows users to control which parameters are trainable during optimization and which remain fixed. This is controlled through the `free_mask` configuration in `fNPconfig.yaml` for both flavor-specific parameters and shared evolution parameters.
 
 ## How It Works
 
 ### Configuration File (`fNPconfig.yaml`)
+
+The configuration supports parameter masking for two types of parameters:
+
+1. **Evolution Parameters**: Shared across all flavors (e.g., g2 parameter)
+2. **Flavor Parameters**: Specific to each flavor
+
+#### Evolution Parameters
+
+The evolution section controls the shared g2 parameter that affects all flavors:
+
+```yaml
+evolution:
+  init_g2: 0.25
+  free_mask: [true]  # Controls whether g2 is trainable
+```
+
+#### Flavor Parameters
 
 Each flavor in the configuration has two key arrays:
 
@@ -23,6 +40,30 @@ flavors:
 ```
 
 ### Implementation Details
+
+The masking system is implemented consistently for both evolution and flavor parameters:
+
+#### Evolution Parameters (fNP_evolution class)
+
+1. **Parameter Storage**: The g2 parameter is stored in two components:
+   - `fixed_g2`: Non-trainable component (stored as buffer)
+   - `free_g2`: Trainable component (stored as nn.Parameter)
+
+2. **Gradient Masking**: A gradient hook ensures only free parameters receive gradients:
+
+   ```python
+   self.free_g2.register_hook(lambda grad: grad * mask)
+   ```
+
+3. **Parameter Access**: The full g2 parameter is accessed via a property:
+
+   ```python
+   @property
+   def g2(self):
+       return (self.fixed_g2 + self.free_g2)[0]
+   ```
+
+#### Flavor Parameters (TMDPDFBase class)
 
 1. **Parameter Storage**: Each flavor module stores parameters in two components:
    - `fixed_params`: Non-trainable parameters (stored as buffers)
@@ -94,11 +135,16 @@ for batch in dataloader:
 
 ## Parameter Counts
 
-The system reports different parameter counts:
+The system reports different parameter counts for both evolution and flavor parameters:
 
-1. **Total Parameters**: All parameters in the model (fixed + trainable)
+1. **Total Parameters**: All parameters in the model (evolution + flavor fixed + trainable)
 2. **PyTorch Trainable Parameters**: Parameters with `requires_grad=True` (may include masked ones)
 3. **Truly Trainable Parameters**: Parameters that actually update during training (considering masks)
+
+The parameter counts include:
+
+- **Evolution Parameters**: g2 parameter (1 parameter total)
+- **Flavor Parameters**: Parameters for each flavor (varies by flavor: u=11, d=10, others=2 by default)
 
 ## Testing Parameter Masking
 
@@ -124,7 +170,27 @@ This script demonstrates:
 
 ## Configuration Examples
 
-### All Parameters Trainable
+### Evolution Parameter Control
+
+#### g2 Parameter Trainable (Default)
+
+```yaml
+evolution:
+  init_g2: 0.25
+  free_mask: [true]  # g2 will be optimized during training
+```
+
+#### g2 Parameter Fixed
+
+```yaml
+evolution:
+  init_g2: 0.25
+  free_mask: [false]  # g2 is fixed, won't change during training
+```
+
+### Flavor Parameter Control
+
+#### All Parameters Trainable
 
 ```yaml
 flavors:
@@ -133,7 +199,7 @@ flavors:
     free_mask:   [true, true, true]
 ```
 
-### Some Parameters Fixed
+#### Some Parameters Fixed
 
 ```yaml
 flavors:

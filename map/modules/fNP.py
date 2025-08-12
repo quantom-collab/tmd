@@ -199,28 +199,55 @@ class TMDPDFBase(nn.Module):
 # 2. fNP Evolution Module
 ###############################################################################
 class fNP_evolution(nn.Module):
-    def __init__(self, init_g2: float):
+    def __init__(self, init_g2: float, free_mask: List[bool]):
         """
-        Evolution factor module.
+        Evolution factor module with parameter masking support.
 
         This class computes the evolution factor for the non-perturbative TMD PDF.
         The evolution factor depends on the parameter g2, b, and the rapidity scale (zeta).
+        The parameter can be either trainable or fixed based on the free_mask.
+
         Parameters:
             init_g2 (float):
                 Initial value for the evolution factor parameter g2.
-                This value is used to initialize a trainable parameter.
+            free_mask (List[bool]):
+                A list containing one boolean value indicating whether g2 should be
+                trainable (True) or fixed (False).
         Attributes:
-            g2 (torch.nn.Parameter):
-                A trainable parameter initialized with the value of init_g2,
-                representing the non-perturbative evolution factor. This parameter
-                is optimized during training to best fit the TMD PDF model.
+            fixed_g2 (torch.Tensor):
+                The fixed part of g2 (registered as buffer, not trainable).
+            free_g2 (torch.nn.Parameter):
+                The trainable part of g2 (only non-zero if free_mask[0] is True).
         """
 
         # Call the constructor of the parent class (nn.Module)
         super().__init__()
 
-        # g2 is a trainable parameter shared across all flavors.
-        self.g2 = nn.Parameter(torch.tensor(init_g2, dtype=torch.float32))
+        # Validate that free_mask has exactly one element for g2
+        if len(free_mask) != 1:
+            raise ValueError(
+                f"free_mask for evolution must have exactly 1 element, got {len(free_mask)}"
+            )
+
+        # Convert mask to tensor
+        mask = torch.tensor(free_mask, dtype=torch.float32)
+        init_tensor = torch.tensor([init_g2], dtype=torch.float32)
+
+        # Store the fixed part (not trainable)
+        fixed_init = init_tensor * (1 - mask)
+        self.register_buffer("fixed_g2", fixed_init)
+
+        # Store the free part (trainable)
+        free_init = init_tensor * mask
+        self.free_g2 = nn.Parameter(free_init)
+
+        # Ensure that during backpropagation, only free entries get gradients.
+        self.free_g2.register_hook(lambda grad: grad * mask)
+
+    @property
+    def g2(self):
+        """Return the full g2 parameter (fixed + free parts)."""
+        return (self.fixed_g2 + self.free_g2)[0]
 
     def forward(self, b: torch.Tensor, zeta: torch.Tensor):
         """
@@ -681,6 +708,10 @@ class fNP(nn.Module):
         # If the key does not exist, set a default value of 0.2.
         init_g2 = config.get("evolution", {}).get("init_g2", 0.2)
 
+        # Read the evolution free_mask from the configuration file.
+        # If the free_mask is not provided, default to [True] (g2 is trainable).
+        evolution_free_mask = config.get("evolution", {}).get("free_mask", [True])
+
         # If the "evolution" key exists in the configuration dictionary,
         # raise an exception with a clear error message.
         if "evolution" not in config:
@@ -691,12 +722,12 @@ class fNP(nn.Module):
         # Print a message to indicate that the shared g2 is being initialized.
         print(
             "\033[94m"
-            + f"[fNP.py] Initializing shared g2 with value {init_g2}."
+            + f"[fNP.py] Initializing shared g2 with value {init_g2}, free_mask: {evolution_free_mask}."
             + "\033[0m"
         )
 
         # Create the shared evolution module.
-        self.NPevolution = fNP_evolution(init_g2=init_g2)
+        self.NPevolution = fNP_evolution(init_g2=init_g2, free_mask=evolution_free_mask)
 
         # Extract the flavor-specific configurations.
         flavor_config = config.get("flavors", {})

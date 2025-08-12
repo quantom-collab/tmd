@@ -2,7 +2,6 @@
 # Lower qT values to stay within the qT/Q cut
 
 header:
-  # Process information
   process: "SIDIS"
   observable: "cross_section"
   target_isoscalarity: 1
@@ -33,6 +32,3 @@ data:
 
   # Inelasticity y
   y: [0.63139491, 0.63139491, 0.63139491, 0.63139491, 0.63139491, 0.63139491, 0.63139491]
-
-  # Experimental multiplicity data (for reference)
-  dsigma: [0.1864647, 0.4160929, 0.5467943, 0.5739435, 0.5183662, 0.3815261, 0.1247706]

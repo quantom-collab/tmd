@@ -6,6 +6,7 @@ zeta: 1.0
 # Shared evolution parameters
 evolution:
   init_g2: 0.25
+  free_mask: [true]
 
 flavors:
   u:
