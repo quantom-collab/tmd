@@ -135,7 +135,6 @@ The following libraries must be installed on your system:
 - **GSL** (GNU Scientific Library): Mathematical functions and integration
 - **CMake** (≥3.12): Build system
 
-
 ## Kinematics File Format (for SIDISCrossSectionKinem)
 
 The custom kinematics YAML file should have the following structure:
