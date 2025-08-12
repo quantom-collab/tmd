@@ -3,8 +3,6 @@
  *          Chiara Bissolotti: chiara.bissolotti01@gmail.com
  */
 
-#if 0 // Guard to avoid vscode intellisense to show errors
-
 #include <LHAPDF/LHAPDF.h>
 #include <apfel/apfelxx.h>
 #include <yaml-cpp/yaml.h>
@@ -43,6 +41,12 @@ int main(int argc, char *argv[])
    std::cout << "\033[1;37m\nComputing SIDIS multiplicities ...\033[0m" << std::endl;
    std::cout << "\033[1;33mComputation done at the average values, NOT INTEGRATED.\033[0m"
              << std::endl;
+
+   std::cout << "\033[1;31m*********\033[0m" << std::endl;
+   std::cout << "\033[1;31mTHE PREDICTIONS DONE ABOVE NLO ARE MISSING THE PREFACTOR, THEY WILL NOT "
+                "BE CLOSE TO DATA.\033[0m"
+             << std::endl;
+   std::cout << "\033[1;31m*********\033[0m" << std::endl;
 
    // Perturbative order
    const int pto = config["PerturbativeOrder"].as<int>();
@@ -147,7 +151,10 @@ int main(int argc, char *argv[])
    em.SetFloatPrecision(8);
    em.SetDoublePrecision(8);
    em << YAML::BeginMap;
-   em << YAML::Key << "Parameterisation" << YAML::Value << "PV17";
+   em << YAML::Key << "IMPORTANT NOTE" << YAML::Value
+      << "Predictions done at a perturbative accuracy above LL are missing a prefactor and will be "
+         "close to data.";
+   em << YAML::Key << "Parameterisation" << YAML::Value << "MAP22g52";
    em << YAML::Key << "Non-perturbative function" << YAML::Value << fNP->LatexFormula();
 
    em << YAML::Key << "Parameters" << YAML::Value << YAML::Flow;
@@ -174,16 +181,16 @@ int main(int argc, char *argv[])
             FFset = "DSS07_NLO_HadronMinus";
          else if (ds["name"].as<std::string>().substr(0, 14) == "HERMES_Pro_Pip" ||
                   ds["name"].as<std::string>().substr(0, 14) == "HERMES_Deu_Pip")
-            FFset = "DSS14_NLO_Pip";
+            FFset = "MAPFF10NNLOPIp";
          else if (ds["name"].as<std::string>().substr(0, 14) == "HERMES_Pro_Pim" ||
                   ds["name"].as<std::string>().substr(0, 14) == "HERMES_Deu_Pim")
-            FFset = "DSS14_NLO_Pim";
+            FFset = "MAPFF10NNLOPIm";
          else if (ds["name"].as<std::string>().substr(0, 13) == "HERMES_Pro_Kp" ||
                   ds["name"].as<std::string>().substr(0, 13) == "HERMES_Deu_Kp")
-            FFset = "DSS17_NLO_KaonPlus";
+            FFset = "MAPFF10NNLOKAp";
          else if (ds["name"].as<std::string>().substr(0, 13) == "HERMES_Pro_Km" ||
                   ds["name"].as<std::string>().substr(0, 13) == "HERMES_Deu_Km")
-            FFset = "DSS17_NLO_KaonMinus";
+            FFset = "MAPFF10NNLOKAm";
          else
             std::cout << "\033[1;31m [SIDISMultiplicities] Unknown SIDIS Experiment - FFs not "
                          "initialized\033[0m"
@@ -553,7 +560,7 @@ int main(int argc, char *argv[])
       }
 
    // Output file
-   std::ofstream fout(OutputFolder + "/Report.yaml");
+   std::ofstream fout(OutputFolder + "/ReportMultiplicities.yaml");
    fout << em.c_str() << std::endl;
    fout.close();
 
@@ -565,5 +572,3 @@ int main(int argc, char *argv[])
 
    return 0;
 }
-
-#endif #if 0

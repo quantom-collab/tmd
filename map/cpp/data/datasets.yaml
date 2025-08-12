@@ -1,0 +1,19 @@
+HERMES:
+  - { name: HERMES_Pro_Pip_x_0.12_0.2_z_0.25_0.3, file: HERMES_Pro_Pip_x_0.12_0.2_z_0.25_0.3.yaml }
+  - { name: HERMES_Pro_Pip_x_0.12_0.2_z_0.2_0.25, file: HERMES_Pro_Pip_x_0.12_0.2_z_0.2_0.25.yaml }
+  - { name: HERMES_Pro_Pip_x_0.12_0.2_z_0.375_0.475, file: HERMES_Pro_Pip_x_0.12_0.2_z_0.375_0.475.yaml }
+  - { name: HERMES_Pro_Pip_x_0.12_0.2_z_0.3_0.375, file: HERMES_Pro_Pip_x_0.12_0.2_z_0.3_0.375.yaml }
+  - { name: HERMES_Pro_Pip_x_0.12_0.2_z_0.475_0.6, file: HERMES_Pro_Pip_x_0.12_0.2_z_0.475_0.6.yaml }
+  - { name: HERMES_Pro_Pip_x_0.12_0.2_z_0.6_0.8, file: HERMES_Pro_Pip_x_0.12_0.2_z_0.6_0.8.yaml }
+  - { name: HERMES_Pro_Pip_x_0.2_0.35_z_0.25_0.3, file: HERMES_Pro_Pip_x_0.2_0.35_z_0.25_0.3.yaml }
+  - { name: HERMES_Pro_Pip_x_0.2_0.35_z_0.2_0.25, file: HERMES_Pro_Pip_x_0.2_0.35_z_0.2_0.25.yaml }
+  - { name: HERMES_Pro_Pip_x_0.2_0.35_z_0.375_0.475, file: HERMES_Pro_Pip_x_0.2_0.35_z_0.375_0.475.yaml }
+  - { name: HERMES_Pro_Pip_x_0.2_0.35_z_0.3_0.375, file: HERMES_Pro_Pip_x_0.2_0.35_z_0.3_0.375.yaml }
+  - { name: HERMES_Pro_Pip_x_0.2_0.35_z_0.475_0.6, file: HERMES_Pro_Pip_x_0.2_0.35_z_0.475_0.6.yaml }
+  - { name: HERMES_Pro_Pip_x_0.2_0.35_z_0.6_0.8, file: HERMES_Pro_Pip_x_0.2_0.35_z_0.6_0.8.yaml }
+  - { name: HERMES_Pro_Pip_x_0.35_0.6_z_0.25_0.3, file: HERMES_Pro_Pip_x_0.35_0.6_z_0.25_0.3.yaml }
+  - { name: HERMES_Pro_Pip_x_0.35_0.6_z_0.2_0.25, file: HERMES_Pro_Pip_x_0.35_0.6_z_0.2_0.25.yaml }
+  - { name: HERMES_Pro_Pip_x_0.35_0.6_z_0.375_0.475, file: HERMES_Pro_Pip_x_0.35_0.6_z_0.375_0.475.yaml }
+  - { name: HERMES_Pro_Pip_x_0.35_0.6_z_0.3_0.375, file: HERMES_Pro_Pip_x_0.35_0.6_z_0.3_0.375.yaml }
+  - { name: HERMES_Pro_Pip_x_0.35_0.6_z_0.475_0.6, file: HERMES_Pro_Pip_x_0.35_0.6_z_0.475_0.6.yaml }
+  - { name: HERMES_Pro_Pip_x_0.35_0.6_z_0.6_0.8, file: HERMES_Pro_Pip_x_0.35_0.6_z_0.6_0.8.yaml }
