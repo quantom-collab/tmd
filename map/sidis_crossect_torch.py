@@ -1,52 +1,27 @@
 #!/usr/bin/env python3
 """
-SIDIS Cross Section Computation using PyTorch and APFEL++ - Complete Implementation
+Semi-Inclusive Deep Inelastic Scattering (SIDIS) Cross Section Computation
+using PyTorch and APFEL++ - Complete Implementation
 
-This script computes Semi-Inclusive Deep Inelastic Scattering (SIDIS) differential
-cross sections using a hybrid approach that combines:
+This script computes SIDIS differential cross sections using:
 1. APFEL++ library for TMD evolution and matching
 2. PyTorch for non-perturbative function modeling and gradient computation
-
-PHYSICS OVERVIEW:
-================
-SIDIS is the process: e + N → e' + h + X
-where an electron scatters off a nucleon N, producing a hadron h and other particles X.
-
-The differential cross section in TMD factorization is:
-...
-- f₁(x,bT): TMD PDF (parton distribution with transverse momentum dependence)
-- D₁(z,bT): TMD FF (fragmentation function with transverse momentum dependence)
-- S(bT): Sudakov factor (soft gluon resummation)
-- H(μ): Hard factor (partonic cross section)
-- bT: Fourier conjugate to qT
 
 KINEMATIC VARIABLES:
 ===================
 - x: Bjorken scaling variable (momentum fraction of struck parton)
-- Q²: Photon virtuality (hard scale of the process)
+- Q2: Photon virtuality (hard scale of the process)
 - z: Energy fraction of produced hadron
 - PhT: Transverse momentum of produced hadron
 - qT = PhT/z: Intrinsic transverse momentum
 
-TMD EVOLUTION:
-==============
-TMDs satisfy coupled evolution equations:
-- μ² d/dμ² TMD = γμ ⊗ TMD (DGLAP-like evolution)
-- ζ d/dζ TMD = -D(μ,bT) TMD (Collins-Soper evolution)
-
-The evolution kernels are computed perturbatively, while non-perturbative
-contributions are modeled using the fNP functions.
-
 PYTORCH INTEGRATION:
 ===================
 This implementation uses PyTorch for:
-- fNP function evaluation with 34 trainable parameters
+- fNP function evaluation
 - Automatic differentiation for gradient-based fitting
 - GPU acceleration (CUDA/Metal support)
 - Tensor operations for efficient computation
-
-The code maintains full compatibility with APFEL++ while adding PyTorch
-capabilities for machine learning applications in TMD physics.
 
 USAGE:
 ======
@@ -76,7 +51,8 @@ import argparse
 import numpy as np
 from typing import Dict, List, Tuple, Any, TYPE_CHECKING, Optional
 
-# Type annotations for LHAPDF - using Any to avoid linter errors
+# Type annotations for LHAPDF
+# using Any to avoid linter errors
 import lhapdf as lh
 
 if TYPE_CHECKING:
