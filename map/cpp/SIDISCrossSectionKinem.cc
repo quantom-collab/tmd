@@ -103,6 +103,10 @@ void saveResultsYAML(const std::string &filename, const KinematicsData &kin,
 {
    YAML::Emitter out;
 
+   // Set scientific notation for YAML output
+   out.SetFloatPrecision(8);
+   out.SetDoublePrecision(8);
+
    out << YAML::BeginMap;
    out << YAML::Key << "Process" << YAML::Value << kin.process;
    out << YAML::Key << "Observable" << YAML::Value << kin.observable;
@@ -118,7 +122,6 @@ void saveResultsYAML(const std::string &filename, const KinematicsData &kin,
       out << YAML::Key << "PhT" << YAML::Value << kin.PhT[i];
       out << YAML::Key << "x" << YAML::Value << kin.x[i];
       out << YAML::Key << "z" << YAML::Value << kin.z[i];
-      out << YAML::Key << "Q2" << YAML::Value << kin.Q2[i];
       out << YAML::Key << "Q" << YAML::Value << std::sqrt(kin.Q2[i]);
       out << YAML::Key << "y" << YAML::Value << kin.y[i];
       out << YAML::Key << "qT" << YAML::Value << kin.PhT[i] / kin.z[i];
@@ -141,6 +144,10 @@ void saveResultsYAMLArrays(const std::string &filename, const KinematicsData &ki
 {
    YAML::Emitter out;
 
+   // Set scientific notation for YAML output
+   out.SetFloatPrecision(8);
+   out.SetDoublePrecision(8);
+
    // Calculate derived quantities - all vectors same length as predictions
    std::vector<double> Q_values, qT_values;
    for (size_t i = 0; i < kin.npoints(); i++) {
@@ -148,16 +155,8 @@ void saveResultsYAMLArrays(const std::string &filename, const KinematicsData &ki
       qT_values.push_back(kin.PhT[i] / kin.z[i]);
    }
 
-   // Calculate average values for metadata
-   double Q_avg = std::accumulate(Q_values.begin(), Q_values.end(), 0.0) / Q_values.size();
-   double x_avg = std::accumulate(kin.x.begin(), kin.x.end(), 0.0) / kin.x.size();
-   double z_avg = std::accumulate(kin.z.begin(), kin.z.end(), 0.0) / kin.z.size();
-
    out << YAML::BeginMap;
    out << YAML::Key << "Name" << YAML::Value << kin.process + "_" + kin.observable;
-   out << YAML::Key << "Q" << YAML::Value << Q_avg;
-   out << YAML::Key << "x" << YAML::Value << x_avg;
-   out << YAML::Key << "z" << YAML::Value << z_avg;
 
    // All arrays have exactly the same length as predictions
    out << YAML::Key << "PhT" << YAML::Value << YAML::Flow << YAML::BeginSeq;
@@ -246,12 +245,14 @@ int main(int argc, char *argv[])
    // Check command line arguments
    if (argc < 4 || strcmp(argv[1], "--help") == 0) {
       std::cout << "\nUsage:" << std::endl;
-      std::cout << "Syntax: ./SIDISCrossSection <config.yaml> <kinematics.yaml> <output_folder>\n"
+      std::cout << "Syntax: ./SIDISCrossSection <config.yaml> <kinematics.yaml> <output_folder> "
+                   "[suffix]\n"
                 << std::endl;
       std::cout << "Arguments:" << std::endl;
       std::cout << "  config.yaml     - SIDIS computation configuration file" << std::endl;
       std::cout << "  kinematics.yaml - Kinematic points file" << std::endl;
       std::cout << "  output_folder   - Output directory for results" << std::endl;
+      std::cout << "  suffix          - Optional suffix for output files" << std::endl;
       exit(-10);
    }
 
@@ -261,6 +262,15 @@ int main(int argc, char *argv[])
    // Load kinematics data
    std::string kinematicsFile = argv[2];
    KinematicsData kin;
+
+   // Get optional suffix for output files
+   std::string suffix = "";
+   if (argc >= 5) {
+      suffix = std::string(argv[4]);
+      if (!suffix.empty() && suffix[0] != '_') {
+         suffix = "_" + suffix; // Add underscore if not present
+      }
+   }
 
    try {
       kin = loadKinematicsFile(kinematicsFile);
@@ -579,10 +589,10 @@ int main(int argc, char *argv[])
                 << std::endl;
    }
 
-   // Save results
-   std::string yamlOutput       = OutputFolder + "/predictions.yaml";
-   std::string yamlArraysOutput = OutputFolder + "/predictions_arrays.yaml";
-   std::string txtOutput        = OutputFolder + "/predictions.txt";
+   // Save results with optional suffix
+   std::string yamlOutput       = OutputFolder + "/predictions" + suffix + ".yaml";
+   std::string yamlArraysOutput = OutputFolder + "/predictions_arrays" + suffix + ".yaml";
+   std::string txtOutput        = OutputFolder + "/predictions" + suffix + ".txt";
 
    saveResultsYAML(yamlOutput, kin, predictions);
    saveResultsYAMLArrays(yamlArraysOutput, kin, predictions);

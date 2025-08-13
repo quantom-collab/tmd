@@ -131,6 +131,9 @@ function(create_executable_from_source source_file)
         ${APFELXX_CPPFLAGS}
         ${NANGAPARBAT_CPPFLAGS}
         ${YAMLCPP_CFLAGS}
+        # Suppress specific warnings from NangaParbat headers.
+        # They are warning messages related to return types.
+        -Wno-return-type
     )
     
     # Set include directories

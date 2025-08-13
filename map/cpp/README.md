@@ -74,7 +74,7 @@ Example usage:
 
 ```bash
 cd tmds/map/cpp/build/
-./SIDISCrossSectionKinem ../../inputs/config.yaml ../../inputs/kinematics.yaml ../output
+./SIDISCrossSectionKinem ../../inputs/config.yaml ../../inputs/kinematics.yaml ../output optional_suffix
 ```
 
 **Output**: Creates both `predictions.yaml` (detailed format), `predictions_arrays.yaml` (plotting format), and `predictions.txt` (tabular format):
@@ -94,7 +94,7 @@ Example usage:
 
 ```bash
 cd tmds/map/cpp/build/
-./SIDISCrossSectionData ../../inputs/config.yaml ../data/ ../output
+./SIDISCrossSectionData ../../inputs/config.yaml ../data/ ../output optional_suffix
 ```
 
 **Input Requirements**:
@@ -117,7 +117,7 @@ Example usage:
 
 ```bash
 cd tmds/map/cpp/build/
-./SIDISMultiplicities ../../inputs/config.yaml ../data/ ../output
+./SIDISMultiplicities ../../inputs/config.yaml ../data/ ../output optional_suffix
 ```
 
 Output:

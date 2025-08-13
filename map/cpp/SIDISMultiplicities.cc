@@ -25,8 +25,13 @@ int main(int argc, char *argv[])
    if (argc < 4 || strcmp(argv[1], "--help") == 0) {
       std::cout << "\nUsage:" << std::endl;
       std::cout << "Syntax: ./SIDISMultiplicities <YAML configuration file [config.yaml]> <path to "
-                   "data folder> <output folder>\n"
+                   "data folder> <output folder> [suffix]\n"
                 << std::endl;
+      std::cout << "Arguments:" << std::endl;
+      std::cout << "  config.yaml     - SIDIS computation configuration file" << std::endl;
+      std::cout << "  data_folder     - Path to data folder containing datasets" << std::endl;
+      std::cout << "  output_folder   - Output directory for results" << std::endl;
+      std::cout << "  suffix          - Optional suffix for output files" << std::endl;
       exit(-10);
    }
 
@@ -36,6 +41,16 @@ int main(int argc, char *argv[])
    // Output folder
    const std::string OutputFolder = std::string(argv[3]);
    mkdir(OutputFolder.c_str(), ACCESSPERMS);
+
+   // Get optional suffix for output files
+   std::string suffix = "";
+   if (argc >= 5) {
+      suffix = std::string(argv[4]);
+      if (!suffix.empty() && suffix[0] != '_') {
+         suffix = "_" + suffix; // Add underscore if not present
+      }
+   }
+
    std::cout << "Creating folder \'" + OutputFolder + "\' to store the output.\n" << std::endl;
 
    std::cout << "\033[1;37m\nComputing SIDIS multiplicities ...\033[0m" << std::endl;
@@ -559,8 +574,8 @@ int main(int argc, char *argv[])
          delete distff;
       }
 
-   // Output file
-   std::ofstream fout(OutputFolder + "/ReportMultiplicities.yaml");
+   // Output file with optional suffix
+   std::ofstream fout(OutputFolder + "/ReportMultiplicities" + suffix + ".yaml");
    fout << em.c_str() << std::endl;
    fout.close();
 
