@@ -49,7 +49,6 @@ import yaml
 import torch
 import argparse
 import numpy as np
-import math
 from typing import Dict, List, Tuple, Any, TYPE_CHECKING, Optional
 
 # Type annotations for LHAPDF
@@ -99,6 +98,8 @@ class SIDISComputationPyTorch:
         Notes:
             - Auto-detects GPU (CUDA) then MPS else CPU
             - Sets float32 default dtype (upgradeable later)
+        TODO:
+            - Validate cross-consistency of config and fNP config (PDF flavor sets)
         """
         self.config = self._load_config(config_file)
         self.fnp_config_file = fnp_config_file
@@ -119,8 +120,6 @@ class SIDISComputationPyTorch:
 
         # Set default dtype
         self.dtype = torch.float32
-        # Use higher precision for oscillatory b-integrals to stabilize gradients
-        self.integration_dtype = torch.float64
 
         # Call setup method to initialize all components,
         # mainly the ones read from the config file
@@ -185,141 +184,7 @@ class SIDISComputationPyTorch:
         # Revisit for precision/perf tuning
         self.DEObj = ap.ogata.OgataQuadrature(0, 1e-9, 0.00001)
 
-        # Prepare a default b-grid for Torch-native integration
-        self._setup_bgrid()
-
         print(f"\033[92m\n --- PyTorch SIDIS computation setup successful!\n\033[0m")
-
-    def _setup_bgrid(self):
-        """
-        Create a logarithmic b-grid and its Torch version for differentiable integration.
-        Configurable via optional 'bgrid' section in YAML; falls back to [1e-2, 2] with 256 nodes.
-        """
-        bg = self.config.get("bgrid", {}) if isinstance(self.config, dict) else {}
-        b_min = float(bg.get("b_min", 1e-2))
-        b_max = float(bg.get("b_max", 2.0))
-        nb = int(bg.get("Nb", 256))
-
-        # Build numpy nodes for APFEL luminosity pretabulation
-        self._b_nodes_np = np.logspace(math.log10(b_min), math.log10(b_max), num=nb)
-
-        # Torch grid for integration (prefer float64 except on MPS which lacks support)
-        use_float64 = not (self.device.type == "mps")
-        integ_dtype = torch.float64 if use_float64 else torch.float32
-        self.integration_dtype = (
-            integ_dtype  # Override initial setting if needed for MPS
-        )
-
-        # Create logspace grid: MPS doesn't support logspace, so create on CPU then move
-        if self.device.type == "mps":
-            self._b_nodes_torch = torch.logspace(
-                math.log10(b_min),
-                math.log10(b_max),
-                steps=nb,
-                base=10.0,
-                device="cpu",
-                dtype=self.integration_dtype,
-            ).to(self.device)
-        else:
-            self._b_nodes_torch = torch.logspace(
-                math.log10(b_min),
-                math.log10(b_max),
-                steps=nb,
-                base=10.0,
-                device=self.device,
-                dtype=self.integration_dtype,
-            )
-
-    def _bessel_j0_torch(self, x: torch.Tensor, n_terms: int = 30) -> torch.Tensor:
-        """
-        Bessel J0 implemented in Torch.
-        Tries torch.special.bessel_j0 if available and supported on device,
-        otherwise uses a rapidly convergent power series valid for moderate |x|,
-        which matches our integration range (qT*b typically O(1)).
-        """
-        # MPS doesn't support bessel functions, skip to series
-        if x.device.type == "mps":
-            pass  # Use series implementation below
-        else:
-            # Try native if present on other devices
-            try:
-                return torch.special.bessel_j0(x)
-            except (AttributeError, NotImplementedError):
-                pass
-
-        # Series: J0(x) = sum_{k=0}^∞ (-1)^k (x^2/4)^k / (k!)^2
-        y = (x * x) / 4.0
-        term = torch.ones_like(x)
-        s = term.clone()
-        # Recurrence: term_{k} = term_{k-1} * (-y) / (k^2)
-        for k in range(1, n_terms + 1):
-            term = term * (-y) / (k * k)
-            s = s + term
-        return s
-
-    def _precompute_luminosity_constants(
-        self, xm: float, zm: float, Qm: float, Yp: float
-    ) -> torch.Tensor:
-        """
-        Precompute APFEL-driven luminosity on the common b-grid as constants (no autograd).
-
-        L(b; x, z, Q) = Yp/x * sum_q [ e_q^2 * f1_q(x, b*; mu, zeta) * D1_q(z, b*; mu, zeta) ]
-                         * Sudakov(b*; mu, zeta)^2 * alpha_em(Q)^2 * H(mu) / (Q^3 * z)
-
-        Returns a Torch tensor on the correct device/dtype, with requires_grad=False.
-        """
-        mu = self.Cf * Qm
-        zeta = Qm * Qm
-        nf = int(ap.utilities.NF(mu, self.Thresholds))
-
-        L_vals = np.zeros_like(self._b_nodes_np)
-        for i, b_val in enumerate(self._b_nodes_np):
-            bs = self.bstar_min(b_val, Qm)
-
-            # Flavor sum luminosity
-            lumiq = 0.0
-            for q in range(-nf, nf + 1):
-                if q == 0:
-                    continue
-                try:
-                    tmd_pdf = self.TabMatchTMDPDFs.EvaluatexQ(q, xm, bs)
-                    tmd_ff = self.TabMatchTMDFFs.EvaluatexQ(q, zm, bs)
-                    try:
-                        qch2 = (
-                            ap.constants.QCh2[abs(q) - 1]
-                            if abs(q) <= len(ap.constants.QCh2)
-                            else 0.0
-                        )
-                    except Exception:
-                        # Fallback charges
-                        charges = {
-                            1: 4 / 9,
-                            2: 1 / 9,
-                            3: 1 / 9,
-                            4: 4 / 9,
-                            5: 1 / 9,
-                            6: 4 / 9,
-                        }
-                        qch2 = charges.get(abs(q), 0.0)
-                    lumiq += Yp * (tmd_pdf / xm) * qch2 * tmd_ff
-                except Exception:
-                    # Skip pathological nodes safely
-                    continue
-
-            try:
-                sudakov_factor = self.QuarkSudakov(bs, mu, zeta) ** 2
-                hard_factor = self.Hf(mu)
-                alphaem2 = self.TabAlphaem.Evaluate(Qm) ** 2
-            except Exception:
-                sudakov_factor = 0.0
-                hard_factor = 0.0
-                alphaem2 = 0.0
-
-            L_vals[i] = lumiq * sudakov_factor * alphaem2 * hard_factor / (Qm**3 * zm)
-
-        # Convert to torch tensor constants (no gradients)
-        L_torch = torch.tensor(L_vals, device=self.device, dtype=self.integration_dtype)
-        return L_torch
 
     def _setup_pdf(self):
         """
@@ -842,6 +707,7 @@ class SIDISComputationPyTorch:
             dict: keys include tensors x,Q2,z,PhT plus header/raw_data
         TODO:
             - Validate presence & lengths of all arrays
+            - Unit handling (assert dimensionless / GeV^2 where expected)
         """
         with open(data_file, "r") as f:
             data = yaml.safe_load(f)
@@ -850,16 +716,16 @@ class SIDISComputationPyTorch:
             return {}
 
         # Convert kinematic arrays to PyTorch tensors
-        kinematic_data: Dict[str, Any] = {}
+        kinematic_data = {}
         for key in ["x", "Q2", "z", "PhT"]:
-            if "data" in data and key in data["data"]:
+            if key in data["data"]:
                 kinematic_data[key] = torch.tensor(
                     data["data"][key], dtype=self.dtype, device=self.device
                 )
 
-        # Include header information
-        kinematic_data["header"] = data.get("header", {})
-        kinematic_data["raw_data"] = data.get("data", {})
+        # Include header information (keep as regular dict)
+        kinematic_data["header"] = data["header"]
+        kinematic_data["raw_data"] = data["data"]
 
         return kinematic_data
 
@@ -867,14 +733,22 @@ class SIDISComputationPyTorch:
         self, x: torch.Tensor, b: torch.Tensor, flavor: str
     ) -> torch.Tensor:
         """
-        Evaluate non-perturbative factor fNP(x,b) for a flavor using the PyTorch fNP model.
+        Evaluate non-perturbative factor fNP(x,b) for a flavor.
+
+        No direct C++ block (enhanced PyTorch path replacing placeholder).
 
         Args:
             @param x: Bjorken x (or z for FF usage) tensor
             @param b: impact parameter tensor (GeV^-1)
             @param flavor: flavor label ('u','d','ubar',...)
         Returns:
-            torch.Tensor: fNP values
+            torch.Tensor: fNP values (dimensionless suppression factor)
+        Notes:
+            - Model returns dict of flavor tensors; we extract requested
+            - Gaussian fallback if model absent/fails
+        TODO:
+            - Batch evaluate multiple flavors to reduce overhead
+            - Support separate parameterizations for PDFs vs FFs
         """
         if self.model_fNP is not None:
             # Use the PyTorch fNP model
@@ -882,8 +756,12 @@ class SIDISComputationPyTorch:
                 # Ensure tensors are on the correct device and dtype
                 x = x.to(self.device, dtype=self.dtype)
                 b = b.to(self.device, dtype=self.dtype)
-                outputs = self.model_fNP(x, b, flavors=[flavor])
-                return outputs[flavor]
+
+                # Evaluate fNP for the specific flavor
+                # The model returns a dictionary with all flavor contributions
+                fnp_outputs = self.model_fNP(x, b, flavors=[flavor])
+                return fnp_outputs[flavor]
+
             except Exception as e:
                 # Print in yellow to indicate a warning
                 print(f"\033[93mWarning: Error in PyTorch fNP evaluation: {e}\033[0m")
@@ -898,24 +776,19 @@ class SIDISComputationPyTorch:
             # Fallback to Gaussian
             return torch.exp(-0.1 * b**2)
 
-    def compute_sidis_cross_section_pytorch(
-        self, data_file: str, output_file: str, use_ogata: bool = False
-    ):
+    def compute_sidis_cross_section_pytorch(self, data_file: str, output_file: str):
         """
         Compute SIDIS differential numerator over kinematic points.
 
         Args:
             @param data_file: path to kinematic YAML (x,Q2,z,PhT arrays)
             @param output_file: destination YAML for results
-            @param use_ogata: if True, use Ogata quadrature (non-differentiable but accurate)
-                             if False, use PyTorch trapezoidal integration (differentiable)
         Returns:
             None (writes file)
         Notes:
             - Applies cut qT/Q < qToQcut prior to expensive integration
-            - Ogata: more accurate, non-differentiable, callback-based
-            - PyTorch: less accurate, fully differentiable, tensor-based
             - Integrand includes factors: b * fNP1 * fNP2 * Σ_q (Yp e_q^2 f1 D1)/(x) * Sud^2 * α_em^2 * H / (Q^3 z)
+            - Ogata transform internally applies Bessel J0(qT b)
         TODO:
             - Implement denominator for multiplicities
             - Vectorize integrals across points (shared b* evaluations)
@@ -963,388 +836,281 @@ class SIDISComputationPyTorch:
 
         # Main computation loop - process each kinematic point
         for iqT in range(len(qT_tensor)):
-            # Scalars for APFEL-side calculations (safe to detach, no fNP gradients here)
-            qTm = float(qT_tensor[iqT].detach().cpu().numpy())
-            Qm = float(Q_tensor[iqT].detach().cpu().numpy())
-            xm = float(x_tensor[iqT].detach().cpu().numpy())
-            zm = float(z_tensor[iqT].detach().cpu().numpy())
+            # Extract scalar values for this kinematic point (convert tensors to floats)
+            qTm = float(qT_tensor[iqT].item())  # Convert tensor to float for APFEL
+            Qm = float(Q_tensor[iqT].item())
+            xm = float(x_tensor[iqT].item())
+            zm = float(z_tensor[iqT].item())
 
-            # Kinematic cut
+            # Apply kinematic cut: skip points where qT > qToQcut * Q
+            # This avoids the non-perturbative region where TMD factorization breaks down
             if qTm > self.qToQcut * Qm:
+                # Print in yellow to indicate skipping
                 print(
                     f"\033[93mSkipping qT = {qTm:.3f} (above cut qT/Q = {self.qToQcut})\033[0m"
                 )
                 continue
 
             print(
+                # Print in blue to indicate current point
                 f"\033[94mComputing point {iqT+1}/{len(qT_tensor)}: qT = {qTm:.3f}, Q = {Qm:.3f}, x = {xm:.4f}, z = {zm:.4f}\033[0m"
             )
 
-            # SIDIS Y+ factor (float)
+            # Set renormalization and factorization scales (keep as floats)
+            mu = self.Cf * Qm  # Factorization scale (typically μ = Q)
+            zeta = Qm * Qm  # Collins-Soper scale (ζ = Q²)
+
+            # Yp factor: accounts for SIDIS kinematics and target mass corrections
+            # Y+ = 1 + (1 - y)² where y is the inelasticity parameter
+            # This appears in the SIDIS cross section structure functions
             Yp = 1 + (1 - (Qm / Vs) ** 2 / xm) ** 2
 
-            if use_ogata:
-                # Use Ogata quadrature (accurate but non-differentiable)
-                print(f"  Using Ogata quadrature integration")
-                xs = self._compute_cross_section_ogata(iqT, xm, zm, Qm, qTm, Yp)
-            else:
-                # Use PyTorch trapezoidal integration (differentiable)
-                print(f"  Using PyTorch trapezoidal integration")
-                xs = self._compute_cross_section_pytorch(
-                    iqT, x_tensor, z_tensor, qT_tensor, Q_tensor, Yp
-                )
+            # Determine number of active quark flavors at scale μ
+            # Important for flavor summation in TMD luminosity
+            nf = int(ap.utilities.NF(mu, self.Thresholds))
 
-            # Final kinematic factors (convert to appropriate tensor)
-            if use_ogata:
-                # Ogata returns float, convert to tensor
-                differential_xsec = torch.tensor(
-                    ap.constants.ConvFact
-                    * ap.constants.FourPi
-                    * qTm
-                    * xs
-                    / (2.0 * Qm)
-                    / zm,
-                    device=self.device,
-                    dtype=self.dtype,
-                )
-            else:
-                # PyTorch integration preserves tensor operations
-                Q_t = Q_tensor[iqT].to(self.device).to(self.integration_dtype)
-                z_t = z_tensor[iqT].to(self.device).to(self.integration_dtype)
-                qT_t = qT_tensor[iqT].to(self.device).to(self.integration_dtype)
+            def b_integrand(b_val):  # Corresponds to C++ integrand ll. 430–470
+                """
+                b-space integrand for Ogata quadrature.
 
-                differential_xsec = (
-                    torch.tensor(
-                        ap.constants.ConvFact * ap.constants.FourPi,
-                        device=self.device,
-                        dtype=self.integration_dtype,
+                Args:
+                    @param b_val: scalar impact parameter (GeV^-1)
+                Returns:
+                    float: integrand value before Bessel transform application
+
+                """
+                # bstar prescription: regularizes large-b_T behavior
+                # Smoothly interpolates between small-b (perturbative) and large-b (non-perturbative)
+                bs = self.bstar_min(b_val, Qm)
+
+                # Compute TMD luminosity: sum over all active quark flavors
+                # This implements the flavor sum in the SIDIS cross section:
+                # Σ_q e_q² * f₁^q(x,b_T) * D₁^q(z,b_T)
+                lumiq = 0.0
+
+                for q in range(-nf, nf + 1):
+                    if q == 0:  # Skip gluon (no direct contribution in SIDIS)
+                        continue
+
+                    try:
+                        # Evaluate TMD PDF: f₁^q(x, b_T; μ, ζ)
+                        # This includes evolution from initial scale to μ
+                        tmd_pdf = self.TabMatchTMDPDFs.EvaluatexQ(q, xm, bs)
+
+                        # Evaluate TMD FF: D₁^q(z, b_T; μ, ζ)
+                        # This describes quark → hadron fragmentation
+                        tmd_ff = self.TabMatchTMDFFs.EvaluatexQ(q, zm, bs)
+
+                        # Electric charge squared for this quark flavor
+                        # e_u² = 4/9, e_d² = 1/9, etc.
+                        # Use safer access to avoid map::at errors
+                        try:
+                            qch2 = (
+                                ap.constants.QCh2[abs(q) - 1]
+                                if abs(q) <= len(ap.constants.QCh2)
+                                else 0.0
+                            )
+                        except (IndexError, AttributeError, KeyError) as charge_error:
+                            # Specific charge lookup failures
+                            print(
+                                f"\033[93m⚠️  APFEL charge lookup failed for flavor q={q}: {charge_error}\033[0m"
+                            )
+                            charges = {
+                                1: 4 / 9,
+                                2: 1 / 9,
+                                3: 1 / 9,
+                                4: 4 / 9,
+                                5: 1 / 9,
+                                6: 4 / 9,
+                            }
+                            qch2 = charges.get(abs(q), 0.0)
+                            print(
+                                f"\033[93m   → Using fallback charge: {qch2:.3f}\033[0m"
+                            )
+
+                        # Add this flavor's contribution to luminosity
+                        # Factor of Yp accounts for SIDIS kinematics
+                        lumiq += Yp * tmd_pdf / xm * qch2 * tmd_ff
+
+                    except ValueError as val_error:
+                        print(
+                            f"\033[93m⚠️  Invalid parameters for TMD evaluation (q={q}): {val_error}\033[0m"
+                        )
+                        print(
+                            f"\033[93m   → x={xm:.4f}, z={zm:.4f}, b*={bs:.4f}\033[0m"
+                        )
+                        continue
+                    except RuntimeError as runtime_error:
+                        print(
+                            f"\033[91m🚨 APFEL runtime error for flavor q={q}: {runtime_error}\033[0m"
+                        )
+                        print(
+                            f"\033[91m   → This may indicate APFEL interpolation failure\033[0m"
+                        )
+                        continue
+                    except Exception as unknown_error:
+                        print(
+                            f"\033[91m💥 Unexpected TMD evaluation error for q={q}: {type(unknown_error).__name__}: {unknown_error}\033[0m"
+                        )
+                        continue
+
+                # Evaluate non-perturbative functions using PyTorch fNP model
+                if self.model_fNP is not None:
+
+                    # Define flavors outside try block
+                    pdf_flavor = (
+                        "u"  # Simplified choice - can be made more sophisticated
                     )
-                    * qT_t
-                    * xs
-                    / (2.0 * Q_t)
-                    / z_t
+                    ff_flavor = "u"  # For π+ production, u-quark dominated
+
+                    try:
+                        # Convert kinematics to tensors for PyTorch evaluation
+                        x_torch = torch.tensor(xm, dtype=self.dtype, device=self.device)
+                        z_torch = torch.tensor(zm, dtype=self.dtype, device=self.device)
+                        b_torch = torch.tensor(
+                            b_val, dtype=self.dtype, device=self.device
+                        )
+
+                        # # Evaluate fNP for PDF and FF. Print in green.
+                        # print(
+                        #     f"\033[92mEvaluating fNP for PDF flavor '{pdf_flavor}' and FF flavor '{ff_flavor}'...\033[0m"
+                        # )
+
+                        # NOTE: The model returns tensors; convert to float for integrand.
+                        # fNP1 is the PDF and fNP2 is the FF.
+                        # TODO: this is the moment where we use for the FF the PDF fNP model
+                        # TODO: ideally we would have separate models or at least parameters
+                        fnp1_val = float(
+                            self.compute_fnp_pytorch(
+                                x_torch, b_torch, pdf_flavor
+                            ).item()
+                        )
+                        fnp2_val = float(
+                            self.compute_fnp_pytorch(z_torch, b_torch, ff_flavor).item()
+                        )
+
+                    # Handle specific exceptions for robustness, fNP evaluation can fail in various ways.
+                    except ValueError as val_error:
+                        print(
+                            f"\033[93m⚠️  Invalid tensor values for fNP: {val_error}\033[0m"
+                        )
+                        print(
+                            f"\033[93m   → Check for NaN/inf in x={xm}, z={zm}, b={b_val}\033[0m"
+                        )
+                        fnp1_val = np.exp(-0.1 * b_val**2)
+                        fnp2_val = np.exp(-0.05 * b_val**2)
+                    except KeyError as key_error:
+                        print(
+                            f"\033[93m⚠️  fNP model missing flavor '{pdf_flavor}' or '{ff_flavor}': {key_error}\033[0m"
+                        )
+                        fnp1_val = np.exp(-0.1 * b_val**2)
+                        fnp2_val = np.exp(-0.05 * b_val**2)
+                    except Exception as unknown_error:
+                        print(
+                            f"\033[91m💥 Unexpected fNP error: {type(unknown_error).__name__}: {unknown_error}\033[0m"
+                        )
+                        fnp1_val = 1
+                        fnp2_val = 1
+                else:
+                    # Gaussian non-perturbative functions if no fNP model
+                    fnp1_val = np.exp(-0.1 * b_val**2)
+                    fnp2_val = np.exp(-0.05 * b_val**2)
+
+                # Compute Sudakov factor: S(b_T; μ, ζ)
+                # This encodes soft gluon resummation.
+                # The factor appears squared because we have both PDF and FF evolution
+                sudakov_factor = self.QuarkSudakov(bs, mu, zeta) ** 2
+
+                # Hard factor: H(μ)
+                # Encodes the hard partonic process e + q → e + q + g
+                hard_factor = self.Hf(mu)
+
+                # Electromagnetic coupling: α_em²(Q)
+                # Running coupling evaluated at the hard scale
+                alphaem2 = self.TabAlphaem.Evaluate(Qm) ** 2
+
+                # Assemble the complete integrand
+                # This implements the TMD factorization formula integrand
+                integrand = (
+                    b_val  # Jacobian from d²b_T integration
+                    * fnp1_val  # Non-perturbative factor for PDF
+                    * fnp2_val  # Non-perturbative factor for FF
+                    * lumiq  # TMD luminosity (flavor sum)
+                    * sudakov_factor  # Sudakov resummation factor
+                    * alphaem2  # Electromagnetic coupling squared
+                    * hard_factor  # Hard process factor
+                    / (Qm**3 * zm)  # Kinematic normalization
                 )
 
-            # Store, casting to output dtype
-            theo_xsec[iqT] = differential_xsec.to(theo_xsec.dtype)
-            print(f"  -> σ = {float(differential_xsec.detach().cpu().numpy()):.6e}")
+                return integrand
 
-        # Save results in multiple formats (matching C++ behavior)
+            # Perform b_T-space integration using Ogata quadrature
+            # This computes: ∫₀^∞ db_T * b_T * J₀(q_T * b_T) * integrand(b_T)
+            # where J₀ is the Bessel function from the Fourier transform
+            try:
+                integral_result = self.DEObj.transform(b_integrand, qTm)
+
+                # Compute final differential cross section
+                # Includes proper kinematic factors and constants
+                # Result is dσ/dxdQdzdPhT in appropriate units
+                differential_xsec = (
+                    ap.constants.ConvFact  # Unit conversion factor
+                    * ap.constants.FourPi  # 4π factor
+                    * qTm  # qT factor from integration
+                    * integral_result  # b_T integral result
+                    / (2 * Qm)  # Additional kinematic factor
+                    / zm  # z normalization
+                )
+
+                # Store result in tensor
+                theo_xsec[iqT] = differential_xsec
+                print(f"  -> σ = {differential_xsec:.6e}")
+
+            except Exception as e:
+                print(f"  -> Integration failed: {e}")
+                theo_xsec[iqT] = 0.0
+
+        # Save computed results to output file
         self.save_results_pytorch(kinematic_data, theo_xsec, output_file)
-
-        # Generate array format for plotting (like C++ saveResultsYAMLArrays)
-        base_name = output_file.rsplit(".", 1)[0]  # Remove extension
-        array_output = f"{base_name}_arrays.yaml"
-        self.save_results_arrays_pytorch(kinematic_data, theo_xsec, array_output)
-
-        print(f"\033[92m\nResults saved to:\033[0m")
-        print(f"  YAML (detailed): {output_file}")
-        print(f"  YAML (arrays):   {array_output}")
-
-    def _compute_cross_section_ogata(
-        self, iqT: int, xm: float, zm: float, Qm: float, qTm: float, Yp: float
-    ) -> float:
-        """
-        Compute cross section using Ogata quadrature (non-differentiable but accurate).
-
-        Args:
-            @param iqT: kinematic point index
-            @param xm, zm, Qm, qTm: kinematic variables as floats
-            @param Yp: SIDIS Y+ factor
-        Returns:
-            float: b-integral result
-        """
-        # TMD scales
-        mu = self.Cf * Qm
-        zeta = Qm * Qm
-        nf = int(ap.utilities.NF(mu, self.Thresholds))
-
-        def b_integrand(b_val: float) -> float:
-            """Ogata integrand function (non-differentiable)."""
-            # bstar prescription
-            bs = self.bstar_min(b_val, Qm)
-
-            # TMD luminosity sum over flavors
-            lumiq = 0.0
-            for q in range(-nf, nf + 1):
-                if q == 0:  # Skip gluon
-                    continue
-
-                try:
-                    # TMD PDF and FF evaluation (float values)
-                    tmd_pdf = self.TabMatchTMDPDFs.EvaluatexQ(q, xm, bs, mu, zeta)
-                    tmd_ff = self.TabMatchTMDFFs.EvaluatexQ(q, zm, bs, mu, zeta)
-
-                    # Electric charge squared
-                    eq2 = (
-                        2.0 / 9.0 if abs(q) in [2, 4, 6] else 1.0 / 9.0
-                    )  # u-type vs d-type
-
-                    lumiq += eq2 * tmd_pdf * tmd_ff
-                except:
-                    continue
-
-            # Non-perturbative factors (convert tensors to floats)
-            fnp1_val = float(
-                self.compute_fnp_pytorch(
-                    torch.tensor(xm, device=self.device, dtype=self.dtype),
-                    torch.tensor(b_val, device=self.device, dtype=self.dtype),
-                    "u",  # PDF flavor
-                ).item()
-            )
-
-            fnp2_val = float(
-                self.compute_fnp_pytorch(
-                    torch.tensor(zm, device=self.device, dtype=self.dtype),
-                    torch.tensor(b_val, device=self.device, dtype=self.dtype),
-                    "u",  # FF flavor
-                ).item()
-            )
-
-            # Additional factors
-            sudakov_factor = self.QuarkSudakov(bs, mu, zeta) ** 2
-            alphaem2 = self.TabAlphaem.Evaluate(Qm) ** 2
-            hard_factor = self.Hf(mu)
-
-            # Complete integrand
-            integrand = (
-                b_val
-                * fnp1_val
-                * fnp2_val
-                * lumiq
-                * sudakov_factor
-                * alphaem2
-                * hard_factor
-                * Yp
-                / xm
-                / (Qm**3 * zm)
-            )
-
-            return integrand
-
-        # Perform Ogata integration
-        try:
-            result = self.DEObj.transform(b_integrand, qTm)
-            return result
-        except Exception as e:
-            print(f"    Warning: Ogata integration failed: {e}")
-            return 0.0
-
-    def _compute_cross_section_pytorch(
-        self,
-        iqT: int,
-        x_tensor: torch.Tensor,
-        z_tensor: torch.Tensor,
-        qT_tensor: torch.Tensor,
-        Q_tensor: torch.Tensor,
-        Yp: float,
-    ) -> torch.Tensor:
-        """
-        Compute cross section using PyTorch integration (differentiable).
-
-        Args:
-            @param iqT: kinematic point index
-            @param x_tensor, z_tensor, qT_tensor, Q_tensor: kinematic tensors
-            @param Yp: SIDIS Y+ factor
-        Returns:
-            torch.Tensor: b-integral result (preserves gradients)
-        """
-        # Extract values for this point
-        xm = float(x_tensor[iqT].detach().cpu().numpy())
-        zm = float(z_tensor[iqT].detach().cpu().numpy())
-        Qm = float(Q_tensor[iqT].detach().cpu().numpy())
-
-        # Precompute APFEL luminosity constants on b-grid (Torch tensor, no grads)
-        L_b = self._precompute_luminosity_constants(xm, zm, Qm, Yp)
-
-        # Build Torch integrand preserving fNP gradients
-        b = self._b_nodes_torch  # [Nb], float64
-        # Prepare tensors for model evaluation
-        x_t = x_tensor[iqT].to(self.device).to(self.integration_dtype)
-        z_t = z_tensor[iqT].to(self.device).to(self.integration_dtype)
-        qT_t = qT_tensor[iqT].to(self.device).to(self.integration_dtype)
-
-        # Evaluate fNP for chosen flavors as tensors; keep gradients
-        pdf_flavor = "u"
-        ff_flavor = "u"
-        fnp_pdf = self.compute_fnp_pytorch(
-            x_t.expand_as(b), b.to(self.dtype), pdf_flavor
-        ).to(self.integration_dtype)
-        fnp_ff = self.compute_fnp_pytorch(
-            z_t.expand_as(b), b.to(self.dtype), ff_flavor
-        ).to(self.integration_dtype)
-
-        # Bessel J0 and integrand
-        J0 = self._bessel_j0_torch(qT_t * b)
-        integrand = b * J0 * fnp_pdf * fnp_ff * L_b  # [Nb]
-
-        # Differentiable trapezoidal integration over b
-        xs = torch.trapz(integrand, b)
-        return xs
+        print(f"Results saved to {output_file}")
 
     def save_results_pytorch(
         self, kinematic_data: Dict, results: torch.Tensor, output_file: str
     ):
         """
-        Save YAML output with human-readable formatting matching C++ version.
+        Save YAML output with metadata.
 
-        Creates structured output similar to SIDISCrossSectionKinem.cc:
-        - Top-level metadata (Process, Observable, etc.)
-        - Detailed kinematics list with per-point data
-        - Computation information
+        No direct C++ equivalent (enhanced output schema).
 
         Args:
              @param kinematic_data: dict with header/raw_data + tensors
              @param results: tensor of differential numerator values
              @param output_file: destination YAML path
         """
-        # Extract header information
-        header = kinematic_data.get("header", {})
-        raw_data = kinematic_data.get("raw_data", {})
-
-        # Convert results to list for serialization
-        cross_sections = results.detach().cpu().numpy().tolist()
-
-        # Calculate derived quantities
-        x_vals = raw_data.get("x", [])
-        z_vals = raw_data.get("z", [])
-        Q2_vals = raw_data.get("Q2", [])
-        PhT_vals = raw_data.get("PhT", [])
-        y_vals = raw_data.get("y", [])
-
-        Q_vals = [float(Q2**0.5) for Q2 in Q2_vals] if Q2_vals else []
-        qT_vals = (
-            [float(PhT / z) for PhT, z in zip(PhT_vals, z_vals)]
-            if PhT_vals and z_vals
-            else []
-        )
-
-        # Build structured output matching C++ format
         output_data = {
-            "Process": header.get("process", "SIDIS"),
-            "Observable": header.get("observable", "cross_section"),
-            "Hadron": header.get("hadron", "unknown"),
-            "Charge": header.get("charge", 0),
-            "Target_isoscalarity": header.get("target_isoscalarity", 0.0),
-            "Vs": header.get("Vs", 0.0),
-            "Kinematics": [],
+            "header": kinematic_data["header"],
+            "input_data": kinematic_data["raw_data"],
+            "results": {
+                "cross_sections": results.cpu().numpy().tolist(),
+                "units": "differential cross section numerator (no denominator)",
+                "computation_info": {
+                    "perturbative_order": self.PerturbativeOrder,
+                    "pdf_set": self.config["pdfset"]["name"],
+                    "ff_set": self.config["ffset"]["name"],
+                    "qT_cut": self.qToQcut,
+                    "device": str(self.device),
+                    "pytorch_version": torch.__version__,
+                    "fnp_model": (
+                        "PyTorch fNP"
+                        if self.model_fNP is not None
+                        else "Gaussian fallback"
+                    ),
+                },
+            },
         }
 
-        # Add per-point kinematics (matching C++ structure)
-        n_points = len(cross_sections)
-        for i in range(n_points):
-            point_data = {
-                "point": i + 1,
-                "PhT": float(PhT_vals[i]) if i < len(PhT_vals) else 0.0,
-                "x": float(x_vals[i]) if i < len(x_vals) else 0.0,
-                "z": float(z_vals[i]) if i < len(z_vals) else 0.0,
-                "Q": float(Q_vals[i]) if i < len(Q_vals) else 0.0,
-                "y": float(y_vals[i]) if i < len(y_vals) else 0.0,
-                "qT": float(qT_vals[i]) if i < len(qT_vals) else 0.0,
-                "cross_section": float(cross_sections[i]),
-            }
-            output_data["Kinematics"].append(point_data)
-
-        # Add computation metadata (PyTorch-specific extension)
-        output_data["Computation_Info"] = {
-            "method": "PyTorch SIDIS computation",
-            "perturbative_order": self.PerturbativeOrder,
-            "pdf_set": self.config["pdfset"]["name"],
-            "ff_set": self.config["ffset"]["name"],
-            "qT_cut": self.qToQcut,
-            "device": str(self.device),
-            "pytorch_version": str(torch.__version__),
-            "fnp_model": (
-                "PyTorch fNP" if self.model_fNP is not None else "Gaussian fallback"
-            ),
-            "integration_dtype": str(self.integration_dtype),
-            "units": "differential cross section numerator (no denominator)",
-        }
-
-        # Write YAML with human-readable formatting
         with open(output_file, "w") as f:
-            # Custom YAML formatting for readability
-            f.write("# SIDIS Cross Section Results - PyTorch Implementation\n")
-            f.write(f"# Generated on {torch.__version__} with device {self.device}\n")
-            f.write(f"# Total points: {n_points}\n")
-            f.write("#\n")
-
-            # Use block style (default_flow_style=False) with proper indentation
-            yaml.dump(
-                output_data,
-                f,
-                default_flow_style=False,
-                indent=2,
-                sort_keys=False,
-                allow_unicode=True,
-                width=120,
-                default_style=None,
-            )
-
-    def save_results_arrays_pytorch(
-        self, kinematic_data: Dict, results: torch.Tensor, output_file: str
-    ):
-        """
-        Save YAML output in array format for plotting (matching C++ saveResultsYAMLArrays).
-
-        Creates arrays of all kinematic variables and results for easy plotting/analysis.
-
-        Args:
-             @param kinematic_data: dict with header/raw_data + tensors
-             @param results: tensor of differential numerator values
-             @param output_file: destination YAML path for array format
-        """
-        # Extract header information
-        header = kinematic_data.get("header", {})
-        raw_data = kinematic_data.get("raw_data", {})
-
-        # Convert results to list for serialization
-        cross_sections = results.detach().cpu().numpy().tolist()
-
-        # Extract arrays
-        x_vals = raw_data.get("x", [])
-        z_vals = raw_data.get("z", [])
-        Q2_vals = raw_data.get("Q2", [])
-        PhT_vals = raw_data.get("PhT", [])
-        y_vals = raw_data.get("y", [])
-
-        # Calculate derived quantities
-        Q_vals = [float(Q2**0.5) for Q2 in Q2_vals] if Q2_vals else []
-        qT_vals = (
-            [float(PhT / z) for PhT, z in zip(PhT_vals, z_vals)]
-            if PhT_vals and z_vals
-            else []
-        )
-
-        # Build array-based output
-        output_data = {
-            "Name": f"{header.get('process', 'SIDIS')}_{header.get('observable', 'cross_section')}",
-            "PhT": [float(val) for val in PhT_vals],
-            "x_values": [float(val) for val in x_vals],
-            "z_values": [float(val) for val in z_vals],
-            "Q2": [float(val) for val in Q2_vals],
-            "Q_values": Q_vals,
-            "y": [float(val) for val in y_vals],
-            "qT": qT_vals,
-            "Predictions": cross_sections,
-        }
-
-        # Write YAML with flow style for arrays (more compact)
-        with open(output_file, "w") as f:
-            f.write("# SIDIS Cross Section Results - Array Format for Plotting\n")
-            f.write(f"# PyTorch implementation on {self.device}\n")
-            f.write(f"# Total data points: {len(cross_sections)}\n")
-            f.write("#\n")
-
-            yaml.dump(
-                output_data,
-                f,
-                default_flow_style=False,
-                indent=2,
-                sort_keys=False,
-                allow_unicode=True,
-                width=120,
-            )
+            yaml.dump(output_data, f, default_flow_style=True)
 
 
 def main():
@@ -1368,11 +1134,6 @@ def main():
     parser.add_argument(
         "--device", help="PyTorch device (cpu, cuda, mps)", default=None, type=str
     )
-    parser.add_argument(
-        "--use-ogata",
-        action="store_true",
-        help="Use Ogata quadrature instead of PyTorch integration (more accurate, non-differentiable)",
-    )
 
     args = parser.parse_args()
 
@@ -1394,9 +1155,7 @@ def main():
     )
 
     # Run computation
-    sidis_comp.compute_sidis_cross_section_pytorch(
-        args.data_file, output_file, use_ogata=args.use_ogata
-    )
+    sidis_comp.compute_sidis_cross_section_pytorch(args.data_file, output_file)
 
     # Print success message in green
     print("\033[92mPyTorch SIDIS computation completed successfully!\033[0m")

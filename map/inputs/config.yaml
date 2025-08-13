@@ -59,3 +59,10 @@ zgrid:
 
 # qT/Q cut for computation
 qToQcut: 10
+
+# b-space grid configuration for PyTorch integration
+# Used for differentiable trapezoidal integration as alternative to Ogata quadrature
+bgrid:
+  b_min: 1.0e-2    # Minimum b value (GeV^-1)
+  b_max: 2.0       # Maximum b value (GeV^-1)  
+  Nb: 256          # Number of grid points (logarithmically spaced)

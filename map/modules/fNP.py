@@ -82,7 +82,7 @@ class TMDPDFBase(nn.Module):
         self.free_params = nn.Parameter(free_init)
 
         # Ensure that during backpropagation, only free entries get gradients.
-        self.free_params.register_hook(lambda grad: grad * mask)
+        self.free_params.register_hook(lambda grad: grad * self.mask)
 
     @property
     def get_params_tensor(self):
@@ -231,6 +231,7 @@ class fNP_evolution(nn.Module):
 
         # Convert mask to tensor
         mask = torch.tensor(free_mask, dtype=torch.float32)
+        self.register_buffer("g2_mask", mask)
         init_tensor = torch.tensor([init_g2], dtype=torch.float32)
 
         # Store the fixed part (not trainable)
@@ -242,7 +243,7 @@ class fNP_evolution(nn.Module):
         self.free_g2 = nn.Parameter(free_init)
 
         # Ensure that during backpropagation, only free entries get gradients.
-        self.free_g2.register_hook(lambda grad: grad * mask)
+        self.free_g2.register_hook(lambda grad: grad * self.g2_mask)
 
     @property
     def g2(self):
