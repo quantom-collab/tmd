@@ -26,17 +26,16 @@ An alternative **Ogata quadrature path** provides maximum numerical accuracy:
 
 - Uses adaptive Ogata-Hankel integration for the b-space transform
 - Non-differentiable but extremely accurate for oscillatory integrals
-- Recommended for final production results and validation
 
 ---
 
 ## Integration Method Comparison
 
 | Aspect | PyTorch Trapezoidal | Ogata Quadrature |
-|--------|-------------------|------------------|
+|:--------|:-------------------:|:------------------:|
 | **Accuracy** | Good (fixed grid) | Excellent (adaptive) |
 | **Speed** | Fast (GPU) | Moderate (CPU) |
-| **Autograd** | ✅ Fully differentiable | ❌ Not differentiable |
+| **Autograd** | ✅ Fully differentiable | ❌ Not fully differentiable |
 | **Use Case** | Parameter fitting | Production results |
 | **Device Support** | CUDA/MPS/CPU | CPU only |
 | **Grid** | Configurable via YAML | Adaptive algorithm |
@@ -58,7 +57,7 @@ bgrid:
 
 - **Logarithmic spacing**: Better samples the physics scales
 - **Device adaptive**: Automatically moves to GPU if available
-- **Precision control**: Uses float64 where supported (MPS falls back to float32)
+- **Precision control**: Uses float64 where supported (MPS falls back to float32 because Apple GPU does not have support for float64)
 
 **Tuning Guidelines:**
 
@@ -156,15 +155,15 @@ The current implementation uses a **hybrid strategy**:
 ### For Parameter Fitting (Differentiable)
 
 ```bash
-python3.10 sidis_crossect_torch.py config.yaml data.yaml fnp_config.yaml results/ output.yaml
 # Uses PyTorch integration by default
+python3.10 sidis_crossect_torch.py config.yaml data.yaml fnp_config.yaml results/ output.yaml
 ```
 
 ### For Production Results (High Accuracy)
 
 ```bash
-python3.10 sidis_crossect_torch.py config.yaml data.yaml fnp_config.yaml results/ output.yaml --use-ogata
 # Uses Ogata quadrature for maximum accuracy
+python3.10 sidis_crossect_torch.py config.yaml data.yaml fnp_config.yaml results/ output.yaml --use-ogata
 ```
 
 ### In Python API
@@ -190,23 +189,6 @@ sidis_comp.compute_sidis_cross_section_pytorch(data_file, output_file, use_ogata
 ### Physics Validation
 
 1. **Positive cross sections**: Check for unphysical negative values
-2. **Smooth qT dependence**: Look for numerical discontinuities
-3. **Kinematic limits**: Verify behavior at small/large qT
-
-### Optimization Workflow
-
-```python
-# 1. Develop fit with PyTorch (fast, differentiable)
-model.train()
-for epoch in range(epochs):
-    loss = compute_loss_pytorch(use_ogata=False)
-    loss.backward()
-    optimizer.step()
-
-# 2. Validate with Ogata (accurate, non-differentiable)
-model.eval()
-final_results = compute_cross_sections(use_ogata=True)
-```
 
 ---
 
@@ -358,43 +340,9 @@ Notes:
 
 ---
 
-## Concrete edits to make in `sidis_crossect_torch.py`
-
-- Replace uses of `bstar_min` in the integrand with `bstar_min_pytorch`.
-- Remove `.item()` and `float(...)` on fNP outputs; keep them as tensors through the integrand and integration.
-- Precompute APFEL parts into tensors outside Autograd (once per b-node and kinematic point), e.g., `L_b`.
-- Replace `self.DEObj.transform(...)` with a Torch-based integration over a fixed b-grid (trapz/Simpson). Optionally keep a switch to compare against Ogata for validation.
-- Ensure all kinematic scalars used with fNP are tensors on the right device/dtype.
-- Consider setting `self.dtype = torch.float64` for the integration path; cast APFEL arrays to the same dtype.
-
-These changes let you run a standard Torch optimizer over fNP parameters with `loss.backward()` producing non-zero gradients.
-
----
-
 ## What remains non-differentiable (and why that’s okay for fNP fits)
 
 - APFEL-provided TMD PDFs/FFs, Sudakov, hard factors, and the running couplings are used as constants in the Torch graph. Gradients are not needed for fNP-only fits.
 - If you later need gradients w.r.t. PDF/FF parameters or alpha_s, you’d need PyTorch-native implementations or custom autograd wrappers with backward formulas.
 
 ---
-
-## Quick checklist for using this in a fit
-
-- [ ] Switch to the Torch integration path (no `.item()`, no NumPy in integrand).
-- [ ] Precompute and cache APFEL luminosity on the chosen b-grid per kinematic point.
-- [ ] Keep all fNP-dependent quantities as tensors up to the loss.
-- [ ] Validate numerical agreement vs. Ogata on a few points; tune b-grid as needed.
-- [ ] Use double precision if gradients are noisy.
-
----
-
-## File features summary (`map/sidis_crossect_torch.py`)
-
-- PyTorch device management (CPU/CUDA/MPS) and dtype control.
-- YAML-driven configuration for PDFs, FFs, scales, grids, and fNP model.
-- APFEL++ integration for DGLAP/TMD evolution, matching, Sudakov, hard factor.
-- PyTorch fNP model loading with parameter summaries.
-- Ogata quadrature (non-differentiable) for the b-integral.
-- Kinematic data ingestion and YAML export of results.
-
-To enable end-to-end autodiff for fNP fits, switch the b-integral to a Torch-native quadrature and keep fNP tensors alive through the integrand, as outlined above.

@@ -4,25 +4,32 @@
 
 The `fit_fnp_synthetic.py` script is a **gradient validation tool** that performs a synthetic fit to verify that the SIDIS cross-section computation correctly propagates gradients through the non-perturbative function (fNP) parameters using PyTorch autograd. This is essential for ensuring that parameter optimization works correctly in actual fits to experimental data.
 
+**REQUIREMENTS**: This script requires Python 3.10 and the full TMD machinery including LHAPDF and APFEL++ packages.
+
 ## What the Script Does
 
 ### Primary Purpose
 
 The script performs a **synthetic fit sanity check** by:
 
-1. Loading a pre-configured fNP model with initial parameters
-2. Computing SIDIS cross sections for a small set of kinematic points using the **full TMD machinery** (APFEL++ + PyTorch)
-3. Comparing against synthetic "target" cross sections (currently set to simple constants)
-4. Using PyTorch's automatic differentiation to compute gradients
-5. Performing gradient descent to update fNP parameters
-6. Verifying that parameters change in response to the loss function
+1. **Verifying Python 3.10**: Ensures the correct Python version for LHAPDF/APFEL++ compatibility
+2. Loading a pre-configured fNP model with initial parameters
+3. Computing SIDIS cross sections for a small set of kinematic points using the **full TMD machinery** (APFEL++ + PyTorch)
+4. Comparing against synthetic "target" cross sections (currently set to simple constants)
+5. Using PyTorch's automatic differentiation to compute gradients
+6. Performing gradient descent to update fNP parameters
+7. Verifying that parameters change in response to the loss function
 
-### Dual Backend Architecture
+### System Requirements
 
-The script can operate in two modes:
+The script now enforces strict requirements:
 
-- **Full backend**: Uses `map.sidis_crossect_torch` with complete SIDIS computation (requires LHAPDF/APFEL++, Python 3.10)
-- **Toy backend**: Fallback mode with simplified mock computation if dependencies are missing
+- **Python 3.10**: Hard requirement checked at startup
+- **LHAPDF**: For PDF and fragmentation function access
+- **APFEL++**: For TMD evolution and matching
+- **PyTorch**: For automatic differentiation and tensor operations
+
+If any requirements are missing, the script will exit with a clear error message directing the user to use Python 3.10.
 
 ## The b-Grid and Its Role
 
@@ -153,14 +160,36 @@ The script validates the PyTorch approach by:
 
 ### Step-by-Step Process
 
-1. **Setup**: Load configuration files and initialize SIDIS computation object
-2. **Kinematics**: Load kinematic points (x, Q², z, PhT) from YAML
-3. **Target Generation**: Create synthetic target cross sections
-4. **Forward Pass**: Compute theoretical cross sections using full SIDIS machinery
-5. **Loss Calculation**: Compare theory vs synthetic targets (MSE loss)
-6. **Backward Pass**: Compute gradients w.r.t. fNP parameters via autograd
-7. **Parameter Update**: Apply gradient descent step
-8. **Validation**: Check parameter changes and convergence metrics
+1. **Python Version Check**: Verify that Python 3.10 is being used
+2. **Dependency Validation**: Ensure LHAPDF and APFEL++ are available
+3. **Setup**: Load configuration files and initialize SIDIS computation object
+4. **Kinematics**: Load kinematic points (x, Q², z, PhT) from YAML
+5. **Target Generation**: Create synthetic target cross sections using initial parameters
+6. **Parameter Randomization**: Perturb fNP parameters to create a fitting challenge
+7. **Forward Pass**: Compute theoretical cross sections using full SIDIS machinery
+8. **Loss Calculation**: Compare theory vs synthetic targets (chi-squared loss)
+9. **Backward Pass**: Compute gradients w.r.t. fNP parameters via autograd
+10. **Parameter Update**: Apply gradient descent step using Adam optimizer
+11. **Validation**: Check parameter changes and convergence metrics
+
+### Error Handling
+
+The script now provides clear error messages for common issues:
+
+```bash
+ERROR: This script MUST be run with Python 3.10
+Current Python version: 3.11
+LHAPDF and APFEL++ require Python 3.10 for proper compatibility.
+Please switch to Python 3.10 and try again.
+```
+
+Or for missing dependencies:
+
+```bash
+ERROR: Required dependencies not found: No module named 'lhapdf'
+This script requires LHAPDF and APFEL++ packages.
+Make sure you're running with Python 3.10 and have these packages installed.
+```
 
 ### Example Output
 
@@ -185,6 +214,7 @@ This output confirms:
 2. **Gradient Accuracy**: Validates that computed gradients reflect true sensitivities
 3. **Numerical Stability**: Tests the computation across realistic kinematic ranges
 4. **Code Correctness**: Catches integration bugs that could affect physics results
+5. **Dependency Verification**: Confirms that all required packages are properly installed and compatible
 
 ### Technical Benefits
 
@@ -192,6 +222,26 @@ This output confirms:
 2. **Performance Benchmark**: Measures computational overhead of differentiable approach
 3. **Device Testing**: Validates GPU compatibility across different hardware
 4. **Precision Analysis**: Guides choice of numerical precision for stability vs speed
+5. **Environment Validation**: Ensures the computing environment is properly configured
+
+## Usage Requirements
+
+### Prerequisites
+
+- **Python 3.10**: Strict requirement for LHAPDF/APFEL++ compatibility
+- **LHAPDF**: Installed and configured with PDF/FF data
+- **APFEL++**: TMD evolution library with Python bindings
+- **PyTorch**: Recent version with autograd support
+- **YAML configuration files**: Properly configured for your setup
+
+### Running the Script
+
+```bash
+# Ensure you're using Python 3.10
+python3.10 fit_fnp_synthetic.py [config.yaml] [kinematics.yaml] [fNPconfig.yaml]
+```
+
+The script will immediately check the Python version and exit with a clear error if not using 3.10.
 
 ## Future Enhancements
 
@@ -200,7 +250,8 @@ This output confirms:
 1. **Hybrid Integration**: Option to use Ogata for final results, PyTorch for gradients
 2. **Adaptive Grids**: Dynamic b-grid refinement based on integrand behavior
 3. **Multi-Point Batching**: Vectorized computation across kinematic points
-4. **Advanced Optimizers**: Integration with Adam, L-BFGS for better convergence
+4. **Advanced Optimizers**: Integration with L-BFGS for better convergence
+5. **Automated Environment Setup**: Helper scripts for dependency installation
 
 ### Physics Extensions
 
@@ -208,5 +259,6 @@ This output confirms:
 2. **Nuclear Targets**: Validation with realistic nuclear TMD modifications
 3. **Systematic Uncertainties**: Gradient-based uncertainty propagation
 4. **Scale Variations**: Differentiable scale variation for theoretical uncertainties
+5. **Cross-Validation**: Multiple kinematic region validation
 
-The `fit_fnp_synthetic.py` script thus serves as a crucial validation tool that bridges the gap between theoretical TMD physics and practical machine learning optimization, ensuring that our parameter extraction methods are both scientifically sound and computationally robust.
+The `fit_fnp_synthetic.py` script now serves as a robust, requirement-enforced validation tool that ensures both the computing environment and the TMD physics implementation are ready for production parameter fitting. By requiring Python 3.10 and the full dependency stack, it guarantees that validation results are directly applicable to real experimental data analysis.
