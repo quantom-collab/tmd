@@ -1,4 +1,4 @@
-# PyTorch autodiff compatibility of `map/sidis_crossect_torch.py`
+# PyTorch autodiff compatibility of `map/map_crossect_torch.py`
 
 The SIDIS cross-section computation now supports **dual integration modes**:
 
@@ -156,14 +156,14 @@ The current implementation uses a **hybrid strategy**:
 
 ```bash
 # Uses PyTorch integration by default
-python3.10 sidis_crossect_torch.py config.yaml data.yaml fnp_config.yaml results/ output.yaml
+python3.10 map_crossect_torch.py config.yaml data.yaml fnp_config.yaml results/ output.yaml
 ```
 
 ### For Production Results (High Accuracy)
 
 ```bash
 # Uses Ogata quadrature for maximum accuracy
-python3.10 sidis_crossect_torch.py config.yaml data.yaml fnp_config.yaml results/ output.yaml --use-ogata
+python3.10 map_crossect_torch.py config.yaml data.yaml fnp_config.yaml results/ output.yaml --use-ogata
 ```
 
 ### In Python API

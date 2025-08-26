@@ -5,7 +5,7 @@ Synthetic fNP parameter fit sanity check using PyTorch autograd.
 This script uses the full SIDIS computation machinery with APFEL++ and LHAPDF.
 REQUIRES: Python 3.10 and LHAPDF/APFEL++ packages.
 
-It auto-discovers the repo root and the 'sidis' folder.
+It auto-discovers the repo root and the 'map' folder.
 """
 
 import os
@@ -36,21 +36,21 @@ def check_python_version():
 
 def _ensure_rootdir_on_syspath() -> Tuple[str, str]:
     """
-    Auto-discover the repository root and ensure the 'sidis' modules are importable.
+    Auto-discover the repository root and ensure the 'map' modules are importable.
 
     This function walks up the directory tree from the current script location
-    to find the TMD repository root (identified by the presence of a 'sidis'
+    to find the TMD repository root (identified by the presence of a 'map'
     directory containing a 'modules' subdirectory). Once found, it adds both
-    the repo root and the 'sidis' directory to sys.path for imports.
+    the repo root and the 'map' directory to sys.path for imports.
 
     Returns:
-        Tuple[str, str]: (repo_root_path, SIDIS_DIRectory_path)
+        Tuple[str, str]: (repo_root_path, map_directory_path)
 
     Algorithm:
         1. Start from the directory containing this script
-        2. Walk up the directory tree looking for 'sidis/modules/'
-        3. When found, add both repo root and sidis dir to sys.path
-        4. If not found, fall back to assuming standard layout (../../sidis)
+        2. Walk up the directory tree looking for 'map/modules/'
+        3. When found, add both repo root and map dir to sys.path
+        4. If not found, fall back to assuming standard layout (../../map)
     """
     # Start from the directory containing this script file
     start = os.path.abspath(os.path.dirname(__file__))
@@ -61,8 +61,8 @@ def _ensure_rootdir_on_syspath() -> Tuple[str, str]:
     # True, so it’s always “true.” The loop only stops when code
     # inside it returns or breaks.
     while True:
-        # Check if current directory contains a 'sidis' folder with 'modules' subfolder
-        candidate_folder = os.path.join(cur, "sidis")
+        # Check if current directory contains a 'map' folder with 'modules' subfolder
+        candidate_folder = os.path.join(cur, "map")
         if os.path.isdir(candidate_folder) and os.path.isdir(
             os.path.join(candidate_folder, "modules")
         ):
@@ -70,13 +70,13 @@ def _ensure_rootdir_on_syspath() -> Tuple[str, str]:
             repo_root = cur
 
             # Add repo root to sys.path if not already present
-            # This allows imports like 'from sidis.modules import ...'
+            # This allows imports like 'from map.modules import ...'
             if repo_root not in sys.path:
                 # Puts repo_root at index 0 (highest priority),
                 # ahead of the script dir, site-packages, etc.
                 sys.path.insert(0, repo_root)
 
-            # Add sidis directory to sys.path if not already present
+            # Add map directory to sys.path if not already present
             # This allows imports like 'from sidis_crossect_torch import ...'
             if candidate_folder not in sys.path:
                 sys.path.insert(0, candidate_folder)
@@ -91,20 +91,20 @@ def _ensure_rootdir_on_syspath() -> Tuple[str, str]:
             break
         cur = parent
 
-    # Fallback: assume script is in repo_root/sidis/tests/ (standard layout)
-    # Go up two levels: tests/ -> sidis/ -> repo_root/
+    # Fallback: assume script is in repo_root/map/tests/ (standard layout)
+    # Go up two levels: tests/ -> map/ -> repo_root/
     fallback_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
     # Add fallback paths to sys.path
     if fallback_root not in sys.path:
         sys.path.insert(0, fallback_root)
 
-    return fallback_root, os.path.join(fallback_root, "sidis")
+    return fallback_root, os.path.join(fallback_root, "map")
 
 
 # Initialize repository paths and set up import system
-# This must be done before any local imports (like 'from sidis.sidis_crossect_torch import ...')
-REPO_ROOT, SIDIS_DIR = _ensure_rootdir_on_syspath()
+# This must be done before any local imports (like 'from map.sidis_crossect_torch import ...')
+REPO_ROOT, MAP_DIR = _ensure_rootdir_on_syspath()
 
 
 def load_kinematics(path: str) -> Dict[str, Any]:
@@ -444,23 +444,23 @@ def main():
         description="Fit fNP parameters on synthetic cross sections to test autograd"
     )
     parser.add_argument(
-        "config", default=os.path.join(SIDIS_DIR, "inputs", "config.yaml"), nargs="?"
+        "config", default=os.path.join(MAP_DIR, "inputs", "config.yaml"), nargs="?"
     )
     parser.add_argument(
         "kinematics",
-        default=os.path.join(SIDIS_DIR, "inputs", "kinematics.yaml"),
+        default=os.path.join(MAP_DIR, "inputs", "kinematics.yaml"),
         nargs="?",
     )
     parser.add_argument(
         "fnp_config",
-        default=os.path.join(SIDIS_DIR, "inputs", "fNPconfig.yaml"),
+        default=os.path.join(MAP_DIR, "inputs", "fNPconfig.yaml"),
         nargs="?",
     )
     parser.add_argument("--device", default=None)
     parser.add_argument(
         "--points", type=int, default=20, help="Max number of kinematic points to use"
     )
-    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--lr", type=float, default=5e-2)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
@@ -472,7 +472,7 @@ def main():
 
     # Initialize SIDIS computation with proper error handling
     try:
-        from sidis.sidis_crossect_torch import SIDISComputationPyTorch
+        from sidis_crossect_torch import SIDISComputationPyTorch
 
         comp = SIDISComputationPyTorch(args.config, args.fnp_config, device=args.device)
         if comp.model_fNP is None:

@@ -25,10 +25,10 @@ This implementation uses PyTorch for:
 
 USAGE:
 ======
-python3.10 sidis_crossect_pytorch.py <config_file> <kinematic_data_file> <fnp_config_file> <output_folder> <output_filename>
+python3.10 map_crossect_pytorch.py <config_file> <kinematic_data_file> <fnp_config_file> <output_folder> <output_filename>
 
 Example:
-python3.10 sidis_crossect_pytorch.py inputs/config.yaml inputs/kinematics.yaml inputs/fNPconfig.yaml results/ sidis_pytorch.yaml
+python3.10 map_crossect_pytorch.py inputs/config.yaml inputs/kinematics.yaml inputs/fNPconfig.yaml results/ map_pytorch.yaml
 
 REQUIREMENTS:
 =============
@@ -1394,12 +1394,12 @@ def main():
     print(f"\033[94mOutput file: {output_file}\033[0m")
 
     # Initialize PyTorch computation
-    sidis_comp = SIDISComputationPyTorch(
+    map_comp = SIDISComputationPyTorch(
         args.config_file, args.fnp_config_file, device=args.device
     )
 
     # Run computation
-    sidis_comp.compute_sidis_cross_section_pytorch(
+    map_comp.compute_sidis_cross_section_pytorch(
         args.data_file, output_file, use_ogata=args.use_ogata
     )
 
