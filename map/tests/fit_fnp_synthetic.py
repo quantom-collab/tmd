@@ -17,23 +17,6 @@ import numpy as np
 from typing import Dict, Any, Tuple, Optional
 
 
-def check_python_version():
-    """
-    Check that we're running Python 3.10 as required by LHAPDF.
-    If it's not running with python3.10, print an error message and exit.
-    """
-    if not (sys.version_info.major == 3 and sys.version_info.minor == 10):
-        print(f"\033[91mERROR: This script MUST be run with Python 3.10")
-        print(
-            f"Current Python version: {sys.version_info.major}.{sys.version_info.minor}"
-        )
-        print(f"LHAPDF requires Python 3.10 for proper compatibility.")
-        print(f"Please switch to Python 3.10 and try again.\033[0m")
-
-        # Terminate the program with exit status 1
-        sys.exit(1)
-
-
 def _ensure_rootdir_on_syspath() -> Tuple[str, str]:
     """
     Auto-discover the repository root and ensure the 'map' modules are importable.
@@ -103,77 +86,8 @@ def _ensure_rootdir_on_syspath() -> Tuple[str, str]:
 # This must be done before any local imports (like 'from modules.sidis import ...')
 REPO_ROOT, MAP_DIR = _ensure_rootdir_on_syspath()
 
-
-def load_kinematics(path: str) -> Dict[str, Any]:
-    """
-    Load kinematic data from a YAML file and validate its structure.
-    This function performs comprehensive validation to ensure the YAML file
-    contains the expected structure for SIDIS kinematic data.
-
-    Args:
-        path (str): Absolute or relative path to the YAML kinematics file.
-                   Expected format: {"header": {...}, "data": {"x": [...], "Q2": [...], ...}}
-
-    Returns:
-        Dict[str, Any]: Parsed YAML data containing:
-                       - "header": metadata (Vs, target_isoscalarity, etc.)
-                       - "data": kinematic arrays (x, Q2, z, PhT as Python lists)
-
-    Raises:
-        FileNotFoundError: If the YAML file doesn't exist
-        yaml.YAMLError: If the file contains invalid YAML syntax
-        ValueError: If the loaded data has wrong structure, including:
-                   - Not a dictionary at top level (e.g., list, string, number)
-                   - Missing required keys ("header" or "data")
-                   - Missing required kinematic variables (x, Q2, z, PhT)
-                   - Kinematic variables are not lists/arrays
-    """
-    with open(path, "r") as f:
-        data = yaml.safe_load(f)
-
-    # Check 1: Must be a dictionary at the top level
-    # YAML can return lists, strings, numbers, None - we need a dict
-    if not isinstance(data, dict):
-        raise ValueError(
-            f"\033[33m[load_kinematics] Invalid kinematics YAML format: top level must be a dictionary, "
-            f"got {type(data).__name__}. "
-            f"Expected: {{header: {{...}}, data: {{...}}}}\033[0m"
-        )
-
-    # Check 2: Must have required top-level keys
-    required_keys = ["header", "data"]
-    for key in required_keys:
-        if key not in data:
-            raise ValueError(
-                f"\033[33m[load_kinematics] Invalid kinematics YAML format: missing required key '{key}'. "
-                f"Expected structure: {{header: {{...}}, data: {{x: [...], Q2: [...], z: [...], PhT: [...]}}}}\033[0m"
-            )
-
-    # Check 3: Data section must contain required kinematic variables
-    required_kinematics = ["x", "Q2", "z", "PhT"]
-    data_section = data["data"]
-    if not isinstance(data_section, dict):
-        raise ValueError(
-            f"\033[33m[load_kinematics] Invalid kinematics YAML format: 'data' must be a dictionary, "
-            f"got {type(data_section).__name__}\033[0m"
-        )
-
-    for var in required_kinematics:
-        if var not in data_section:
-            raise ValueError(
-                f"\033[33m[load_kinematics] Invalid kinematics YAML format: missing kinematic variable '{var}' in data section. "
-                f"Required variables: {required_kinematics}\033[0m"
-            )
-
-        # Check that each kinematic variable is a list/array (not a single value)
-        if not isinstance(data_section[var], (list, tuple)):
-            raise ValueError(
-                f"\033[33m[load_kinematics] Invalid kinematics YAML format: kinematic variable '{var}' must be a list/array, "
-                f"got {type(data_section[var]).__name__}. "
-                f"Example: {var}: [0.1, 0.2, 0.3]\033[0m"
-            )
-
-    return data
+# Local imports
+from map.modules.utilities import check_python_version, load_and_validate_kinematics
 
 
 def forward_cross_sections_torch(
@@ -192,7 +106,7 @@ def forward_cross_sections_torch(
               - fNP model parameters (PyTorch)
               - Integration configuration (b-grid, devices, dtypes)
 
-        kin (Dict[str, Any]): Kinematic data from load_kinematics() containing:
+        kin (Dict[str, Any]): Kinematic data from load_and_validate_kinematics() containing:
                              - "header": {"Vs": sqrt(s), "target_isoscalarity": float}
                              - "data": {"x": [...], "Q2": [...], "z": [...], "PhT": [...]}
 
@@ -419,7 +333,7 @@ def main():
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    kin = load_kinematics(args.kinematics)
+    kin = load_and_validate_kinematics(args.kinematics)
 
     # Initialize SIDIS computation with proper error handling
     try:

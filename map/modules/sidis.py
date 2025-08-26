@@ -616,7 +616,7 @@ class SIDISComputationPyTorch:
                 print(
                     f"\033[95m\nLoading fNP configuration from {self.fnp_config_file}\033[0m"
                 )
-                config_fnp = utl.load_yaml_config(self.fnp_config_file)
+                config_fnp = utl.load_yaml_file(self.fnp_config_file)
 
                 # Initialize PyTorch fNP model.
                 # Set self.model_fNP to the fNP instance from the fNP module
