@@ -110,11 +110,11 @@ def test_integration_methods():
 
     # Import the required module
     try:
-        import sidis_crossect_torch
+        from modules.sidis import SIDISComputationPyTorch
 
-        print(f"\033[94m✅ Successfully imported sidis_crossect_torch\033[0m")
+        print(f"\033[94m✅ Successfully imported modules.sidis\033[0m")
     except ImportError as e:
-        print(f"\033[91m❌ Failed to import sidis_crossect_torch: {e}\033[0m")
+        print(f"\033[91m❌ Failed to import modules.sidis: {e}\033[0m")
         return
 
     # Create output directory
@@ -140,7 +140,7 @@ def test_integration_methods():
     config_file = os.path.join(map_dir, "inputs", "config.yaml")
     fnp_config_file = os.path.join(map_dir, "inputs", "fNPconfig.yaml")
 
-    comp = sidis_crossect_torch.SIDISComputationPyTorch(config_file, fnp_config_file)
+    comp = SIDISComputationPyTorch(config_file, fnp_config_file)
 
     print("\n\033[94m1️⃣ Testing PyTorch integration (differentiable)...\033[0m")
     pytorch_result_file = os.path.join(output_dir, "test_pytorch_result.yaml")

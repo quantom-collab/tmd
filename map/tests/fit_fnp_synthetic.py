@@ -77,7 +77,7 @@ def _ensure_rootdir_on_syspath() -> Tuple[str, str]:
                 sys.path.insert(0, repo_root)
 
             # Add map directory to sys.path if not already present
-            # This allows imports like 'from sidis_crossect_torch import ...'
+            # This allows imports like 'from modules.sidis import ...'
             if candidate_folder not in sys.path:
                 sys.path.insert(0, candidate_folder)
 
@@ -91,11 +91,8 @@ def _ensure_rootdir_on_syspath() -> Tuple[str, str]:
             break
         cur = parent
 
-    # Fallback: assume script is in repo_root/map/tests/ (standard layout)
-    # Go up two levels: tests/ -> map/ -> repo_root/
+    # Fallback: assume script is in repo_root/map/tests/
     fallback_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-
-    # Add fallback paths to sys.path
     if fallback_root not in sys.path:
         sys.path.insert(0, fallback_root)
 
@@ -103,7 +100,7 @@ def _ensure_rootdir_on_syspath() -> Tuple[str, str]:
 
 
 # Initialize repository paths and set up import system
-# This must be done before any local imports (like 'from map.sidis_crossect_torch import ...')
+# This must be done before any local imports (like 'from modules.sidis import ...')
 REPO_ROOT, MAP_DIR = _ensure_rootdir_on_syspath()
 
 
@@ -179,54 +176,6 @@ def load_kinematics(path: str) -> Dict[str, Any]:
     return data
 
 
-def tensors_from_kinematics(
-    comp, data: Dict[str, Any]
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    Convert kinematic data from Python lists to PyTorch tensors for computation.
-
-    This function extracts the kinematic variables (x, Q2, z, PhT) from the loaded
-    YAML data and converts them to PyTorch tensors with the correct dtype and device
-    configuration for the SIDIS computation.
-
-    Args:
-        comp: SIDISComputationPyTorch instance containing:
-              - comp.dtype: Target tensor dtype (usually torch.float32)
-              - comp.device: Computation device ('cpu', 'cuda', or 'mps')
-              This object is created later in main() and contains all TMD computation setup.
-
-        data (Dict[str, Any]): Kinematic data dictionary from load_kinematics().
-                              A Dict (dictionary) is Python's key-value mapping type: {"key": value}.
-                              Expected structure:
-                              {
-                                "header": {"Vs": float, "target_isoscalarity": float, ...},
-                                "data": {
-                                  "x": [float, float, ...],      # Bjorken x values
-                                  "Q2": [float, float, ...],     # Virtuality squared (GeV²)
-                                  "z": [float, float, ...],      # Fragmentation fraction
-                                  "PhT": [float, float, ...]     # Transverse momentum (GeV)
-                                }
-                              }
-
-    Returns:
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-            Four tensors (x, Q2, z, PhT) configured with:
-            - Same dtype as comp.dtype (for memory efficiency)
-            - Same device as comp.device (for GPU acceleration)
-            - Shape: [N] where N is the number of kinematic points
-    """
-    # Create empty object which will hold the kinematic tensors
-    kd = {}
-
-    # Print message
-    print("\033[92m---Converting x, Q2, z, PhT to tensors...\033[0m")
-
-    # For each kinematic variable, convert the Python list to a PyTorch tensor
-    for key in ["x", "Q2", "z", "PhT"]:
-        kd[key] = torch.tensor(data["data"][key], dtype=comp.dtype, device=comp.device)
-    return kd["x"], kd["Q2"], kd["z"], kd["PhT"]
-
-
 def forward_cross_sections_torch(
     comp, kin: Dict[str, Any], max_points: Optional[int] = None
 ) -> torch.Tensor:
@@ -276,9 +225,11 @@ def forward_cross_sections_torch(
     # SIDISComputationPyTorch class.
     comp.setup_isoscalar_tmds(Vs, targetiso)
 
-    # Convert kinematic data to tensors
     # Extract x, Q2, z, PhT from YAML data and convert to PyTorch tensors
-    x, Q2, z, PhT = tensors_from_kinematics(comp, kin)
+    x = torch.tensor(kin["data"]["x"]).to(comp.device).to(comp.integration_dtype)
+    Q2 = torch.tensor(kin["data"]["Q2"]).to(comp.device).to(comp.integration_dtype)
+    z = torch.tensor(kin["data"]["z"]).to(comp.device).to(comp.integration_dtype)
+    PhT = torch.tensor(kin["data"]["PhT"]).to(comp.device).to(comp.integration_dtype)
 
     # Optionally limit to first N points for quick testing
     if max_points is not None:
@@ -472,7 +423,7 @@ def main():
 
     # Initialize SIDIS computation with proper error handling
     try:
-        from sidis_crossect_torch import SIDISComputationPyTorch
+        from modules.sidis import SIDISComputationPyTorch
 
         comp = SIDISComputationPyTorch(args.config, args.fnp_config, device=args.device)
         if comp.model_fNP is None:

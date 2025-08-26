@@ -1,19 +1,11 @@
 #!/usr/bin/env python3
 """
 Semi-Inclusive Deep Inelastic Scattering (SIDIS) Cross Section Computation
-using PyTorch and APFEL++ - Complete Implementation
+using PyTorch and APFEL++
 
 This script computes SIDIS differential cross sections using:
 1. APFEL++ library for TMD evolution and matching
 2. PyTorch for non-perturbative function modeling and gradient computation
-
-KINEMATIC VARIABLES:
-===================
-- x: Bjorken scaling variable (momentum fraction of struck parton)
-- Q2: Photon virtuality (hard scale of the process)
-- z: Energy fraction of produced hadron
-- PhT: Transverse momentum of produced hadron
-- qT = PhT/z: Intrinsic transverse momentum
 
 PYTORCH INTEGRATION:
 ===================
@@ -25,6 +17,9 @@ This implementation uses PyTorch for:
 
 USAGE:
 ======
+This script is meant both to be imported as a module and run as a standalone script.
+As a standalone script, the user may run it by doing;
+
 python3.10 map_crossect_pytorch.py <config_file> <kinematic_data_file> <fnp_config_file> <output_folder> <output_filename>
 
 Example:
@@ -56,13 +51,24 @@ from typing import Dict, List, Tuple, Any, TYPE_CHECKING, Optional
 # using Any to avoid linter errors
 import lhapdf as lh
 
-if TYPE_CHECKING:
-    LHAPDF_PDF = Any
-else:
-    LHAPDF_PDF = Any
+LHAPDF_PDF = Any
 
 # Import apfelpy
 import apfelpy as ap
+
+# Ensure module can be executed as a standalone script by setting import paths
+# Adds both the repository root and the 'map' directory to sys.path when needed
+try:
+    # When imported as a package this usually succeeds without changes
+    _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+    _MAP_DIR = os.path.dirname(_SCRIPT_DIR)
+    _REPO_ROOT = os.path.dirname(_MAP_DIR)
+    if _REPO_ROOT not in sys.path:
+        sys.path.insert(0, _REPO_ROOT)
+    if _MAP_DIR not in sys.path:
+        sys.path.insert(0, _MAP_DIR)
+except Exception:
+    pass
 
 # Import custom modules
 try:
