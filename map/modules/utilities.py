@@ -8,9 +8,69 @@ This file contains utility functions that are used in the map module
 import sys
 import yaml
 import torch
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple, Any, Optional
+import os
 import matplotlib.pyplot as plt
 from IPython.display import display, Latex
+
+
+###############################################################################
+# Repository path setup for local imports
+###############################################################################
+def ensure_repo_on_syspath(start_dir: Optional[str] = None) -> Tuple[str, str]:
+    """
+    Ensure the repository root and 'map' directory are present in sys.path.
+
+    Walks up from start_dir (or current file/cwd) to locate a directory that
+    contains a 'map' folder with a 'modules' subfolder. When found, it inserts
+    both the repo root and the 'map' directory at the front of sys.path.
+
+    Args:
+        start_dir: Optional starting directory. If None, uses the directory
+                   of the caller's file if available, otherwise the cwd.
+
+    Returns:
+        (repo_root_path, map_directory_path)
+
+    Raises:
+        RuntimeError if the repository structure cannot be located.
+    """
+    # Determine a reasonable starting directory
+    if start_dir is None:
+        # Try to infer the caller's directory from the call stack; fallback to cwd
+        try:
+            # __file__ is not always defined (e.g., in some REPL contexts)
+            start_dir = os.path.abspath(os.path.dirname(__file__))
+        except Exception:
+            start_dir = os.getcwd()
+
+    current = os.path.abspath(start_dir)
+
+    # Walk up the directory tree to find repo root containing map/modules
+    while True:
+        candidate_map = os.path.join(current, "map")
+        if os.path.isdir(candidate_map) and os.path.isdir(
+            os.path.join(candidate_map, "modules")
+        ):
+            # Found repository root
+            repo_root = current
+            # Prepend to sys.path to prioritize local code
+            if repo_root not in sys.path:
+                sys.path.insert(0, repo_root)
+            if candidate_map not in sys.path:
+                sys.path.insert(0, candidate_map)
+            return repo_root, candidate_map
+
+        parent = os.path.dirname(current)
+        if parent == current:
+            break
+        current = parent
+
+    # If not found, raise a clear error
+    raise RuntimeError(
+        "Could not locate repository root containing 'map/modules'. "
+        "Start the search from a path inside the repository or set PYTHONPATH to the repo root."
+    )
 
 
 ###############################################################################
@@ -82,7 +142,7 @@ def load_and_validate_kinematics(path: str) -> Dict[str, Any]:
         raise ValueError(
             f"\033[33m[load_and_validate_kinematics] Invalid kinematics YAML format: top level must be a dictionary, "
             f"got {type(data).__name__}. "
-            f"Expected: {{header: {{...}}, data: {{...}}}}\033[0m"
+            f"Expected: {header: {...}, data: {...}}\033[0m"
         )
 
     # Check 2: Must have required top-level keys
@@ -91,7 +151,7 @@ def load_and_validate_kinematics(path: str) -> Dict[str, Any]:
         if key not in data:
             raise ValueError(
                 f"\033[33m[load_and_validate_kinematics] Invalid kinematics YAML format: missing required key '{key}'. "
-                f"Expected structure: {{header: {{...}}, data: {{x: [...], Q2: [...], z: [...], PhT: [...]}}}}\033[0m"
+                f"Expected structure: {header: {...}, data: {x: [...], Q2: [...], z: [...], PhT: [...]}}\033[0m"
             )
 
     # Check 3: Data section must contain required kinematic variables

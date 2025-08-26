@@ -16,78 +16,24 @@ import torch
 import numpy as np
 from typing import Dict, Any, Tuple, Optional
 
-
-def _ensure_rootdir_on_syspath() -> Tuple[str, str]:
-    """
-    Auto-discover the repository root and ensure the 'map' modules are importable.
-
-    This function walks up the directory tree from the current script location
-    to find the TMD repository root (identified by the presence of a 'map'
-    directory containing a 'modules' subdirectory). Once found, it adds both
-    the repo root and the 'map' directory to sys.path for imports.
-
-    Returns:
-        Tuple[str, str]: (repo_root_path, map_directory_path)
-
-    Algorithm:
-        1. Start from the directory containing this script
-        2. Walk up the directory tree looking for 'map/modules/'
-        3. When found, add both repo root and map dir to sys.path
-        4. If not found, fall back to assuming standard layout (../../map)
-    """
-    # Start from the directory containing this script file
-    start = os.path.abspath(os.path.dirname(__file__))
-    cur = start
-
-    # Walk up the directory tree to find the repo root.
-    # Starts an infinite loop: the condition is the literal boolean
-    # True, so it’s always “true.” The loop only stops when code
-    # inside it returns or breaks.
-    while True:
-        # Check if current directory contains a 'map' folder with 'modules' subfolder
-        candidate_folder = os.path.join(cur, "map")
-        if os.path.isdir(candidate_folder) and os.path.isdir(
-            os.path.join(candidate_folder, "modules")
-        ):
-            # Found the repo root! Set up import paths
-            repo_root = cur
-
-            # Add repo root to sys.path if not already present
-            # This allows imports like 'from map.modules import ...'
-            if repo_root not in sys.path:
-                # Puts repo_root at index 0 (highest priority),
-                # ahead of the script dir, site-packages, etc.
-                sys.path.insert(0, repo_root)
-
-            # Add map directory to sys.path if not already present
-            # This allows imports like 'from modules.sidis import ...'
-            if candidate_folder not in sys.path:
-                sys.path.insert(0, candidate_folder)
-
-            return repo_root, candidate_folder
-
-        # Move up one directory level
-        parent = os.path.dirname(cur)
-
-        # Check if we've reached the filesystem root (can't go higher)
-        if parent == cur:
-            break
-        cur = parent
-
-    # Fallback: assume script is in repo_root/map/tests/
-    fallback_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    if fallback_root not in sys.path:
-        sys.path.insert(0, fallback_root)
-
-    return fallback_root, os.path.join(fallback_root, "map")
-
-
 # Initialize repository paths and set up import system
-# This must be done before any local imports (like 'from modules.sidis import ...')
-REPO_ROOT, MAP_DIR = _ensure_rootdir_on_syspath()
+# First import the utilities module using a fallback method
+try:
+    # Try direct import if we're already in the right place
+    from modules.utilities import ensure_repo_on_syspath
+except ImportError:
+    # Fallback: manually add map to path
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    map_dir = os.path.dirname(script_dir)
+    if map_dir not in sys.path:
+        sys.path.insert(0, map_dir)
+    from modules.utilities import ensure_repo_on_syspath
+
+# Now use the centralized function to set up paths
+REPO_ROOT, MAP_DIR = ensure_repo_on_syspath()
 
 # Local imports
-from map.modules.utilities import check_python_version, load_and_validate_kinematics
+from modules.utilities import check_python_version, load_and_validate_kinematics
 
 
 def forward_cross_sections_torch(
