@@ -439,5 +439,5 @@ class fNPManager(nn.Module):
                     module.free_params.data.copy_(free_part.unsqueeze(0))
 
 
-# Legacy compatibility: alias to maintain backward compatibility
+# Create an alias for backward compatibility and clean imports
 fNP = fNPManager

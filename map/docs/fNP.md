@@ -11,40 +11,46 @@
 - [Modular fNP System Documentation](#modular-fnp-system-documentation)
   - [Table of Contents](#table-of-contents)
   - [1. Overview](#1-overview)
-  - [2. New Modular Architecture](#2-new-modular-architecture)
+  - [2. Architecture](#2-architecture)
   - [3. File Structure](#3-file-structure)
-  - [4. Core Components](#4-core-components)
+  - [4. `fnp_base.py`](#4-fnp_basepy)
     - [4.1. Evolution Module (`fNP_evolution`)](#41-evolution-module-fnp_evolution)
     - [4.2. TMD PDF Base (`TMDPDFBase`)](#42-tmd-pdf-base-tmdpdfbase)
     - [4.3. TMD FF Base (`TMDFFBase`)](#43-tmd-ff-base-tmdffbase)
-    - [4.4. Unified Manager (`fNPManager`)](#44-unified-manager-fnpmanager)
-  - [5. MAP22 Implementation](#5-map22-implementation)
-  - [6. Configuration Structure](#6-configuration-structure)
-    - [Complete Example (`fNPconfig_unified.yaml`)](#complete-example-fnpconfig_unifiedyaml)
+  - [5. `fnp_manager.py`](#5-fnp_managerpy)
+    - [5.1 Class `fNPManager`](#51-class-fnpmanager)
+  - [6. `fnp.py` - The Main Interface Module](#6-fnppy---the-main-interface-module)
+    - [6.1. What is `fnp.py` and Why Do We Need It?](#61-what-is-fnppy-and-why-do-we-need-it)
+    - [6.2. Architecture Role](#62-architecture-role)
+    - [6.3. Why This Design?](#63-why-this-design)
+      - [**1. Clean Import Interface**](#1-clean-import-interface)
+      - [**2. API Stability**](#2-api-stability)
+      - [**3. Selective Exports**](#3-selective-exports)
+      - [**4. Documentation Entry Point**](#4-documentation-entry-point)
+    - [6.4. What Does `fnp.py` Actually Do?](#64-what-does-fnppy-actually-do)
+    - [6.5. Could We Eliminate `fnp.py`?](#65-could-we-eliminate-fnppy)
+  - [7. Configuration Structure](#7-configuration-structure)
+    - [Complete Example (`fNPconfig.yaml`)](#complete-example-fnpconfigyaml)
   - [7. Usage Examples](#7-usage-examples)
     - [7.1. Basic Usage](#71-basic-usage)
     - [7.2. Optimization Example](#72-optimization-example)
     - [7.3. Parameter Analysis](#73-parameter-analysis)
-  - [8. Migration Guide](#8-migration-guide)
-  - [9. Testing and Validation](#9-testing-and-validation)
 
 ---
 
 ## 1. Overview
 
-The modular fNP system represents a complete reorganization of the TMD non-perturbative function framework. Key improvements include:
-
 - **Unified PDF/FF Management**: Simultaneous optimization of both TMD PDFs and FFs
 - **MAP22 Implementation**: Exact implementation of the MAP22 parameterization from NangaParbat
 - **Shared Evolution**: Common evolution factor across PDFs and FFs
 - **Modular Design**: Clean separation of concerns with reusable components
-- **Enhanced Configuration**: Comprehensive YAML-based parameter management
+- **Configuration**: Comprehensive YAML-based parameter management
 
-## 2. New Modular Architecture
+## 2. Architecture
 
 ```mermaid
 graph TD
-    Config[fNPconfig_unified.yaml] --> Manager[fNPManager]
+    Config[fNPconfig.yaml] --> Manager[fNPManager]
     Manager --> Evolution[fNP_evolution<br/>Shared Evolution]
     Manager --> PDFModules[TMD PDF Modules]
     Manager --> FFModules[TMD FF Modules]
@@ -74,90 +80,51 @@ graph TD
 map/modules/
 ├── fnp_base.py          # Base classes (Evolution, PDF, FF)
 ├── fnp_manager.py       # Unified manager for PDFs and FFs
-├── fNP_new.py          # Main interface and exports
-└── fNP.py              # Legacy file (to be replaced)
+└── fnp.py               # Main interface and exports
 
-map/inputs/
-├── fNPconfig_unified.yaml  # New unified configuration
-└── fNPconfig.yaml         # Legacy configuration
+map/inputs/ 
+└── fNPconfig.yaml       # New unified configuration
 
 map/tests/
 ├── test_fnp_modular.py    # Comprehensive test suite
 └── other test files...
 
 map/docs/
-├── fNP_modular.md         # This documentation
-└── fNP.md                 # Legacy documentation
+└── fnp.md         # This documentation
 ```
 
-## 4. Core Components
+## 4. `fnp_base.py`
 
 ### 4.1. Evolution Module (`fNP_evolution`)
 
 **Purpose:** Shared evolution factor for both TMD PDFs and FFs.
 
-**Implementation:**
+Implementation of
 
-```python
+```latex
 S_NP(ζ, b_T) = exp[-g₂² b_T²/4 × ln(ζ/Q₀²)]
 ```
 
 **Key Features:**
 
-- Single trainable parameter `g₂`
+- Single trainable parameter `g2`
 - Shared across all PDF and FF flavors
 - Parameter masking support
 - Reference scale Q₀² = 1 GeV²
 
 ### 4.2. TMD PDF Base (`TMDPDFBase`)
 
-**Purpose:** Exact MAP22 TMD PDF parameterization.
-
-**Parameters (11 total):**
-
-- `N₁, α₁, σ₁, λ`: Primary component
-- `N₁ᵦ, α₂, σ₂`: Secondary component  
-- `N₁ᶜ, α₃, σ₃`: Tertiary component
-- `λ₂`: Additional coupling
-
-**Implementation:**
-
-```python
-f_NP(x, b_T) = S_NP × [numerator] / [denominator]
-
-numerator = g₁×exp(-g₁×(b/2)²) + λ²×g₁ᵦ²×(1-g₁ᵦ×(b/2)²)×exp(-g₁ᵦ×(b/2)²) + g₁ᶜ×λ₂²×exp(-g₁ᶜ×(b/2)²)
-denominator = g₁ + λ²×g₁ᵦ² + g₁ᶜ×λ₂²
-
-where:
-g₁ = N₁ × (x/0.1)^σ₁ × ((1-x)/0.9)^α₁²
-g₁ᵦ = N₁ᵦ × (x/0.1)^σ₂ × ((1-x)/0.9)^α₂²
-g₁ᶜ = N₁ᶜ × (x/0.1)^σ₃ × ((1-x)/0.9)^α₃²
-```
+**Purpose:** MAP22 TMD PDF parameterization with 11 parameters.
 
 ### 4.3. TMD FF Base (`TMDFFBase`)
 
-**Purpose:** Exact MAP22 TMD FF parameterization.
+**Purpose:** Exact MAP22 TMD FF parameterization with 9 parameters.
 
-**Parameters (9 total):**
+## 5. `fnp_manager.py`
 
-- `N₃, β₁, δ₁, γ₁`: Primary component
-- `N₃ᵦ, β₂, δ₂, γ₂`: Secondary component
-- `λ_F`: Coupling parameter
+Unified Manager for TMD PDFs and FFs.
 
-**Implementation:**
-
-```python
-D_NP(z, b_T) = S_NP × [numerator] / [denominator]
-
-numerator = g₃×exp(-g₃×(b/2)²/z²) + (λ_F/z²)×g₃ᵦ²×(1-g₃ᵦ×(b/2)²/z²)×exp(-g₃ᵦ×(b/2)²/z²)
-denominator = g₃ + (λ_F/z²)×g₃ᵦ²
-
-where:
-g₃ = N₃ × [(z^β₁ + δ₁²)/(0.5^β₁ + δ₁²)] × ((1-z)/0.5)^γ₁²
-g₃ᵦ = N₃ᵦ × [(z^β₂ + δ₂²)/(0.5^β₂ + δ₂²)] × ((1-z)/0.5)^γ₂²
-```
-
-### 4.4. Unified Manager (`fNPManager`)
+### 5.1 Class `fNPManager`
 
 **Purpose:** Single interface for managing both TMD PDFs and FFs.
 
@@ -169,47 +136,118 @@ g₃ᵦ = N₃ᵦ × [(z^β₂ + δ₂²)/(0.5^β₂ + δ₂²)] × ((1-z)/0.5)^
 - Comprehensive parameter analysis
 - PyTorch optimizer compatibility
 
-## 5. MAP22 Implementation
+## 6. `fnp.py` - The Main Interface Module
 
-The implementation exactly matches the C++ MAP22g52.h from NangaParbat:
+### 6.1. What is `fnp.py` and Why Do We Need It?
 
-**Parameter Mapping:**
+**The Question:** "*Why do we need `fnp.py` when we already have `fnp_manager.py`?*"
 
-```cpp
-// C++ MAP22g52.h parameters (21 total)
-this->_pars[0]  = g2        // Evolution
-this->_pars[1]  = N1        // PDF primary
-this->_pars[2]  = alpha1
-this->_pars[3]  = sigma1
-this->_pars[4]  = lambda
-this->_pars[5]  = N3        // FF primary
-this->_pars[6]  = beta1
-this->_pars[7]  = delta1
-this->_pars[8]  = gamma1
-this->_pars[9]  = lambdaF
-this->_pars[10] = N3B       // FF secondary
-this->_pars[11] = N1B       // PDF secondary
-this->_pars[12] = N1C       // PDF tertiary
-this->_pars[13] = lambda2
-...
+**The Answer:** `fnp.py` serves as a **package interface layer** that provides a clean, stable API for users while hiding the internal complexity of the modular system.
+
+### 6.2. Architecture Role
+
+```mermaid
+graph LR
+    User[User Code] --> Interface[fnp.py]
+    Interface --> Manager[fnp_manager.py]
+    Interface --> Base[fnp_base.py]
+    Manager --> Base
+    
+    subgraph "Internal Implementation"
+        Manager
+        Base
+    end
+    
+    subgraph "Public API"
+        Interface
+    end
 ```
 
-**Python Modular Mapping:**
+### 6.3. Why This Design?
+
+#### **1. Clean Import Interface**
+
+Without `fnp.py`:
 
 ```python
-# Evolution (1 parameter)
-g2
-
-# PDF per flavor (11 parameters)
-[N₁, α₁, σ₁, λ, N₁ᵦ, N₁ᶜ, λ₂, α₂, α₃, σ₂, σ₃]
-
-# FF per flavor (9 parameters)  
-[N₃, β₁, δ₁, γ₁, λ_F, N₃ᵦ, β₂, δ₂, γ₂]
+# User needs to know internal structure
+from modules.fnp_manager import fNPManager as fNP
+from modules.fnp_base import TMDPDFBase, TMDFFBase
 ```
 
-## 6. Configuration Structure
+With `fnp.py`:
 
-### Complete Example (`fNPconfig_unified.yaml`)
+```python
+# Clean, simple imports
+from modules.fnp import fNP, TMDPDFBase, TMDFFBase
+```
+
+#### **2. API Stability**
+
+- Internal refactoring doesn't break user code
+- Import paths remain consistent
+- Version compatibility maintained
+
+#### **3. Selective Exports**
+
+`fnp.py` explicitly controls what's available to users:
+
+```python
+__all__ = [
+    "fNP",                    # Main interface (most users need this)
+    "fNPManager",             # Advanced users
+    "TMDPDFBase",             # For custom implementations
+    "TMDFFBase",              # For custom implementations
+    # Internal utilities are NOT exported
+]
+```
+
+#### **4. Documentation Entry Point**
+
+- Single place to document the entire system
+- Version information
+- Usage examples
+
+### 6.4. What Does `fnp.py` Actually Do?
+
+`fnp.py` is essentially a **re-export module** that:
+
+1. **Imports** all components from `fnp_base.py` and `fnp_manager.py`
+2. **Re-exports** them with clean names
+3. **Provides** version info and documentation
+4. **Defines** `__all__` for controlled exports
+
+**The Code:**
+
+```python
+# Re-export the main classes and functions from the modular system
+from .fnp_base import (
+    fNP_evolution,
+    TMDPDFBase, 
+    TMDFFBase,
+    MAP22_DEFAULT_*
+)
+
+from .fnp_manager import fNPManager, fNP
+
+# Make the main interface easily accessible
+__all__ = ["fNP", "fNPManager", ...]
+```
+
+### 6.5. Could We Eliminate `fnp.py`?
+
+**Yes, technically**, but it would:
+
+- ❌ Force users to know internal module structure
+- ❌ Make imports longer and more complex  
+- ❌ Break existing code if we reorganize internally
+- ❌ Violate Python packaging best practices
+
+**The current design follows Python conventions** used by major packages like NumPy, PyTorch, etc.
+
+## 7. Configuration Structure
+
+### Complete Example (`fNPconfig.yaml`)
 
 ```yaml
 # Global settings
@@ -325,83 +363,3 @@ torch.save(trainable_params, 'fitted_parameters.pth')
 loaded_params = torch.load('fitted_parameters.pth')
 fnp_manager.set_trainable_parameters_dict(loaded_params)
 ```
-
-## 8. Migration Guide
-
-**From Legacy fNP.py to Modular System:**
-
-1. **Update Imports:**
-
-   ```python
-   # Old
-   from modules.fNP import fNP
-   
-   # New
-   from modules.fnp_manager import fNPManager as fNP
-   ```
-
-2. **Update Configuration:**
-   - Use `fNPconfig_unified.yaml` instead of `fNPconfig.yaml`
-   - Separate PDF and FF configurations
-   - Define masking strategy for each flavor
-
-3. **Update Usage:**
-
-   ```python
-   # Old
-   outputs = model(x, b, flavors=['u', 'd'])
-   
-   # New - specify PDF or FF
-   pdf_outputs = model.forward_pdf(x, b, flavors=['u', 'd'])
-   ff_outputs = model.forward_ff(z, b, flavors=['u', 'd'])
-   ```
-
-4. **Update SIDIS Integration:**
-   - Modify `compute_flavor_sum_pytorch` to use separate PDF/FF calls
-   - Update parameter extraction methods
-
-## 9. Testing and Validation
-
-**Test Suite:** `map/tests/test_fnp_modular.py`
-
-**Test Coverage:**
-
-- ✅ Evolution module functionality
-- ✅ TMD PDF MAP22 implementation
-- ✅ TMD FF MAP22 implementation  
-- ✅ Unified manager operations
-- ✅ Parameter masking and optimization
-- ✅ Configuration loading
-- ✅ PyTorch optimizer compatibility
-
-**Run Tests:**
-
-```bash
-cd /path/to/tmd
-python3.10 map/tests/test_fnp_modular.py
-```
-
-**Expected Output:**
-
-```bash
-🧪 Testing Modular fNP System
-✅ Evolution module working
-✅ TMD PDF module (MAP22) working
-✅ TMD FF module (MAP22) working
-✅ Unified manager working
-✅ Optimization compatibility confirmed
-🎉 ALL TESTS PASSED SUCCESSFULLY!
-```
-
----
-
-**Key Advantages of the Modular System:**
-
-1. **Physics Accuracy**: Exact MAP22 implementation matching C++ reference
-2. **Unified Optimization**: Simultaneous PDF and FF parameter fitting
-3. **Flexibility**: Per-flavor parameterization control with masking
-4. **Maintainability**: Clean modular design with separation of concerns
-5. **Extensibility**: Easy to add new parameterizations or flavors
-6. **Performance**: Efficient PyTorch implementation with gradient support
-
-The modular fNP system provides a robust, physics-accurate, and maintainable framework for TMD non-perturbative function modeling with full integration into the PyTorch optimization ecosystem.
