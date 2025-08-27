@@ -156,13 +156,14 @@ def forward_cross_sections_torch(
             print(
                 f"\033[93mWarning: Flavor sum failed, using single 'u' flavor: {e}\033[0m"
             )
-            fnp_pdf = comp.compute_fnp_pytorch(
+            # fnp1 = PDF, fnp2 = FF as specified by user
+            fnp1 = comp.compute_fnp_pytorch_pdf(
                 x_t.expand_as(b), b.to(comp.dtype), "u"
             ).to(comp.integration_dtype)
-            fnp_ff = comp.compute_fnp_pytorch(
+            fnp2 = comp.compute_fnp_pytorch_ff(
                 z_t.expand_as(b), b.to(comp.dtype), "u"
             ).to(comp.integration_dtype)
-            flavor_sum = fnp_pdf * fnp_ff  # Single flavor approximation
+            flavor_sum = fnp1 * fnp2  # Single flavor approximation
 
         # ===== Compute Fourier-Bessel transform kernel =====
         # Zeroth-order Bessel function

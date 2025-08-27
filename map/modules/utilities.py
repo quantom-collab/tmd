@@ -184,47 +184,107 @@ def load_and_validate_kinematics(path: str) -> Dict[str, Any]:
 ###############################################################################
 # Plot fNP
 ###############################################################################
-def plot_fNP(model_fNP, x, flavors=None):
+def plot_fNP(model_fNP, x, flavors=None, plot_type="pdf"):
     """
     Evaluate and plot the fNP values for a given fNP model over a range of b values.
 
     Parameters:
-      - model_fNP (nn.Module): An instance of your fNP module.
+      - model_fNP (nn.Module): An instance of your fNP module (modular system).
       - x (torch.Tensor): The input tensor for x (typically a scalar tensor).
-      - b_range (torch.Tensor): A 1D tensor of b values at which to evaluate fNP.
       - flavors (list, optional): A list of flavor keys to evaluate.
-                                  If None, uses model_fNP.flavor_keys.
+                                  If None, uses model_fNP.pdf_flavor_keys.
+      - plot_type (str): Type of fNP to plot - 'pdf' (fnp1), 'ff' (fnp2), or 'both'.
 
     The function evaluates the model for each b in b_range and collects the fNP
     output for each flavor. It then produces a plot of fNP versus b for all flavors.
+
+    Note: fnp1 = PDF, fnp2 = FF as specified for cross section computation.
     """
     # If no specific flavors are provided, use all available flavors.
     if flavors is None:
-        flavors = model_fNP.flavor_keys
+        if hasattr(model_fNP, "pdf_flavor_keys"):
+            flavors = model_fNP.pdf_flavor_keys
+        else:
+            # Fallback for backward compatibility
+            flavors = ["u", "d", "s"]
 
     # Create a range of b values from 0 to 10.
     b_values = torch.linspace(0, 10, steps=100)
 
-    # Create a dictionary to store the computed fNP for each flavor.
-    results_dict = {flavor: [] for flavor in flavors}
+    if plot_type == "both":
+        # Create dictionaries for both PDF and FF results
+        pdf_results = {flavor: [] for flavor in flavors}
+        ff_results = {flavor: [] for flavor in flavors}
 
-    # Loop over the b values, evaluating the model at each b.
-    for b in b_values:
-        # The model's forward method uses the internally stored zeta.
-        outputs = model_fNP(x, b)
+        # Loop over the b values, evaluating both PDF and FF
+        for b in b_values:
+            # Evaluate PDF fNP (fnp1)
+            pdf_outputs = model_fNP.forward_pdf(x, b, flavors=flavors)
+            # Evaluate FF fNP (fnp2) - use x as z for fragmentation
+            ff_outputs = model_fNP.forward_ff(x, b, flavors=flavors)
+
+            for flavor in flavors:
+                pdf_results[flavor].append(pdf_outputs[flavor].item())
+                ff_results[flavor].append(ff_outputs[flavor].item())
+
+        # Plot both PDF and FF on the same figure
+        plt.figure(figsize=(12, 8))
         for flavor in flavors:
-            # We assume that each output is a scalar tensor.
-            results_dict[flavor].append(outputs[flavor].item())
+            plt.plot(
+                b_values.numpy(),
+                pdf_results[flavor],
+                label=f"{flavor} PDF (fnp1)",
+                linestyle="-",
+            )
+            plt.plot(
+                b_values.numpy(),
+                ff_results[flavor],
+                label=f"{flavor} FF (fnp2)",
+                linestyle="--",
+            )
 
-    # Plot all flavors on the same figure.
-    plt.figure(figsize=(10, 6))
-    for flavor, values in results_dict.items():
-        plt.plot(b_values.numpy(), values, label=flavor)
-    plt.xlabel("b")
-    plt.ylabel("fNP")
-    plt.title("fNP vs. b for all flavors")
-    plt.legend()
-    plt.show()
+        plt.xlabel("b")
+        plt.ylabel("fNP")
+        plt.title("fNP vs. b: PDF (fnp1) and FF (fnp2) for all flavors")
+        plt.legend()
+        plt.show()
+
+    else:
+        # Create a dictionary to store the computed fNP for each flavor.
+        results_dict = {flavor: [] for flavor in flavors}
+
+        # Loop over the b values, evaluating the model at each b.
+        for b in b_values:
+            if plot_type == "pdf":
+                # Evaluate PDF fNP (fnp1)
+                outputs = model_fNP.forward_pdf(x, b, flavors=flavors)
+            elif plot_type == "ff":
+                # Evaluate FF fNP (fnp2) - use x as z for fragmentation
+                outputs = model_fNP.forward_ff(x, b, flavors=flavors)
+            else:
+                raise ValueError(
+                    f"Invalid plot_type: {plot_type}. Use 'pdf', 'ff', or 'both'."
+                )
+
+            for flavor in flavors:
+                # We assume that each output is a scalar tensor.
+                results_dict[flavor].append(outputs[flavor].item())
+
+        # Plot all flavors on the same figure.
+        plt.figure(figsize=(10, 6))
+        for flavor, values in results_dict.items():
+            plt.plot(b_values.numpy(), values, label=flavor)
+        plt.xlabel("b")
+
+        if plot_type == "pdf":
+            plt.ylabel("fNP PDF (fnp1)")
+            plt.title("fNP PDF (fnp1) vs. b for all flavors")
+        else:
+            plt.ylabel("fNP FF (fnp2)")
+            plt.title("fNP FF (fnp2) vs. b for all flavors")
+
+        plt.legend()
+        plt.show()
 
 
 ###############################################################################

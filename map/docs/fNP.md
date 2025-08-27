@@ -1,430 +1,407 @@
-# fNP Module Documentation
+# Modular fNP System Documentation
 
 **Author:** Chiara Bissolotti (<cbissolotti@anl.gov>)  
-**Module:** `map/modules/fNP.py`  
-**Purpose:** Non-perturbative TMD PDF parameterization using PyTorch
+**Version:** 2.0.0  
+**Purpose:** Unified TMD PDF and FF non-perturbative parameterization with MAP22 implementation
 
 ---
 
 ## Table of Contents
 
-- [fNP Module Documentation](#fnp-module-documentation)
+- [Modular fNP System Documentation](#modular-fnp-system-documentation)
   - [Table of Contents](#table-of-contents)
   - [1. Overview](#1-overview)
-  - [2. Module Architecture](#2-module-architecture)
-  - [3. Class Hierarchy](#3-class-hierarchy)
-  - [4. Core Classes](#4-core-classes)
-    - [4.1. TMDPDFBase](#41-tmdpdfbase)
-    - [4.2. fNP\_evolution](#42-fnp_evolution)
-    - [4.3. TMDPDF\_u](#43-tmdpdf_u)
-    - [4.4. TMDPDF\_d](#44-tmdpdf_d)
-    - [4.5. fNP (Top-level Module)](#45-fnp-top-level-module)
-  - [5. Dependencies and Relationships](#5-dependencies-and-relationships)
-    - [Internal Dependencies](#internal-dependencies)
-    - [External Dependencies](#external-dependencies)
-    - [Parameter Flow](#parameter-flow)
+  - [2. New Modular Architecture](#2-new-modular-architecture)
+  - [3. File Structure](#3-file-structure)
+  - [4. Core Components](#4-core-components)
+    - [4.1. Evolution Module (`fNP_evolution`)](#41-evolution-module-fnp_evolution)
+    - [4.2. TMD PDF Base (`TMDPDFBase`)](#42-tmd-pdf-base-tmdpdfbase)
+    - [4.3. TMD FF Base (`TMDFFBase`)](#43-tmd-ff-base-tmdffbase)
+    - [4.4. Unified Manager (`fNPManager`)](#44-unified-manager-fnpmanager)
+  - [5. MAP22 Implementation](#5-map22-implementation)
   - [6. Configuration Structure](#6-configuration-structure)
-    - [Complete Example (`fNPconfig.yaml`)](#complete-example-fnpconfigyaml)
+    - [Complete Example (`fNPconfig_unified.yaml`)](#complete-example-fnpconfig_unifiedyaml)
   - [7. Usage Examples](#7-usage-examples)
-    - [7.1. Basic Instantiation](#71-basic-instantiation)
-    - [7.2. Forward Pass](#72-forward-pass)
+    - [7.1. Basic Usage](#71-basic-usage)
+    - [7.2. Optimization Example](#72-optimization-example)
     - [7.3. Parameter Analysis](#73-parameter-analysis)
-    - [7.4. Parameter Setting](#74-parameter-setting)
-    - [7.5. Integration with SIDIS Computation](#75-integration-with-sidis-computation)
-    - [7.6. Optimization Example](#76-optimization-example)
-  - [8. Parameter Management](#8-parameter-management)
-    - [8.1. Parameter Masking System](#81-parameter-masking-system)
-    - [8.2. Gradient Hooks](#82-gradient-hooks)
-    - [8.3. Parameter Access Patterns](#83-parameter-access-patterns)
+  - [8. Migration Guide](#8-migration-guide)
+  - [9. Testing and Validation](#9-testing-and-validation)
 
 ---
 
 ## 1. Overview
 
-The `fNP` module provides a comprehensive PyTorch-based framework for modeling non-perturbative functions in Transverse Momentum Dependent (TMD) Parton Distribution Functions (PDFs). The module implements sophisticated parameterizations for different quark flavors with support for:
+The modular fNP system represents a complete reorganization of the TMD non-perturbative function framework. Key improvements include:
 
-- **Automatic differentiation** for gradient-based optimization
-- **Parameter masking** (trainable vs. fixed parameters)
-- **Flavor-specific parameterizations** (u-quark, d-quark, etc.)
-- **Shared evolution factors** across all flavors
-- **LaTeX formula rendering** for mathematical expressions
+- **Unified PDF/FF Management**: Simultaneous optimization of both TMD PDFs and FFs
+- **MAP22 Implementation**: Exact implementation of the MAP22 parameterization from NangaParbat
+- **Shared Evolution**: Common evolution factor across PDFs and FFs
+- **Modular Design**: Clean separation of concerns with reusable components
+- **Enhanced Configuration**: Comprehensive YAML-based parameter management
 
-## 2. Module Architecture
+## 2. New Modular Architecture
 
 ```mermaid
 graph TD
-    %% Top-level module
-    fNP[fNP<br/>Top-level Module] --> |contains| Evolution[fNP_evolution<br/>Evolution Module]
-    fNP --> |contains| FlavorDict[nn.ModuleDict<br/>flavors]
+    Config[fNPconfig_unified.yaml] --> Manager[fNPManager]
+    Manager --> Evolution[fNP_evolution<br/>Shared Evolution]
+    Manager --> PDFModules[TMD PDF Modules]
+    Manager --> FFModules[TMD FF Modules]
     
-    %% Flavor modules
-    FlavorDict --> |u flavor| TMDPDF_u[TMDPDF_u<br/>u-quark specific]
-    FlavorDict --> |d flavor| TMDPDF_d[TMDPDF_d<br/>d-quark specific]
-    FlavorDict --> |other flavors| TMDPDFBase[TMDPDFBase<br/>Base parameterization]
+    PDFModules --> |"u, d, s, etc."| PDFBase[TMDPDFBase<br/>MAP22 Implementation]
+    FFModules --> |"u, d, s, etc."| FFBase[TMDFFBase<br/>MAP22 Implementation]
     
-    %% Inheritance
-    TMDPDF_u -.-> |inherits from| TMDPDFBase
-    TMDPDF_d -.-> |inherits from| TMDPDFBase
-    TMDPDFBase -.-> |inherits from| PyTorchModule[nn.Module]
-    fNP_evolution -.-> |inherits from| PyTorchModule
-    fNP -.-> |inherits from| PyTorchModule
+    Evolution --> |S_NP factor| PDFBase
+    Evolution --> |S_NP factor| FFBase
     
-    %% Parameter management
-    TMDPDFBase --> |manages| FixedParams[fixed_params<br/>buffer]
-    TMDPDFBase --> |manages| FreeParams[free_params<br/>Parameter]
-    TMDPDFBase --> |uses| Mask[mask<br/>buffer]
+    Manager --> Optimizer[PyTorch Optimizer<br/>Unified Parameters]
     
-    %% Evolution parameters
-    Evolution --> |manages| FixedG2[fixed_g2<br/>buffer]
-    Evolution --> |manages| FreeG2[free_g2<br/>Parameter]
-    Evolution --> |uses| G2Mask[g2_mask<br/>buffer]
+    classDef config fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef manager fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef module fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef optimizer fill:#fff3e0,stroke:#e65100,stroke-width:2px
     
-    %% Data flow
-    fNP --> |forward pass| FlavorOutputs["Flavor Outputs<br/>Dict[str, Tensor]"]
-    Evolution --> |provides| NPEvol[NP_evol<br/>shared factor]
-    NPEvol --> |input to| TMDPDF_u
-    NPEvol --> |input to| TMDPDF_d
-    NPEvol --> |input to| TMDPDFBase
-    
-    %% Configuration
-    Config[fNPconfig.yaml] --> |configures| fNP
-    Config --> |defines| FlavorConfig[Flavor Parameters]
-    Config --> |defines| EvolutionConfig[Evolution Parameters]
-    
-    %% External dependencies
-    PyTorch[PyTorch Framework] -.-> |provides| PyTorchModule
-    IPython[IPython/Jupyter] -.-> |optional| LaTeXDisplay[LaTeX Display]
-    
-    classDef mainClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-    classDef flavorClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
-    classDef paramClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    classDef configClass fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
-    classDef externalClass fill:#fafafa,stroke:#424242,stroke-width:1px,stroke-dasharray: 5 5
-    
-    class fNP mainClass
-    class Evolution mainClass
-    class TMDPDF_u flavorClass
-    class TMDPDF_d flavorClass
-    class TMDPDFBase mainClass
-    class FixedParams,FreeParams,Mask,FixedG2,FreeG2,G2Mask paramClass
-    class Config,FlavorConfig,EvolutionConfig configClass
-    class PyTorch,IPython,LaTeXDisplay externalClass
+    class Config config
+    class Manager manager
+    class Evolution,PDFModules,FFModules,PDFBase,FFBase module
+    class Optimizer optimizer
 ```
 
-## 3. Class Hierarchy
-
-The module follows a clear inheritance structure:
+## 3. File Structure
 
 ```bash
-nn.Module (PyTorch)
-├── TMDPDFBase (Base parameterization)
-│   ├── TMDPDF_u (u-quark specific, 11 parameters)
-│   └── TMDPDF_d (d-quark specific, 10 parameters)
-├── fNP_evolution (Shared evolution factor)
-└── fNP (Top-level container)
+map/modules/
+├── fnp_base.py          # Base classes (Evolution, PDF, FF)
+├── fnp_manager.py       # Unified manager for PDFs and FFs
+├── fNP_new.py          # Main interface and exports
+└── fNP.py              # Legacy file (to be replaced)
+
+map/inputs/
+├── fNPconfig_unified.yaml  # New unified configuration
+└── fNPconfig.yaml         # Legacy configuration
+
+map/tests/
+├── test_fnp_modular.py    # Comprehensive test suite
+└── other test files...
+
+map/docs/
+├── fNP_modular.md         # This documentation
+└── fNP.md                 # Legacy documentation
 ```
 
-## 4. Core Classes
+## 4. Core Components
 
-### 4.1. TMDPDFBase
+### 4.1. Evolution Module (`fNP_evolution`)
 
-**Purpose:** Base class for flavor-specific TMD PDF parameterizations.
+**Purpose:** Shared evolution factor for both TMD PDFs and FFs.
 
-**Parameters:**
-
-- `n_flavors` (int): Number of flavor instances (typically 1)
-- `init_params` (List[float]): Initial parameter values
-- `free_mask` (List[bool]): Trainability mask for each parameter
-
-**Key Methods:**
+**Implementation:**
 
 ```python
-def forward(self, x: torch.Tensor, b: torch.Tensor, zeta: torch.Tensor, 
-           NP_evol: torch.Tensor, flavor_idx: int = 0) -> torch.Tensor
+S_NP(ζ, b_T) = exp[-g₂² b_T²/4 × ln(ζ/Q₀²)]
 ```
-
-**Default Parameterization:**
-
-```bash
-f_NP(x, b_T) = NP_evol * exp(-λ * b_T²) * exp(g1 * ln(1/x))
-```
-
-### 4.2. fNP_evolution
-
-**Purpose:** Computes the shared evolution factor across all flavors.
-
-**Parameters:**
-
-- `init_g2` (float): Initial value for evolution parameter
-- `free_mask` (List[bool]): Single-element list for g2 trainability
-
-**Evolution Formula:**
-
-```bash
-NP_evol(b, ζ) = exp(-g2² * b² * ln(ζ) / 4)
-```
-
-**Key Methods:**
-
-```python
-def forward(self, b: torch.Tensor, zeta: torch.Tensor) -> torch.Tensor
-```
-
-### 4.3. TMDPDF_u
-
-**Purpose:** Specialized u-quark parameterization using MAP22 formulation.
-
-**Parameters (11 total):**
-
-- `N1, alpha1, sigma1, lambda`: Primary component parameters
-- `N1B, alpha2, sigma2`: Secondary component parameters  
-- `N1C, alpha3, sigma3`: Tertiary component parameters
-- `lambda2`: Additional coupling parameter
-
-**Mathematical Form:**
-
-```bash
-f_NP^u(x,b_T) = NP_evol * [
-    g1 * exp(-g1*(b/2)²) + 
-    λ² * g1B² * (1 - g1B*(b/2)²) * exp(-g1B*(b/2)²) +
-    g1C * λ2² * exp(-g1C*(b/2)²)
-] / [
-    g1 + λ² * g1B² + g1C * λ2²
-]
-```
-
-Where:
-
-- `g1 = N1 * (x/0.1)^σ1 * ((1-x)/0.9)^α1²`
-- `g1B = N1B * (x/0.1)^σ2 * ((1-x)/0.9)^α2²`
-- `g1C = N1C * (x/0.1)^σ3 * ((1-x)/0.9)^α3²`
-
-### 4.4. TMDPDF_d
-
-**Purpose:** Specialized d-quark parameterization using MAP24 formulation.
-
-**Parameters (10 total):**
-
-- Similar structure to u-quark but with `σ3 = σ2` constraint
-- Slightly different parameter organization
-
-### 4.5. fNP (Top-level Module)
-
-**Purpose:** Main container that manages all flavor modules and evolution.
 
 **Key Features:**
 
-- Automatic flavor module instantiation
-- Configuration-driven parameter setup
-- Unified forward pass across all flavors
-- Parameter summary and analysis tools
+- Single trainable parameter `g₂`
+- Shared across all PDF and FF flavors
+- Parameter masking support
+- Reference scale Q₀² = 1 GeV²
 
-**Configuration Structure:**
+### 4.2. TMD PDF Base (`TMDPDFBase`)
 
-```yaml
-hadron: proton
-zeta: 1.0
-evolution:
-  init_g2: 0.25
-  free_mask: [true]
-flavors:
-  u:
-    init_params: [...]  # 11 parameters
-    free_mask: [...]    # 11 booleans
-  d:
-    init_params: [...]  # 10 parameters
-    free_mask: [...]    # 10 booleans
+**Purpose:** Exact MAP22 TMD PDF parameterization.
+
+**Parameters (11 total):**
+
+- `N₁, α₁, σ₁, λ`: Primary component
+- `N₁ᵦ, α₂, σ₂`: Secondary component  
+- `N₁ᶜ, α₃, σ₃`: Tertiary component
+- `λ₂`: Additional coupling
+
+**Implementation:**
+
+```python
+f_NP(x, b_T) = S_NP × [numerator] / [denominator]
+
+numerator = g₁×exp(-g₁×(b/2)²) + λ²×g₁ᵦ²×(1-g₁ᵦ×(b/2)²)×exp(-g₁ᵦ×(b/2)²) + g₁ᶜ×λ₂²×exp(-g₁ᶜ×(b/2)²)
+denominator = g₁ + λ²×g₁ᵦ² + g₁ᶜ×λ₂²
+
+where:
+g₁ = N₁ × (x/0.1)^σ₁ × ((1-x)/0.9)^α₁²
+g₁ᵦ = N₁ᵦ × (x/0.1)^σ₂ × ((1-x)/0.9)^α₂²
+g₁ᶜ = N₁ᶜ × (x/0.1)^σ₃ × ((1-x)/0.9)^α₃²
 ```
 
-## 5. Dependencies and Relationships
+### 4.3. TMD FF Base (`TMDFFBase`)
 
-### Internal Dependencies
+**Purpose:** Exact MAP22 TMD FF parameterization.
 
-1. **fNP** → **fNP_evolution**: Computes shared evolution factor
-2. **fNP** → **flavor modules**: Manages u, d, ubar, dbar, c, cbar, s, sbar
-3. **TMDPDF_u/d** → **TMDPDFBase**: Inherit base functionality
-4. **All classes** → **nn.Module**: PyTorch integration
+**Parameters (9 total):**
 
-### External Dependencies
+- `N₃, β₁, δ₁, γ₁`: Primary component
+- `N₃ᵦ, β₂, δ₂, γ₂`: Secondary component
+- `λ_F`: Coupling parameter
 
-- **PyTorch** (`torch`, `torch.nn`): Core tensor operations and neural network framework
-- **IPython** (optional): LaTeX rendering in Jupyter notebooks
-- **typing**: Type hints for better code documentation
+**Implementation:**
 
-### Parameter Flow
+```python
+D_NP(z, b_T) = S_NP × [numerator] / [denominator]
 
-1. **Configuration** → **fNP constructor**
-2. **fNP** → **Individual flavor modules** (parameter distribution)
-3. **Forward pass**: `x, b, ζ` → **Evolution** → **Flavor modules** → **Output tensors**
+numerator = g₃×exp(-g₃×(b/2)²/z²) + (λ_F/z²)×g₃ᵦ²×(1-g₃ᵦ×(b/2)²/z²)×exp(-g₃ᵦ×(b/2)²/z²)
+denominator = g₃ + (λ_F/z²)×g₃ᵦ²
+
+where:
+g₃ = N₃ × [(z^β₁ + δ₁²)/(0.5^β₁ + δ₁²)] × ((1-z)/0.5)^γ₁²
+g₃ᵦ = N₃ᵦ × [(z^β₂ + δ₂²)/(0.5^β₂ + δ₂²)] × ((1-z)/0.5)^γ₂²
+```
+
+### 4.4. Unified Manager (`fNPManager`)
+
+**Purpose:** Single interface for managing both TMD PDFs and FFs.
+
+**Key Features:**
+
+- Unified parameter optimization
+- Shared evolution factor management
+- Per-flavor configuration
+- Comprehensive parameter analysis
+- PyTorch optimizer compatibility
+
+## 5. MAP22 Implementation
+
+The implementation exactly matches the C++ MAP22g52.h from NangaParbat:
+
+**Parameter Mapping:**
+
+```cpp
+// C++ MAP22g52.h parameters (21 total)
+this->_pars[0]  = g2        // Evolution
+this->_pars[1]  = N1        // PDF primary
+this->_pars[2]  = alpha1
+this->_pars[3]  = sigma1
+this->_pars[4]  = lambda
+this->_pars[5]  = N3        // FF primary
+this->_pars[6]  = beta1
+this->_pars[7]  = delta1
+this->_pars[8]  = gamma1
+this->_pars[9]  = lambdaF
+this->_pars[10] = N3B       // FF secondary
+this->_pars[11] = N1B       // PDF secondary
+this->_pars[12] = N1C       // PDF tertiary
+this->_pars[13] = lambda2
+...
+```
+
+**Python Modular Mapping:**
+
+```python
+# Evolution (1 parameter)
+g2
+
+# PDF per flavor (11 parameters)
+[N₁, α₁, σ₁, λ, N₁ᵦ, N₁ᶜ, λ₂, α₂, α₃, σ₂, σ₃]
+
+# FF per flavor (9 parameters)  
+[N₃, β₁, δ₁, γ₁, λ_F, N₃ᵦ, β₂, δ₂, γ₂]
+```
 
 ## 6. Configuration Structure
 
-### Complete Example (`fNPconfig.yaml`)
+### Complete Example (`fNPconfig_unified.yaml`)
 
 ```yaml
+# Global settings
 hadron: proton
 zeta: 1.0
 
+# Shared evolution factor
 evolution:
-  init_g2: 0.25
+  init_g2: 0.12840
   free_mask: [true]
 
-flavors:
+# TMD PDFs (11 parameters each)
+pdfs:
   u:
-    init_params: [0.25, 0.15, 0.12, 0.10, 0.20, 0.18, 0.08, 0.14, 0.13, 0.11, 0.09]
+    init_params: [0.28516, 2.9755, 0.17293, 0.39432, 0.28516, 0.28516, 0.39432, 2.9755, 2.9755, 0.17293, 0.17293]
     free_mask: [true, true, true, true, true, true, true, true, true, true, true]
   d:
-    init_params: [0.25, 0.15, 0.12, 0.10, 0.20, 0.18, 0.08, 0.14, 0.13, 0.11]
-    free_mask: [true, true, true, true, true, true, true, true, true, true]
-  ubar:
-    init_params: [0.50, 0.50]
-    free_mask: [true, false]
-  dbar:
-    init_params: [0.50, 0.50]
-    free_mask: [true, false]
+    init_params: [0.25000, 2.8000, 0.16000, 0.35000, 0.25000, 0.25000, 0.35000, 2.8000, 2.8000, 0.16000, 0.16000]
+    free_mask: [true, true, true, true, true, true, true, true, true, true, true]
+  # ... other flavors with reduced complexity
+
+# TMD FFs (9 parameters each)
+ffs:
+  u:
+    init_params: [0.21012, 2.12062, 0.093554, 0.25246, 5.2915, 0.033798, 2.1012, 0.093554, 0.25246]
+    free_mask: [true, true, true, true, true, true, true, true, true]
+  d:
+    init_params: [0.19000, 2.00000, 0.090000, 0.24000, 5.0000, 0.030000, 2.0000, 0.090000, 0.24000]
+    free_mask: [true, true, true, true, true, true, true, true, true]
+  # ... other flavors with reduced complexity
 ```
+
+**Parameter Summary:**
+
+- **Total**: 161 parameters (1 evolution + 8×11 PDFs + 8×9 FFs)
+- **Trainable**: ~70 parameters (varies based on masking strategy)
+- **Strategy**: Full complexity for u,d; reduced for sea quarks; minimal for heavy quarks
 
 ## 7. Usage Examples
 
-### 7.1. Basic Instantiation
+### 7.1. Basic Usage
 
 ```python
 import torch
 import yaml
-from modules.fNP import fNP
+from modules.fnp_manager import fNPManager
 
 # Load configuration
-with open('inputs/fNPconfig.yaml', 'r') as f:
+with open('map/inputs/fNPconfig_unified.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
-# Create fNP model
-model = fNP(config)
+# Initialize manager
+fnp_manager = fNPManager(config)
 
-# Move to device (GPU/CPU)
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = model.to(device)
+# Evaluate TMD PDFs
+x = torch.tensor([0.1, 0.3, 0.5])
+b = torch.tensor([0.5, 1.0, 1.5])
+
+pdf_results = fnp_manager.forward_pdf(x, b, flavors=['u', 'd'])
+print(f"PDF u: {pdf_results['u']}")
+print(f"PDF d: {pdf_results['d']}")
+
+# Evaluate TMD FFs
+z = torch.tensor([0.2, 0.4, 0.7])
+ff_results = fnp_manager.forward_ff(z, b, flavors=['u', 'd'])
+print(f"FF u: {ff_results['u']}")
+print(f"FF d: {ff_results['d']}")
 ```
 
-### 7.2. Forward Pass
+### 7.2. Optimization Example
 
 ```python
-# Define input tensors
-x = torch.tensor([0.1, 0.2, 0.3], device=device)  # Bjorken x
-b = torch.tensor([0.5, 1.0, 1.5], device=device)  # Impact parameter
-flavors = ['u', 'd', 'ubar']  # Requested flavors
+# Set up optimizer
+optimizer = torch.optim.Adam(fnp_manager.parameters(), lr=0.001)
 
-# Evaluate fNP functions
-outputs = model(x, b, flavors=flavors)
-
-# Access results
-f_u = outputs['u']     # u-quark fNP values
-f_d = outputs['d']     # d-quark fNP values
-f_ubar = outputs['ubar']  # ubar fNP values
+# Training loop
+for epoch in range(num_epochs):
+    optimizer.zero_grad()
+    
+    # Forward pass
+    pdf_results = fnp_manager.forward_pdf(x_data, b_data, flavors=['u', 'd'])
+    ff_results = fnp_manager.forward_ff(z_data, b_data, flavors=['u', 'd'])
+    
+    # Compute loss (example)
+    pdf_loss = torch.nn.functional.mse_loss(pdf_results['u'], target_pdf_u)
+    ff_loss = torch.nn.functional.mse_loss(ff_results['u'], target_ff_u)
+    total_loss = pdf_loss + ff_loss
+    
+    # Backward pass
+    total_loss.backward()
+    optimizer.step()
+    
+    if epoch % 100 == 0:
+        print(f"Epoch {epoch}, Loss: {total_loss.item():.6f}")
 ```
 
 ### 7.3. Parameter Analysis
 
 ```python
-# Get parameter summary
-model.print_parameter_summary()
+# Get parameter information
+param_info = fnp_manager.get_parameter_info()
+print(f"Total parameters: {param_info['total_parameters']}")
+print(f"Trainable parameters: {param_info['truly_trainable_parameters']}")
 
-# Get detailed parameter information
-param_info = model.get_parameter_info()
-print(f"Total parameters: {param_info['total_params']}")
-print(f"Trainable parameters: {param_info['trainable_params']}")
+# Print detailed summary
+fnp_manager.print_parameter_summary()
 
-# Access trainable parameters for optimization
-trainable_params = model.get_trainable_parameters_dict()
-optimizer = torch.optim.Adam(trainable_params.values(), lr=0.001)
+# Extract trainable parameters for saving
+trainable_params = fnp_manager.get_trainable_parameters_dict()
+torch.save(trainable_params, 'fitted_parameters.pth')
+
+# Load parameters
+loaded_params = torch.load('fitted_parameters.pth')
+fnp_manager.set_trainable_parameters_dict(loaded_params)
 ```
 
-### 7.4. Parameter Setting
+## 8. Migration Guide
 
-```python
-# Set specific parameter values
-param_tensor = torch.tensor([0.3, 0.2, 0.15, ...])  # Full parameter vector
-model.set_parameters(param_tensor)
+**From Legacy fNP.py to Modular System:**
 
-# Set individual flavor parameters
-new_u_params = {'free_params': torch.tensor([[0.3, 0.2, ...]])}
-model.set_trainable_parameters_dict({'u': new_u_params})
+1. **Update Imports:**
+
+   ```python
+   # Old
+   from modules.fNP import fNP
+   
+   # New
+   from modules.fnp_manager import fNPManager as fNP
+   ```
+
+2. **Update Configuration:**
+   - Use `fNPconfig_unified.yaml` instead of `fNPconfig.yaml`
+   - Separate PDF and FF configurations
+   - Define masking strategy for each flavor
+
+3. **Update Usage:**
+
+   ```python
+   # Old
+   outputs = model(x, b, flavors=['u', 'd'])
+   
+   # New - specify PDF or FF
+   pdf_outputs = model.forward_pdf(x, b, flavors=['u', 'd'])
+   ff_outputs = model.forward_ff(z, b, flavors=['u', 'd'])
+   ```
+
+4. **Update SIDIS Integration:**
+   - Modify `compute_flavor_sum_pytorch` to use separate PDF/FF calls
+   - Update parameter extraction methods
+
+## 9. Testing and Validation
+
+**Test Suite:** `map/tests/test_fnp_modular.py`
+
+**Test Coverage:**
+
+- ✅ Evolution module functionality
+- ✅ TMD PDF MAP22 implementation
+- ✅ TMD FF MAP22 implementation  
+- ✅ Unified manager operations
+- ✅ Parameter masking and optimization
+- ✅ Configuration loading
+- ✅ PyTorch optimizer compatibility
+
+**Run Tests:**
+
+```bash
+cd /path/to/tmd
+python3.10 map/tests/test_fnp_modular.py
 ```
 
-### 7.5. Integration with SIDIS Computation
+**Expected Output:**
 
-```python
-from modules.sidis import SIDISComputationPyTorch
-
-# Initialize SIDIS computation with fNP
-sidis_comp = SIDISComputationPyTorch('config.yaml', 'fNPconfig.yaml')
-
-# Use in cross-section calculation (automatic flavor sum)
-x_vals = torch.tensor([0.1], device=device)
-z_vals = torch.tensor([0.5], device=device) 
-b_vals = torch.linspace(0.1, 3.0, 50, device=device)
-Q_vals = torch.tensor([2.0], device=device)
-
-flavor_sum = sidis_comp.compute_flavor_sum_pytorch(x_vals, z_vals, b_vals, Q_vals)
+```bash
+🧪 Testing Modular fNP System
+✅ Evolution module working
+✅ TMD PDF module (MAP22) working
+✅ TMD FF module (MAP22) working
+✅ Unified manager working
+✅ Optimization compatibility confirmed
+🎉 ALL TESTS PASSED SUCCESSFULLY!
 ```
 
-### 7.6. Optimization Example
+---
 
-```python
-# Training loop example
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+**Key Advantages of the Modular System:**
 
-for epoch in range(num_epochs):
-    # Forward pass
-    outputs = model(x_data, b_data, flavors=['u', 'd'])
-    
-    # Compute loss (example: compare to target data)
-    loss = torch.nn.functional.mse_loss(outputs['u'], target_u_data)
-    
-    # Backward pass
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    
-    if epoch % 100 == 0:
-        print(f"Epoch {epoch}, Loss: {loss.item():.6f}")
-```
+1. **Physics Accuracy**: Exact MAP22 implementation matching C++ reference
+2. **Unified Optimization**: Simultaneous PDF and FF parameter fitting
+3. **Flexibility**: Per-flavor parameterization control with masking
+4. **Maintainability**: Clean modular design with separation of concerns
+5. **Extensibility**: Easy to add new parameterizations or flavors
+6. **Performance**: Efficient PyTorch implementation with gradient support
 
-## 8. Parameter Management
-
-### 8.1. Parameter Masking System
-
-Each flavor module uses a sophisticated masking system:
-
-```python
-# Example: mixed trainable/fixed parameters
-free_mask = [True, True, False, True, False]  # params 0,1,3 trainable; 2,4 fixed
-init_params = [0.1, 0.2, 0.3, 0.4, 0.5]
-
-# Internal storage:
-# fixed_params = [0.0, 0.0, 0.3, 0.0, 0.5]  # only fixed values
-# free_params = [0.1, 0.2, 0.0, 0.4, 0.0]   # only trainable values (as nn.Parameter)
-# full_params = fixed_params + free_params    # combined for computation
-```
-
-### 8.2. Gradient Hooks
-
-Automatic gradient masking ensures only trainable parameters receive updates:
-
-```python
-# Registered during initialization
-self.free_params.register_hook(lambda grad: grad * self.mask)
-```
-
-### 8.3. Parameter Access Patterns
-
-```python
-# Get full parameter tensor (fixed + trainable)
-params = module.get_params_tensor  # Shape: [n_flavors, n_params]
-
-# Access evolution parameter
-g2_value = evolution_module.g2  # Combined fixed + trainable
-
-# Parameter counting
-total = sum(p.numel() for p in model.parameters())
-trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-```
+The modular fNP system provides a robust, physics-accurate, and maintainable framework for TMD non-perturbative function modeling with full integration into the PyTorch optimization ecosystem.
