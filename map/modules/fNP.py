@@ -2,10 +2,9 @@
 module: fNP.py
 author: Chiara Bissolotti (cbissolotti@anl.gov)
 
-This file contains the fNP parametrization for the TMDPDFs.
+This file contains the fNP parametrization for the TMD PDFs.
 """
 
-# fNP.py
 import torch
 import torch.nn as nn
 from typing import Optional, Union, List, Dict, Any
@@ -40,9 +39,8 @@ class TMDPDFBase(nn.Module):
         """
         Base TMD PDF parametrization for a specific quark flavor.
 
-        The (default) forward function uses a simple model.
-        NP_evol is the shared evolution factor computed outside this class,
-        from the fNP_evolution module.
+        The default forward function uses a simple model.
+        Subclasses must override forward to implement flavor-specific forms.
 
         Internally the full parameter vector is stored as:
             params = fixed_params + free_params
@@ -275,8 +273,6 @@ class fNP_evolution(nn.Module):
 ###############################################################################
 # For example, you might want a different parameterization (even a different number of parameters)
 # for each flavor. It is assumed that flavors not explicitly subclassed use the base class.
-
-
 class TMDPDF_u(TMDPDFBase):
     def __init__(
         self,
@@ -426,30 +422,6 @@ class TMDPDF_u(TMDPDFBase):
         r"""
         Return a LaTeX string representing the analytic form of the u-quark TMD PDF
         parameterization. This formula is based on the C++ code of MAP22.
-        
-        $$
-        f(x,b) = N_{Pevol} \cdot \frac{
-            g_1 \, \exp\left(-g_1\left(\frac{b}{2}\right)^2\right)
-          + \lambda^2 \, g_{1B}^2 \left(1 - g_{1B}\left(\frac{b}{2}\right)^2\right)
-            \exp\left(-g_{1B}\left(\frac{b}{2}\right)^2\right)
-          + g_{1C} \, \lambda_2^2 \, \exp\left(-g_{1C}\left(\frac{b}{2}\right)^2\right)
-        }{
-            g_1 + \lambda^2 \, g_{1B}^2 + g_{1C} \, \lambda_2^2
-        }
-        \\
-        \text{where } 
-        \\
-        g_1 = N_1 \left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_1}
-            \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_1^2},\\[1mm]
-        \\    
-        g_{1B} = N_{1B} \left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_2}
-            \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_2^2},\\[1mm]
-        \\    
-        g_{1C} = N_{1C} \left(\frac{x}{x_{\text{hat}}}\right)^{\sigma_3}
-            \left(\frac{1-x}{1-x_{\text{hat}}}\right)^{\alpha_3^2},\quad
-        \\    
-        x_{\text{hat}} = 0.1.
-        $$
         """
         return r"""$$
         f(x,b) = N_{Pevol} \cdot \frac{

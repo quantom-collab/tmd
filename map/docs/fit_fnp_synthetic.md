@@ -1,10 +1,51 @@
 # Understanding `fit_fnp_synthetic.py`: PyTorch Autograd Validation for fNP Parameters
 
+## Table of Contents
+
+- [Understanding `fit_fnp_synthetic.py`: PyTorch Autograd Validation for fNP Parameters](#understanding-fit_fnp_syntheticpy-pytorch-autograd-validation-for-fnp-parameters)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Usage Requirements](#usage-requirements)
+    - [Prerequisites](#prerequisites)
+    - [Running the Script](#running-the-script)
+  - [What the Script Does](#what-the-script-does)
+    - [Primary Purpose](#primary-purpose)
+  - [Locate right paths from imports](#locate-right-paths-from-imports)
+  - [The b-Grid and Its Role](#the-b-grid-and-its-role)
+    - [What is the b-Grid?](#what-is-the-b-grid)
+    - [Why the b-Grid Was Needed](#why-the-b-grid-was-needed)
+      - [Historical Context: Ogata Quadrature](#historical-context-ogata-quadrature)
+      - [The Autograd Problem](#the-autograd-problem)
+      - [The b-Grid Solution](#the-b-grid-solution)
+    - [b-Grid Configuration](#b-grid-configuration)
+  - [How the Fourier Transform is Performed](#how-the-fourier-transform-is-performed)
+  - [Synthetic Fit Workflow](#synthetic-fit-workflow)
+    - [Step-by-Step Process](#step-by-step-process)
+
 ## Overview
 
 The `fit_fnp_synthetic.py` script is a **gradient validation tool** that performs a synthetic fit to verify that the SIDIS cross-section computation correctly propagates gradients through the non-perturbative function (fNP) parameters using PyTorch autograd. This is essential for ensuring that parameter optimization works correctly in actual fits to experimental data.
 
-**REQUIREMENTS**: This script requires Python 3.10 and the full TMD machinery including LHAPDF and APFEL++ packages.
+## Usage Requirements
+
+This script requires Python 3.10 and the full TMD machinery including LHAPDF and APFEL++ packages.
+
+### Prerequisites
+
+- **Python 3.10**: Strict requirement for LHAPDF/APFEL++ compatibility
+- **LHAPDF**: Installed and configured with PDF/FF data
+- **APFEL++**: TMD evolution library with Python bindings
+- **PyTorch**: Recent version with autograd support
+- **YAML configuration files**: Properly configured for your setup
+
+### Running the Script
+
+```bash
+# Ensure you're using Python 3.10
+python3.10 fit_fnp_synthetic.py [config.yaml] [kinematics.yaml] [fNPconfig.yaml]
+```
+
+The script will immediately check the Python version and exit with a clear error if not using 3.10.
 
 ## What the Script Does
 
@@ -20,16 +61,45 @@ The script performs a **synthetic fit sanity check** by:
 6. Performing gradient descent to update fNP parameters
 7. Verifying that parameters change in response to the loss function
 
-### System Requirements
+## Locate right paths from imports
 
-The script now enforces strict requirements:
+What the code is doing:
 
-- **Python 3.10**: Hard requirement checked at startup
-- **LHAPDF**: For PDF and fragmentation function access
-- **APFEL++**: For TMD evolution and matching
-- **PyTorch**: For automatic differentiation and tensor operations
+```python
+# Initialize repository paths and set up import system
+# First import the utilities module using a fallback method
+try:
+    # Try direct import if we're already in the right place
+    from modules.utilities import ensure_repo_on_syspath
+except ImportError:
+    # Fallback: manually add map to path
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    map_dir = os.path.dirname(script_dir)
+    if map_dir not in sys.path:
+        sys.path.insert(0, map_dir)
+    from modules.utilities import ensure_repo_on_syspath
+```
 
-If any requirements are missing, the script will exit with a clear error message directing the user to use Python 3.10.
+It first tries a **normal absolute import**: from `modules.utilities import ensure_repo_on_syspath`.
+
+This will only work if Python can find a top-level package named `modules` on `sys.path` (i.e., a folder `modules/` with an `__init__.py`, or a namespace package).
+
+If that fails with `ImportError`, it assumes the current file is inside `map/<something>/this_file.py` (e.g., `map/tests/...` or `map/scripts/...`), so it:
+
+- Computes the directory of the current file (`script_dir`)
+- Goes one level up to get `map_dir`
+- Temporarily adds `map_dir` to the front of `sys.path`
+
+Retries the same import, which now resolves to `map/modules/utilities.py` (because adding `map_dir` makes `modules` importable as a top-level package).
+
+- `os.path.abspath(__file__)` — absolute path of the current file.
+- `os.path.dirname(path)` — the directory containing path.
+- `script_dir = dirname(abspath(__file__))` → **directory of this file**.
+- `map_dir = dirname(script_dir)` → **the file’s parent directory** (expected to be map/).
+- `sys.path` — the list of directories Python searches for imports.
+- `sys.path.insert(0, map_dir)` pushes `map_dir` to the front, making it highest priority.
+
+---
 
 ## The b-Grid and Its Role
 
@@ -95,67 +165,6 @@ Default values: `[1e-2, 2]` GeV⁻¹ with 256 logarithmically-spaced points.
 
 ## How the Fourier Transform is Performed
 
-### Modern Differentiable Approach
-
-The script now performs the Fourier-Bessel transform using PyTorch operations:
-
-```python
-# 1. Pre-compute APFEL luminosity on fixed b-grid (no gradients needed)
-L_b = self._precompute_luminosity_constants(x, z, Q, Yp)
-
-# 2. Evaluate fNP as PyTorch tensors (gradients preserved)
-fnp_pdf = comp.compute_fnp_pytorch(x.expand_as(b), b, pdf_flavor)
-fnp_ff = comp.compute_fnp_pytorch(z.expand_as(b), b, ff_flavor)
-
-# 3. Bessel function evaluation (device-aware)
-J0 = comp._bessel_j0_torch(qT * b)
-
-# 4. Build integrand preserving gradients
-integrand = b * J0 * fnp_pdf * fnp_ff * L_b
-
-# 5. Differentiable integration
-xs = torch.trapz(integrand, b)
-```
-
-### Key Technical Details
-
-#### Bessel Function Implementation
-
-- **Preferred**: `torch.special.bessel_j0()` when available
-- **MPS fallback**: Power series expansion for Apple Metal GPU compatibility
-- **CPU/CUDA**: Native PyTorch implementation
-
-#### Precision Strategy
-
-- **Integration dtype**: `float64` (except MPS which uses `float32`)
-- **Model dtype**: `float32` for memory efficiency
-- **Type conversion**: Careful casting to maintain gradients
-
-#### Device Compatibility
-
-- **CUDA**: Full functionality
-- **MPS (Apple Metal)**: Custom workarounds for unsupported operations
-- **CPU**: Fallback for maximum compatibility
-
-### Comparison: Ogata vs PyTorch Integration
-
-| Aspect | Ogata Quadrature | PyTorch Integration |
-|--------|------------------|-------------------|
-| **Accuracy** | Excellent (adaptive) | Good (fixed grid) |
-| **Speed** | Fast | Moderate |
-| **Autograd** | ❌ Not differentiable | ✅ Fully differentiable |
-| **GPU Support** | CPU only | Full GPU support |
-| **Precision** | Double by default | Configurable |
-
-### Integration Validation
-
-The script validates the PyTorch approach by:
-
-1. Comparing results against known values when possible
-2. Monitoring gradient magnitudes to ensure they're reasonable
-3. Verifying parameter updates occur in expected directions
-4. Testing numerical stability across different kinematic regions
-
 ## Synthetic Fit Workflow
 
 ### Step-by-Step Process
@@ -171,94 +180,5 @@ The script validates the PyTorch approach by:
 9. **Backward Pass**: Compute gradients w.r.t. fNP parameters via autograd
 10. **Parameter Update**: Apply gradient descent step using Adam optimizer
 11. **Validation**: Check parameter changes and convergence metrics
-
-### Error Handling
-
-The script now provides clear error messages for common issues:
-
-```bash
-ERROR: This script MUST be run with Python 3.10
-Current Python version: 3.11
-LHAPDF and APFEL++ require Python 3.10 for proper compatibility.
-Please switch to Python 3.10 and try again.
-```
-
-Or for missing dependencies:
-
-```bash
-ERROR: Required dependencies not found: No module named 'lhapdf'
-This script requires LHAPDF and APFEL++ packages.
-Make sure you're running with Python 3.10 and have these packages installed.
-```
-
-### Example Output
-
-```bash
-Epoch    1/1  chi2 = 3.2680e-03
-Param L2 diff: 1.2960e+00 (rel 1.2223e+00)
-WARNING: Parameters did not fully converge. Consider more epochs, LR tuning, or point count.
-```
-
-This output confirms:
-
-- ✅ Forward computation completed successfully
-- ✅ Gradients computed without errors
-- ✅ Parameters updated (L2 difference > 0)
-- ⚠️ More epochs needed for full convergence (expected for quick test)
-
-## Why This Validation Matters
-
-### Scientific Importance
-
-1. **Fit Reliability**: Ensures that actual experimental fits will converge properly
-2. **Gradient Accuracy**: Validates that computed gradients reflect true sensitivities
-3. **Numerical Stability**: Tests the computation across realistic kinematic ranges
-4. **Code Correctness**: Catches integration bugs that could affect physics results
-5. **Dependency Verification**: Confirms that all required packages are properly installed and compatible
-
-### Technical Benefits
-
-1. **Debug Tool**: Identifies autograd breaks in complex physics computations
-2. **Performance Benchmark**: Measures computational overhead of differentiable approach
-3. **Device Testing**: Validates GPU compatibility across different hardware
-4. **Precision Analysis**: Guides choice of numerical precision for stability vs speed
-5. **Environment Validation**: Ensures the computing environment is properly configured
-
-## Usage Requirements
-
-### Prerequisites
-
-- **Python 3.10**: Strict requirement for LHAPDF/APFEL++ compatibility
-- **LHAPDF**: Installed and configured with PDF/FF data
-- **APFEL++**: TMD evolution library with Python bindings
-- **PyTorch**: Recent version with autograd support
-- **YAML configuration files**: Properly configured for your setup
-
-### Running the Script
-
-```bash
-# Ensure you're using Python 3.10
-python3.10 fit_fnp_synthetic.py [config.yaml] [kinematics.yaml] [fNPconfig.yaml]
-```
-
-The script will immediately check the Python version and exit with a clear error if not using 3.10.
-
-## Future Enhancements
-
-### Planned Improvements
-
-1. **Hybrid Integration**: Option to use Ogata for final results, PyTorch for gradients
-2. **Adaptive Grids**: Dynamic b-grid refinement based on integrand behavior
-3. **Multi-Point Batching**: Vectorized computation across kinematic points
-4. **Advanced Optimizers**: Integration with L-BFGS for better convergence
-5. **Automated Environment Setup**: Helper scripts for dependency installation
-
-### Physics Extensions
-
-1. **Multi-Hadron Fits**: Extension to multiple hadron species simultaneously
-2. **Nuclear Targets**: Validation with realistic nuclear TMD modifications
-3. **Systematic Uncertainties**: Gradient-based uncertainty propagation
-4. **Scale Variations**: Differentiable scale variation for theoretical uncertainties
-5. **Cross-Validation**: Multiple kinematic region validation
 
 The `fit_fnp_synthetic.py` script now serves as a robust, requirement-enforced validation tool that ensures both the computing environment and the TMD physics implementation are ready for production parameter fitting. By requiring Python 3.10 and the full dependency stack, it guarantees that validation results are directly applicable to real experimental data analysis.

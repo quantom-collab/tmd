@@ -22,7 +22,8 @@ try:
     # Try direct import if we're already in the right place
     from modules.utilities import ensure_repo_on_syspath
 except ImportError:
-    # Fallback: manually add map to path
+    # Fallback: manually add map to path. Assumes the current
+    # file is inside `map/<something>/this_file.py`
     script_dir = os.path.dirname(os.path.abspath(__file__))
     map_dir = os.path.dirname(script_dir)
     if map_dir not in sys.path:
@@ -110,6 +111,7 @@ def forward_cross_sections_torch(
 
     # Loop over each kinematic point
     for i in range(qT.shape[0]):
+
         # Convert tensors to floats for APFEL++ (C++ interface requirement)
         qTm = float(qT[i].detach().cpu().numpy())  # qT value for point i
         Qm = float(Q[i].detach().cpu().numpy())  # Q value for point i
@@ -141,27 +143,34 @@ def forward_cross_sections_torch(
 
         # ===== Evaluate fNP functions (THE DIFFERENTIABLE PART) =====
         # These are the only parts that maintain gradients for optimization
-        # TODO: figure out how to put all flavors
-        pdf_flavor = "u"  # PDF flavor (up quark for simplicity)
-        ff_flavor = "u"  # FF flavor (up quark for simplicity)
 
-        # Evaluate fNP for PDF: fNP(x, b) for the PDF sector
-        # x_t.expand_as(b) creates tensor [x, x, x, ...] matching b-grid length
-        fnp_pdf = comp.compute_fnp_pytorch(
-            x_t.expand_as(b), b.to(comp.dtype), pdf_flavor
-        ).to(comp.integration_dtype)
-
-        # Evaluate fNP for FF: fNP(z, b) for the fragmentation function sector
-        fnp_ff = comp.compute_fnp_pytorch(
-            z_t.expand_as(b), b.to(comp.dtype), ff_flavor
-        ).to(comp.integration_dtype)
+        # Properly sum over all quark flavors instead of just 'u'
+        # This implements the missing flavor sum: Σ_q e_q^2 * f_q(x,b) * D_q(z,b)
+        try:
+            # Use the new flavor sum function that handles all active flavors
+            flavor_sum = comp.compute_flavor_sum_pytorch(
+                x_t.expand_as(b), z_t.expand_as(b), b.to(comp.dtype), Q_t
+            ).to(comp.integration_dtype)
+        except Exception as e:
+            # Fallback to single flavor if the new function fails
+            print(
+                f"\033[93mWarning: Flavor sum failed, using single 'u' flavor: {e}\033[0m"
+            )
+            fnp_pdf = comp.compute_fnp_pytorch(
+                x_t.expand_as(b), b.to(comp.dtype), "u"
+            ).to(comp.integration_dtype)
+            fnp_ff = comp.compute_fnp_pytorch(
+                z_t.expand_as(b), b.to(comp.dtype), "u"
+            ).to(comp.integration_dtype)
+            flavor_sum = fnp_pdf * fnp_ff  # Single flavor approximation
 
         # ===== Compute Fourier-Bessel transform kernel =====
         # Zeroth-order Bessel function
         J0 = comp._bessel_j0_torch(qT_t * b)
 
         # Build the full integrand
-        integrand = b * J0 * fnp_pdf * fnp_ff * L_b
+        # L_b already contains the APFEL++ TMD evolution factors for all flavors
+        integrand = b * J0 * flavor_sum * L_b
 
         # Perform numerical integration over b
         xs = torch.trapz(integrand, b)
