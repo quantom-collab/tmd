@@ -74,11 +74,11 @@ except Exception:
 try:
     # Try importing from map.modules first (when run from repo root)
     import map.modules.utilities as utl
-    from map.modules.fnp import fNP
+    from map.modules.fnp import fNPManager
 except ImportError:
     # Fallback to direct import (when run from map directory)
     import modules.utilities as utl
-    from modules.fnp import fNP
+    from modules.fnp import fNPManager
 
 
 class SIDISComputationPyTorch:
@@ -621,11 +621,11 @@ class SIDISComputationPyTorch:
                 # Initialize PyTorch fNP model.
                 # Set self.model_fNP to the fNP instance from the fNP module
                 # with the provided fNP configuration. The following line does two things:
-                # 1. fNP(config_fnp) instantiates the model/class fNP with the given config
+                # 1. fNPManager(config_fnp) instantiates the model/class fNPManager with the given config
                 # 2. .to(self.device) moves all its parameters and buffers to the device stored
                 # in self.device (commonly something like torch.device("cuda"), "cpu", or "mps").
                 # It returns the same module (after moving it), which you assign to self.model_fNP
-                self.model_fNP = fNP(config_fnp).to(self.device)
+                self.model_fNP = fNPManager(config_fnp).to(self.device)
                 print("✅ PyTorch fNP model loaded successfully")
 
                 # Use the enhanced parameter analysis from the fNP module

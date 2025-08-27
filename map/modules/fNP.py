@@ -1,5 +1,5 @@
 """
-Main Interface Module for the Modular fNP System
+Main Interface Module for fNP
 
 WHAT THIS MODULE DOES:
 ======================
@@ -9,7 +9,7 @@ It re-exports all the key components from the underlying modules to provide a un
 WHY IS THIS NEEDED?
 ==================
 1. **Clean Import Interface**: Users can simply import from 'fnp' rather than knowing the internals
-   Example: `from modules.fnp import fNP` instead of `from modules.fnp_manager import fNPManager`
+   Example: `from modules.fnp import fNPManager` instead of `from modules.fnp_manager import fNPManager`
 
 2. **API Abstraction**: Hides the internal organization from users
    - fnp_base.py: Core building blocks (evolution, PDF/FF base classes)
@@ -22,8 +22,7 @@ WHY IS THIS NEEDED?
 
 WHAT'S AVAILABLE:
 ================
-- fNP: Main unified interface (alias to fNPManager) - this is what most users want
-- fNPManager: Explicit manager class for advanced users
+- fNPManager: Main unified interface - this is what most users want
 - Base classes: fNP_evolution, TMDPDFBase, TMDFFBase
 - Default parameters: MAP22_DEFAULT_* constants
 
@@ -36,7 +35,7 @@ import yaml
 with open('fNPconfig.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
-model = fNP(config)  # Creates the unified PDF+FF system
+model = fNPManager(config)  # Creates the unified PDF+FF system
 
 # Use for PDFs (fnp1)
 pdf_results = model.forward_pdf(x, b, flavors=['u', 'd'])
@@ -58,12 +57,11 @@ from .fnp_base import (
     MAP22_DEFAULT_FF_PARAMS,
 )
 
-from .fnp_manager import fNPManager, fNP
+from .fnp_manager import fNPManager
 
 # Make the main interface easily accessible
 __all__ = [
-    "fNP",  # Main unified interface (alias to fNPManager)
-    "fNPManager",  # Explicit manager class
+    "fNPManager",  # Main unified interface
     "fNP_evolution",  # Evolution factor module
     "TMDPDFBase",  # TMD PDF base class
     "TMDFFBase",  # TMD FF base class

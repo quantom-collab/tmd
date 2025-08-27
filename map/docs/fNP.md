@@ -171,7 +171,7 @@ Without `fnp.py`:
 
 ```python
 # User needs to know internal structure
-from modules.fnp_manager import fNPManager as fNP
+from modules.fnp_manager import fNPManager
 from modules.fnp_base import TMDPDFBase, TMDFFBase
 ```
 
@@ -179,7 +179,7 @@ With `fnp.py`:
 
 ```python
 # Clean, simple imports
-from modules.fnp import fNP, TMDPDFBase, TMDFFBase
+from modules.fnp import fNPManager, TMDPDFBase, TMDFFBase
 ```
 
 #### **2. API Stability**

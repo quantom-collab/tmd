@@ -238,20 +238,68 @@ def randomize_fnp_parameters(model: torch.nn.Module, scale: float = 0.2, seed: i
 
     Modifies:
         The input model's parameters are modified in-place:
-        - model.NPevolution.free_g2: g2 evolution parameters (if present)
-        - model.flavors[flavor].free_params: Flavor-specific parameters (if present)
+        - model.evolution.free_g2: g2 evolution parameters (new modular system)
+        - model.pdf_modules[flavor].free_params: PDF flavor parameters
+        - model.ff_modules[flavor].free_params: FF flavor parameters
     """
     torch.manual_seed(seed)
+    print(f"🎲 Randomizing fNP parameters with scale={scale}, seed={seed}")
+
     with torch.no_grad():
-        if hasattr(model, "NPevolution") and hasattr(model.NPevolution, "free_g2"):
-            if model.NPevolution.free_g2.requires_grad:
-                model.NPevolution.free_g2.add_(
-                    torch.randn_like(model.NPevolution.free_g2) * scale
+        randomized_count = 0
+
+        # Randomize evolution parameter (new modular system)
+        if hasattr(model, "evolution") and hasattr(model.evolution, "free_g2"):
+            if model.evolution.free_g2.requires_grad:
+                old_val = model.evolution.free_g2.clone()
+                model.evolution.free_g2.add_(
+                    torch.randn_like(model.evolution.free_g2) * scale
                 )
-        if hasattr(model, "flavors"):
-            for mod in model.flavors.values():
+                print(
+                    f"  Evolution g2: {old_val.item():.6f} -> {model.evolution.free_g2.item():.6f}"
+                )
+                randomized_count += 1
+
+        # Randomize PDF parameters (new modular system)
+        if hasattr(model, "pdf_modules"):
+            for flavor, mod in model.pdf_modules.items():
                 if hasattr(mod, "free_params") and mod.free_params.requires_grad:
+                    old_val = mod.free_params.clone()
                     mod.free_params.add_(torch.randn_like(mod.free_params) * scale)
+                    print(
+                        f"  PDF {flavor}: params changed by {torch.norm(mod.free_params - old_val).item():.6f}"
+                    )
+                    randomized_count += 1
+
+        # Randomize FF parameters (new modular system)
+        if hasattr(model, "ff_modules"):
+            for flavor, mod in model.ff_modules.items():
+                if hasattr(mod, "free_params") and mod.free_params.requires_grad:
+                    old_val = mod.free_params.clone()
+                    mod.free_params.add_(torch.randn_like(mod.free_params) * scale)
+                    print(
+                        f"  FF {flavor}: params changed by {torch.norm(mod.free_params - old_val).item():.6f}"
+                    )
+                    randomized_count += 1
+
+        # Fallback for old fNP system (backward compatibility)
+        if randomized_count == 0:
+            print("  Using fallback for old fNP system...")
+            if hasattr(model, "NPevolution") and hasattr(model.NPevolution, "free_g2"):
+                if model.NPevolution.free_g2.requires_grad:
+                    model.NPevolution.free_g2.add_(
+                        torch.randn_like(model.NPevolution.free_g2) * scale
+                    )
+                    randomized_count += 1
+            if hasattr(model, "flavors"):
+                for mod in model.flavors.values():
+                    if hasattr(mod, "free_params") and mod.free_params.requires_grad:
+                        mod.free_params.add_(torch.randn_like(mod.free_params) * scale)
+                        randomized_count += 1
+
+        print(f"  Total randomized parameter groups: {randomized_count}")
+        if randomized_count == 0:
+            print("  ⚠️  WARNING: No parameters were randomized! Check model structure.")
 
 
 def main():

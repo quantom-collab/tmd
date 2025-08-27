@@ -2,11 +2,11 @@
 """
 Test script for the new modular fNP system.
 
-This script verifies that the reorganized fNP system works correctly:
+This script verifies that fNP works correctly:
 - Tests MAP22 parameterization implementation
 - Verifies PDF and FF computation consistency
 - Checks parameter management and optimization
-- Validates unified configuration loading
+- Validates configuration loading
 
 Run from anywhere in the TMD repository.
 """
@@ -17,7 +17,11 @@ import torch
 import yaml
 import numpy as np
 
-# Set up paths for local imports
+# Set up paths for local imports. The function that finds the
+# path to the root and map/ folder, ensure_repo_on_syspath(),
+# is in modules/utilities.py, so it's in a module itself. In
+# order to import it, we need to manually look for it, since
+# the modules/ path is not in the sys.path yet.
 try:
     from modules.utilities import ensure_repo_on_syspath
 except ImportError:
@@ -64,7 +68,7 @@ def test_evolution_module():
     return evolution
 
 
-def test_pdf_module():
+def test_fnp_tmdpdf_module():
     """Test the TMD PDF base module."""
     print("\n" + "=" * 60)
     print("Testing TMD PDF Module (MAP22)")
@@ -81,17 +85,24 @@ def test_pdf_module():
     print(f"✅ PDF module initialized with {pdf_module.n_params} parameters")
 
     # Test forward pass
-    x = torch.tensor([0.1, 0.3, 0.5])
+    x = torch.tensor([0.001, 0.01, 0.1])
     b = torch.tensor([0.5, 1.0, 1.5])
-    zeta = torch.tensor(4.0)
+    zeta = torch.tensor(4.0)  # Q^2 = 4 GeV^2
 
     # Create mock evolution factor
     evolution = fNP_evolution(init_g2=0.12840, free_mask=[True])
+    # evolution takes in two torch tensors, b and zeta, and returns a tensor
+    # of the same shape as b.
     NP_evol = evolution(b, zeta)
 
     result = pdf_module(x, b, zeta, NP_evol, flavor_idx=0)
-    print(f"✅ PDF computed for {len(x)} points")
-    print(f"   Values: {result.detach().numpy()}")
+    print(f"✅ fNP for TMDPDF computed for {len(x)} points")
+    # detach(): returns a new tensor that shares the same storage as
+    # result but is not tracked by autograd (no gradient history).
+    # Gradients won’t flow through it. (It’s a view: no copy.)
+    # cpu() is used to move the tensor to the CPU, so that it can
+    # be converted to a numpy array.
+    print(f"   Values: {result.detach().cpu().numpy()}")
 
     # Test parameter masking
     params = pdf_module.get_params_tensor
@@ -102,7 +113,7 @@ def test_pdf_module():
     return pdf_module
 
 
-def test_ff_module():
+def test_fnp_tmdff_module():
     """Test the TMD FF base module."""
     print("\n" + "=" * 60)
     print("Testing TMD FF Module (MAP22)")
@@ -140,7 +151,7 @@ def test_ff_module():
     return ff_module
 
 
-def test_unified_manager():
+def test_fnp_manager():
     """Test the unified fNP manager."""
     print("\n" + "=" * 60)
     print("Testing Unified fNP Manager")
@@ -292,11 +303,11 @@ def main():
     try:
         # Test individual modules
         evolution = test_evolution_module()
-        pdf_module = test_pdf_module()
-        ff_module = test_ff_module()
+        pdf_module = test_fnp_tmdpdf_module()
+        ff_module = test_fnp_tmdff_module()
 
         # Test unified system
-        manager = test_unified_manager()
+        manager = test_fnp_manager()
 
         # Test optimization
         opt_manager = test_optimization_compatibility()

@@ -94,7 +94,7 @@ with open('inputs/fNPconfig.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
 # Create model
-model = fNP(config)
+model = fNPManager(config)
 
 # Print parameter summary
 model.print_parameter_summary()

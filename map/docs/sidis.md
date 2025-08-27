@@ -15,7 +15,7 @@ You can choose the integration method via the `--use-ogata` command-line flag or
 
 The main computation path is **end-to-end differentiable** with PyTorch Autograd:
 
-- fNP parameters → fNP(x,b) → SIDIS σ(qT) → loss → gradients → parameter updates
+- fNP parameters → fNPManager(x,b) → SIDIS σ(qT) → loss → gradients → parameter updates
 - Uses PyTorch trapezoidal integration on a fixed b-grid
 - Supports GPU acceleration (CUDA/MPS)
 - All kinematic operations preserve gradients
@@ -77,7 +77,7 @@ bgrid:
 
 ### ✅ **Differentiable Operations**
 
-- fNP model evaluation: `fNP(x,b)` → gradients flow to fNP parameters
+- fNP model evaluation: `fNPManager(x,b)` → gradients flow to fNP parameters
 - Tensor arithmetic: `b * J0 * fnp_pdf * fnp_ff * L_b`
 - PyTorch integration: `torch.trapz(integrand, b)`
 - Loss computation: `MSE(theory, target)`

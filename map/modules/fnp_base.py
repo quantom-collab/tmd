@@ -59,6 +59,8 @@ class fNP_evolution(nn.Module):
         Args:
             init_g2 (float): Initial value for g2 parameter
             free_mask (List[bool]): Single-element list [True/False] for g2 trainability
+        Initialization example:
+        evolution = fNP_evolution(init_g2=0.12840, free_mask=[True])
         """
         # First, call the constructor of the parent class (nn.Module)
         # to initialize internal machinery.
@@ -104,7 +106,8 @@ class fNP_evolution(nn.Module):
             zeta (torch.Tensor): Rapidity scale ζ (GeV²)
 
         Returns:
-            torch.Tensor: Evolution factor exp[-g2² b_T²/4 x ln(ζ/Q₀²)]
+            torch.Tensor: Evolution factor exp[-g2² b_T²/4 x ln(ζ/Q₀²)]. Tensor
+            has the same shape as b.
         """
         return torch.exp(
             -(self.g2**2) * (b**2) * torch.log(zeta / self.Q0_squared) / 4.0

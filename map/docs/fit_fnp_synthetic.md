@@ -132,7 +132,7 @@ Previously, the code used **Ogata quadrature** exclusively for the b-space integ
 When performing parameter fits with PyTorch, we need **end-to-end differentiability**:
 
 ```python
-parameters → fNP(x,b) → SIDIS σ(qT) → loss → gradients → parameter updates
+parameters → fNPManager(x,b) → SIDIS σ(qT) → loss → gradients → parameter updates
 ```
 
 The Ogata integration broke this chain because:
