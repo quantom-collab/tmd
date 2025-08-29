@@ -22,7 +22,7 @@ map_dir = os.path.dirname(script_dir)
 if map_dir not in sys.path:
     sys.path.insert(0, map_dir)
 
-from modules.fnp_manager_flavor_blind import (
+from modules.fnp import (
     fNPManagerFlavorBlind,
     load_flavor_blind_config,
 )

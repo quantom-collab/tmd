@@ -35,8 +35,8 @@ except ImportError:
 repo_root, map_dir = ensure_repo_on_syspath()
 
 # Import the new modular fNP system
-from modules.fnp_manager import fNPManager
-from modules.fnp_base import fNP_evolution, TMDPDFBase, TMDFFBase
+from modules.fnp import fNPManager
+from modules.fnp import fNP_evolution, TMDPDFBase, TMDFFBase
 
 
 def test_evolution_module():
@@ -75,7 +75,7 @@ def test_fnp_tmdpdf_module():
     print("=" * 60)
 
     # Use MAP22 default parameters
-    from modules.fnp_base import MAP22_DEFAULT_PDF_PARAMS
+    from modules.fnp import MAP22_DEFAULT_PDF_PARAMS
 
     pdf_module = TMDPDFBase(
         n_flavors=1,
@@ -95,7 +95,7 @@ def test_fnp_tmdpdf_module():
     # of the same shape as b.
     NP_evol = evolution(b, zeta)
 
-    result = pdf_module(x, b, zeta, NP_evol, flavor_idx=0)
+    result = pdf_module(x, b, NP_evol, 0)
     print(f"✅ fNP for TMDPDF computed for {len(x)} points")
     # detach(): returns a new tensor that shares the same storage as
     # result but is not tracked by autograd (no gradient history).
@@ -120,7 +120,7 @@ def test_fnp_tmdff_module():
     print("=" * 60)
 
     # Use MAP22 default parameters
-    from modules.fnp_base import MAP22_DEFAULT_FF_PARAMS
+    from modules.fnp import MAP22_DEFAULT_FF_PARAMS
 
     ff_module = TMDFFBase(
         n_flavors=1,
@@ -138,7 +138,7 @@ def test_fnp_tmdff_module():
     evolution = fNP_evolution(init_g2=0.12840, free_mask=[True])
     NP_evol = evolution(b, zeta)
 
-    result = ff_module(z, b, zeta, NP_evol, flavor_idx=0)
+    result = ff_module(z, b, NP_evol, 0)
     print(f"✅ FF computed for {len(z)} points")
     print(f"   Values: {result.detach().numpy()}")
 

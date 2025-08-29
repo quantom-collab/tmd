@@ -7,7 +7,7 @@ each flavor has its own parameter set, here all flavors use identical parameters
 that change simultaneously during optimization.
 
 Author: Chiara Bissolotti (cbissolotti@anl.gov)
-Based on MAP22 parameterization from NangaParbat
+Based on MAP22 parameterization from NangaParbat (MAP22g52.h)
 """
 
 import torch
@@ -21,7 +21,7 @@ import numpy as np
 ###############################################################################
 class fNP_evolution(nn.Module):
     """
-    Evolution factor S_NP(ζ, b_T) = exp[-g₂² b_T²/4 \cdot ln(ζ/Q₀²)]
+    Evolution factor S_NP(ζ, b_T) = exp[-g₂² b_T²/4 · ln(ζ/Q₀²)]
 
     This is identical to the standard fNP evolution since evolution is already
     shared across flavors in the standard implementation.
@@ -33,10 +33,15 @@ class fNP_evolution(nn.Module):
 
         Args:
             init_g2 (float): Initial value for g₂ parameter
-            free_mask (List[bool]): Trainability mask for g₂
+            free_mask (List[bool]): Single-element list [True/False] for g2 trainability
+
+        This method is the same as the fnp evolution module for the flavor-dependent case.
+        This makes sense as the non-perturbative part of the evolution is not flavor dependent.
         """
+        # First, call the constructor of the parent class (nn.Module)
         super().__init__()
 
+        # Validate input
         if len(free_mask) != 1:
             raise ValueError(f"Evolution expects 1 mask element, got {len(free_mask)}")
 
@@ -59,7 +64,7 @@ class fNP_evolution(nn.Module):
         self.free_g2.register_hook(lambda grad: grad * self.mask)
 
     @property
-    def get_g2_value(self):
+    def g2(self):
         """Return the full g₂ value (fixed + free parts)."""
         return self.fixed_g2 + self.free_g2
 
@@ -68,15 +73,14 @@ class fNP_evolution(nn.Module):
         Compute evolution factor S_NP(ζ, b_T).
 
         Args:
-            b (torch.Tensor): Impact parameter b_T in GeV⁻¹
+            b (torch.Tensor): b_T in GeV⁻¹
             zeta (torch.Tensor): Rapidity scale ζ in GeV²
 
         Returns:
-            torch.Tensor: Evolution factor S_NP
+            torch.Tensor: Evolution factor S_NP. The tensor
+            has the same shape as b.
         """
-        g2 = self.get_g2_value[0]  # Extract scalar g₂ value
-
-        return torch.exp(-(g2**2) * b**2 * torch.log(zeta / self.Q0_squared) / 4.0)
+        return torch.exp(-(self.g2**2) * b**2 * torch.log(zeta / self.Q0_squared) / 4.0)
 
 
 ###############################################################################
@@ -90,10 +94,8 @@ class TMDPDFFlavorBlind(nn.Module):
     this class uses a single parameter set that applies to all flavors. All flavors
     evolve together when parameters are updated during optimization.
 
-    The parameterization follows MAP22:
-    f_NP(x, b_T) = NP_evol x [numerator] / [denominator]
-
-    But now the same parameters are used for u, d, s, ubar, dbar, sbar, etc.
+    The parameterization follows MAP22. The same parameters are used for u, d, s,
+    ubar, dbar, sbar, etc.
     """
 
     def __init__(self, init_params: List[float], free_mask: List[bool]):
@@ -104,16 +106,17 @@ class TMDPDFFlavorBlind(nn.Module):
             init_params (List[float]): 11 parameters [N₁, α₁, σ₁, λ, N₁ᵦ, N₁ᶜ, λ₂, α₂, α₃, σ₂, σ₃]
             free_mask (List[bool]): Trainability mask for each parameter
         """
+        # First, call the constructor of the parent class (nn.Module)
         super().__init__()
 
         # Validate parameters
         if len(init_params) != 11:
             raise ValueError(
-                f"\033[92m[fnp_base_flavor_blind.py] MAP22 TMD PDF requires 11 parameters, got {len(init_params)}\033[0m"
+                f"\033[91m[fnp_base_flavor_blind.py] MAP22 TMD PDF requires 11 parameters, got {len(init_params)}\033[0m"
             )
         if len(free_mask) != len(init_params):
             raise ValueError(
-                f"\033[92m[fnp_base_flavor_blind.py] free_mask length must match init_params length\033[0m"
+                f"\033[91m[fnp_base_flavor_blind.py] free_mask length ({len(free_mask)}) must match init_params length ({len(init_params)})\033[0m"
             )
 
         self.n_params = len(init_params)
@@ -148,23 +151,24 @@ class TMDPDFFlavorBlind(nn.Module):
         self,
         x: torch.Tensor,
         b: torch.Tensor,
-        zeta: torch.Tensor,
         NP_evol: torch.Tensor,
-        **kwargs,  # Accept any additional args (like flavor) but ignore them
     ) -> torch.Tensor:
         """
         Compute TMD PDF using MAP22 parameterization.
 
+        This is a flavor-blind implementation where all flavors use identical parameters.
+
         Args:
             x (torch.Tensor): Bjorken x variable
-            b (torch.Tensor): Impact parameter (GeV⁻¹)
-            zeta (torch.Tensor): Rapidity scale ζ (GeV²) [not used in MAP22]
+            b (torch.Tensor): Fourier-conjugate of k_T (GeV⁻¹)
             NP_evol (torch.Tensor): Evolution factor from fNP_evolution
-            **kwargs: Additional arguments (like flavor) are accepted but ignored
-                     since all flavors are identical in this flavor-blind implementation
 
         Returns:
             torch.Tensor: TMD PDF f_NP(x, b) - identical for all flavors
+
+        Note:
+            Unlike the standard implementation, this flavor-blind version doesn't
+            accept zeta (not used in MAP22) or flavor (all flavors identical).
         """
         # Handle x >= 1 case (return zero)
         if torch.any(x >= 1):
@@ -288,23 +292,24 @@ class TMDFFFlavorBlind(nn.Module):
         self,
         z: torch.Tensor,
         b: torch.Tensor,
-        zeta: torch.Tensor,
         NP_evol: torch.Tensor,
-        **kwargs,  # Accept any additional args (like flavor) but ignore them
     ) -> torch.Tensor:
         """
         Compute TMD FF using MAP22 parameterization.
 
+        This is a flavor-blind implementation where all flavors use identical parameters.
+
         Args:
             z (torch.Tensor): Energy fraction z variable
             b (torch.Tensor): Impact parameter (GeV⁻¹)
-            zeta (torch.Tensor): Rapidity scale ζ (GeV²) [not used in MAP22]
             NP_evol (torch.Tensor): Evolution factor from fNP_evolution
-            **kwargs: Additional arguments (like flavor) are accepted but ignored
-                     since all flavors are identical in this flavor-blind implementation
 
         Returns:
             torch.Tensor: TMD FF D_NP(z, b) - identical for all flavors
+
+        Note:
+            Unlike the standard implementation, this flavor-blind version doesn't
+            accept zeta (not used in MAP22) or flavor (all flavors identical).
         """
         # Handle z >= 1 case (return zero)
         if torch.any(z >= 1):
@@ -395,4 +400,3 @@ MAP22_DEFAULT_FF_PARAMS_FLAVOR_BLIND = {
     ],
     "free_mask": [True] * 9,  # All parameters trainable by default
 }
-

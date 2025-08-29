@@ -59,6 +59,7 @@ class fNP_evolution(nn.Module):
         Args:
             init_g2 (float): Initial value for g2 parameter
             free_mask (List[bool]): Single-element list [True/False] for g2 trainability
+
         Initialization example:
         evolution = fNP_evolution(init_g2=0.12840, free_mask=[True])
         """
@@ -95,7 +96,7 @@ class fNP_evolution(nn.Module):
     @property
     def g2(self):
         """Return the full g2 parameter (fixed + free parts)."""
-        return (self.fixed_g2 + self.free_g2)[0]
+        return self.fixed_g2 + self.free_g2
 
     def forward(self, b: torch.Tensor, zeta: torch.Tensor) -> torch.Tensor:
         """
@@ -147,6 +148,7 @@ class TMDPDFBase(nn.Module):
                 f"[fnp_base.py] \033[91mfree_mask length ({len(free_mask)}) must match init_params length ({len(init_params)})\033[0m"
             )
 
+        # Set attributes
         self.n_flavors = n_flavors
         self.n_params = len(init_params)
 
@@ -171,7 +173,7 @@ class TMDPDFBase(nn.Module):
             .repeat(n_flavors, 1)  # shape: (F, P)
         )
 
-        # mask of shape (1, P) to broadcast correctly
+        # Mask of shape (1, P) to broadcast correctly
         mask = torch.tensor(free_mask, dtype=torch.float32).unsqueeze(0)
         # Registering mask as a buffer means it moves with the module (.to(device)),
         # is saved/loaded in the state_dict, but is not trainable.
@@ -203,7 +205,6 @@ class TMDPDFBase(nn.Module):
         self,
         x: torch.Tensor,
         b: torch.Tensor,
-        zeta: torch.Tensor,
         NP_evol: torch.Tensor,
         flavor_idx: int = 0,
     ) -> torch.Tensor:
@@ -213,12 +214,15 @@ class TMDPDFBase(nn.Module):
         Args:
             x (torch.Tensor): Bjorken x variable
             b (torch.Tensor): fourier-conjugate of k_T (GeV⁻¹)
-            zeta (torch.Tensor): Rapidity scale ζ (GeV²) [not used in this parameterization]
             NP_evol (torch.Tensor): Evolution factor from fNP_evolution
             flavor_idx (int): Flavor index (typically 0)
 
         Returns:
             torch.Tensor: TMD PDF f_NP(x, b)
+
+        Note:
+            MAP22 parameterization doesn't use zeta evolution, so it's removed
+            from the interface for clarity.
         """
         # Handle x >= 1 case (return zero)
         if torch.any(x >= 1):
@@ -368,7 +372,6 @@ class TMDFFBase(nn.Module):
         self,
         z: torch.Tensor,
         b: torch.Tensor,
-        zeta: torch.Tensor,
         NP_evol: torch.Tensor,
         flavor_idx: int = 0,
     ) -> torch.Tensor:
@@ -376,14 +379,17 @@ class TMDFFBase(nn.Module):
         Compute TMD FF using MAP22 parameterization.
 
         Args:
-            z (torch.Tensor): Energy fraction z variable
-            b (torch.Tensor): fourier-conjugate of k_T (GeV⁻¹)
-            zeta (torch.Tensor): Rapidity scale ζ (GeV²) [not used in this parameterization]
+            z (torch.Tensor): Momentum fraction variable
+            b (torch.Tensor): fourier-conjugate of P_T (GeV⁻¹)
             NP_evol (torch.Tensor): Evolution factor from fNP_evolution
             flavor_idx (int): Flavor index (typically 0)
 
         Returns:
             torch.Tensor: TMD FF D_NP(z, b)
+
+        Note:
+            MAP22 parameterization doesn't use zeta evolution, so it's removed
+            from the interface for clarity.
         """
         # Handle z >= 1 case (return zero)
         if torch.any(z >= 1):

@@ -44,7 +44,7 @@ REPO_ROOT, MAP_DIR = ensure_repo_on_syspath()
 
 # Local imports
 from modules.utilities import check_python_version, load_and_validate_kinematics
-from modules.fnp_manager_flavor_blind import (
+from modules.fnp import (
     fNPManagerFlavorBlind,
     load_flavor_blind_config,
 )

@@ -163,9 +163,7 @@ class fNPManager(nn.Module):
         outputs = {}
         for flavor in flavors:
             if flavor in self.pdf_modules:
-                outputs[flavor] = self.pdf_modules[flavor](
-                    x, b, self.zeta, shared_evol, flavor_idx=0
-                )
+                outputs[flavor] = self.pdf_modules[flavor](x, b, shared_evol, 0)
             else:
                 raise ValueError(f"Unknown PDF flavor: {flavor}")
 
@@ -195,9 +193,7 @@ class fNPManager(nn.Module):
         outputs = {}
         for flavor in flavors:
             if flavor in self.ff_modules:
-                outputs[flavor] = self.ff_modules[flavor](
-                    z, b, self.zeta, shared_evol, flavor_idx=0
-                )
+                outputs[flavor] = self.ff_modules[flavor](z, b, shared_evol, 0)
             else:
                 raise ValueError(f"Unknown FF flavor: {flavor}")
 
@@ -437,7 +433,3 @@ class fNPManager(nn.Module):
 
                     module.fixed_params.data.copy_(fixed_part.unsqueeze(0))
                     module.free_params.data.copy_(free_part.unsqueeze(0))
-
-
-# Create alias for cleaner API
-fNP = fNPManager

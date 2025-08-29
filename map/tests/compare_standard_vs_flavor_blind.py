@@ -25,8 +25,8 @@ if map_dir not in sys.path:
     sys.path.insert(0, map_dir)
 
 # Import both systems
-from modules.fnp_manager import fNPManager
-from modules.fnp_manager_flavor_blind import (
+from modules.fnp import (
+    fNPManager,
     fNPManagerFlavorBlind,
     load_flavor_blind_config,
 )

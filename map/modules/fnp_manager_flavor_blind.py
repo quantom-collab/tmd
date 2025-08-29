@@ -192,7 +192,7 @@ class fNPManagerFlavorBlind(nn.Module):
         shared_evol = self.evolution(b, self._zeta)
 
         # Evaluate PDF using shared parameters (same result for all flavors)
-        shared_pdf_result = self.pdf_module(x, b, self._zeta, shared_evol)
+        shared_pdf_result = self.pdf_module(x, b, shared_evol)
 
         # Return the same result for all requested flavors
         outputs = {}
@@ -225,7 +225,7 @@ class fNPManagerFlavorBlind(nn.Module):
         shared_evol = self.evolution(b, self._zeta)
 
         # Evaluate FF using shared parameters (same result for all flavors)
-        shared_ff_result = self.ff_module(z, b, self._zeta, shared_evol)
+        shared_ff_result = self.ff_module(z, b, shared_evol)
 
         # Return the same result for all requested flavors
         outputs = {}
@@ -287,7 +287,7 @@ class fNPManagerFlavorBlind(nn.Module):
         )
         info["parameter_breakdown"]["evolution"] = evolution_params
         info["current_values"]["evolution_g2"] = (
-            self.evolution.get_g2_value.detach().cpu().numpy().tolist()
+            self.evolution.g2.detach().cpu().numpy().tolist()
         )
         info["trainable_flags"]["evolution"] = (
             self.evolution.mask.detach().cpu().numpy().tolist()
