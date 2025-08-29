@@ -228,10 +228,10 @@ from .fnp_base import (
     MAP22_DEFAULT_*
 )
 
-from .fnp_manager import fNPManager, fNP
+from .fnp_manager import fNPManager
 
 # Make the main interface easily accessible
-__all__ = ["fNP", "fNPManager", ...]
+__all__ = ["fNPManager", "fNPManagerFlavorBlind", ...]
 ```
 
 ### 6.5. Could We Eliminate `fnp.py`?
@@ -293,7 +293,7 @@ ffs:
 ```python
 import torch
 import yaml
-from modules.fnp_manager import fNPManager
+from modules.fnp import fNPManager
 
 # Load configuration
 with open('map/inputs/fNPconfig_unified.yaml', 'r') as f:

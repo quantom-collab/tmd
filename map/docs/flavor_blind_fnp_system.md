@@ -85,7 +85,7 @@ This test verifies:
 
 ```python
 import torch
-from modules.fnp_manager_flavor_blind import fNPManagerFlavorBlind, load_flavor_blind_config
+from modules.fnp import fNPManagerFlavorBlind, load_flavor_blind_config
 
 # Load configuration
 config = load_flavor_blind_config('inputs/fNPconfig_flavor_blind.yaml')

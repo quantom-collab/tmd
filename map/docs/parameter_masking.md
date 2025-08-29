@@ -86,7 +86,7 @@ The masking system is implemented consistently for both evolution and flavor par
 ### Basic Parameter Analysis
 
 ```python
-from modules.fNP import fNP
+from modules.fnp import fNPManager
 import yaml
 
 # Load configuration
