@@ -59,9 +59,13 @@ from .fnp_base import (
 
 from .fnp_manager import fNPManager
 
+# Create alias for cleaner API
+fNP = fNPManager
+
 # Make the main interface easily accessible
 __all__ = [
-    "fNPManager",  # Main unified interface
+    "fNP",  # Main unified interface (alias to fNPManager)
+    "fNPManager",  # Explicit manager class
     "fNP_evolution",  # Evolution factor module
     "TMDPDFBase",  # TMD PDF base class
     "TMDFFBase",  # TMD FF base class
@@ -71,6 +75,6 @@ __all__ = [
 ]
 
 # Version info
-__version__ = "2.0.0"
+__version__ = "1.0.0"
 __author__ = "Chiara Bissolotti"
 __email__ = "cbissolotti@anl.gov"

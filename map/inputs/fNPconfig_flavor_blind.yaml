@@ -12,14 +12,12 @@ hadron: proton
 zeta: 1.0  # Reference rapidity scale in GeV^2
 
 # Shared evolution factor (applies to both PDFs and FFs)
-# S_NP(ζ, b_T) = exp[-g₂² b_T²/4 × ln(ζ/Q₀²)]
 evolution:
   init_g2: 0.12840      # Evolution parameter g₂ (from MAP22)
   free_mask: [true]     # g2 is trainable
 
 # TMD PDF parameterization (MAP22 implementation)
-# f_NP(x, b_T) = S_NP × [numerator] / [denominator]
-# Parameters: [N₁, α₁, σ₁, λ, N₁ᵦ, N₁ᶜ, λ₂, α₂, α₃, σ₂, σ₃] (11 params)
+# Parameters: [N1, \alpha_1, \sigma_1, \lambda, N_{1\beta}, N1C, \lambda_2, |alpha_2, α₃, σ₂, σ₃] (11 params)
 # 
 # IMPORTANT: This single parameter set applies to ALL PDF flavors:
 # u, d, s, ubar, dbar, sbar, c, cbar will all have identical shapes
@@ -29,8 +27,7 @@ pdf:
   free_mask: [true, true, true, true, true, true, true, true, true, true, true]
 
 # TMD FF parameterization (MAP22 implementation)  
-# D_NP(z, b_T) = S_NP × [numerator] / [denominator]
-# Parameters: [N₃, β₁, δ₁, γ₁, λ_F, N₃ᵦ, β₂, δ₂, γ₂] (9 params)
+# Parameters: [N3, \beta_1, \sigma_1, \gamma_1, \lambda_F, N_{3\beta}, \beta_2, \sigma_2, \gamma_2] (9 params)
 #
 # IMPORTANT: This single parameter set applies to ALL FF flavors:
 # u, d, s, ubar, dbar, sbar, c, cbar will all have identical fragmentation shapes
@@ -69,3 +66,4 @@ ff:
 # - Cannot capture flavor-specific TMD behavior
 # - May not describe data as accurately as full flavor-dependent system
 # - Less flexibility for fine-tuning individual flavors
+

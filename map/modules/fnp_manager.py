@@ -439,4 +439,5 @@ class fNPManager(nn.Module):
                     module.free_params.data.copy_(free_part.unsqueeze(0))
 
 
-
+# Create alias for cleaner API
+fNP = fNPManager

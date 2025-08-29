@@ -121,19 +121,7 @@ class TMDPDFBase(nn.Module):
     """
     Base TMD PDF class implementing the MAP22 parameterization.
 
-    This implements the exact MAP22 TMD PDF parameterization from the C++ code:
-
-    f_NP(x, b_T) = NP_evol × [numerator] / [denominator]
-
-    where:
-    numerator = g₁×exp(-g₁×(b/2)²) + λ²×g₁ᵦ²×(1-g₁ᵦ×(b/2)²)×exp(-g₁ᵦ×(b/2)²) + g₁ᶜ×λ₂²×exp(-g₁ᶜ×(b/2)²)
-    denominator = g₁ + λ²×g₁ᵦ² + g₁ᶜ×λ₂²
-
-    g₁ = N₁ × (x/x̂)^σ₁ × ((1-x)/(1-x̂))^α₁²
-    g₁ᵦ = N₁ᵦ × (x/x̂)^σ₂ × ((1-x)/(1-x̂))^α₂²
-    g₁ᶜ = N₁ᶜ × (x/x̂)^σ₃ × ((1-x)/(1-x̂))^α₃²
-
-    with x̂ = 0.1
+    This implements the exact MAP22 TMD PDF parameterization from the C++ code.
     """
 
     def __init__(self, n_flavors: int, init_params: List[float], free_mask: List[bool]):
@@ -165,15 +153,36 @@ class TMDPDFBase(nn.Module):
         # Reference point x_hat = 0.1 (MAP22 standard)
         self.register_buffer("x_hat", torch.tensor(0.1, dtype=torch.float32))
 
-        # Parameter setup with masking
+        # Parameter setup with masking. We have to create a (F, P) tensor
+        # where F is the number of flavors and P is the number of parameters, that
+        # will be the masking template for the parameters. Each flavor will have
+        # its own copy of the parameters.
+        #
+        # Take a 1-D parameter vector (e.g., initial parameters),
+        # turn it into a row, and duplicate that row so each flavor
+        # starts with the same initial values.
+        # .repeat(n_flavors, 1): repeats the single row n_flavors times along dim 0, and
+        # 1 time along dim 1. Therefore, the final shape is (n_flavors, P).
+        # .repeat copies memory; that’s desired here because each flavor’s params must be
+        # independently trainable. If you only needed read-only broadcasting, .expand would avoid copies.
         init_tensor = (
-            torch.tensor(init_params, dtype=torch.float32)
-            .unsqueeze(0)
-            .repeat(n_flavors, 1)
+            torch.tensor(init_params, dtype=torch.float32)  # shape: (P,)
+            .unsqueeze(0)  # shape: (1, P)
+            .repeat(n_flavors, 1)  # shape: (F, P)
         )
+
+        # mask of shape (1, P) to broadcast correctly
         mask = torch.tensor(free_mask, dtype=torch.float32).unsqueeze(0)
+        # Registering mask as a buffer means it moves with the module (.to(device)),
+        # is saved/loaded in the state_dict, but is not trainable.
         self.register_buffer("mask", mask)
 
+        # Split parameters into fixed (masked-off) and free (masked-on) parts.
+        # Both are (F, P): each flavor has its own copy of every parameter.
+        # This is flavor-dependent: parameters are per flavor. Even though
+        # they start identical (due to .repeat), each flavor’s row in
+        # free_params is a distinct trainable vector that can diverge during training.
+        #
         # Fixed parameters (non-trainable)
         fixed_init = init_tensor * (1 - mask)
         self.register_buffer("fixed_params", fixed_init)
@@ -182,7 +191,7 @@ class TMDPDFBase(nn.Module):
         free_init = init_tensor * mask
         self.free_params = nn.Parameter(free_init)
 
-        # Gradient hook
+        # Gradient hook. Gradients are zeroed where mask == 0.
         self.free_params.register_hook(lambda grad: grad * self.mask)
 
     @property
@@ -277,8 +286,6 @@ class TMDPDFBase(nn.Module):
         }{
             g_1(x) + \lambda^2 g_{1B}^2(x) + \lambda_2^2 g_{1C}(x)
         }
-        $$
-        $$
         \text{where} \quad
         g_{1,1B,1C}(x) = N_{1,1B,1C} \frac{x^{\sigma_{1,2,3}}(1-x)^{\alpha^2_{1,2,3}}}{\hat{x}^{\sigma_{1,2,3}}(1-\hat{x})^{\alpha^2_{1,2,3}}}, \quad \hat{x} = 0.1
         $$"""
@@ -300,18 +307,7 @@ class TMDFFBase(nn.Module):
     """
     Base TMD FF class implementing the MAP22 parameterization.
 
-    This implements the MAP22 TMD FF parameterization from the C++ code:
-
-    D_NP(z, b_T) = NP_evol x [numerator] / [denominator]
-
-    where:
-    numerator = g₃ × exp(-g₃×(b/2)²/z²) + (λ_F/z²)×g₃ᵦ²×(1-g₃ᵦ×(b/2)²/z²)×exp(-g₃ᵦ×(b/2)²/z²)
-    denominator = g₃ + (λ_F/z²)×g₃ᵦ²
-
-    g₃ = N₃ × [(z^β₁ + δ₁²)/(ẑ^β₁ + δ₁²)] × ((1-z)/(1-ẑ))^γ₁²
-    g₃ᵦ = N₃ᵦ × [(z^β₂ + δ₂²)/(ẑ^β₂ + δ₂²)] × ((1-z)/(1-ẑ))^γ₂²
-
-    with ẑ = 0.5
+    This implements the MAP22 TMD FF parameterization from the C++ code.
     """
 
     def __init__(self, n_flavors: int, init_params: List[float], free_mask: List[bool]):
@@ -447,8 +443,6 @@ class TMDFFBase(nn.Module):
         }{
             g_3(z) + \frac{\lambda_F}{z^2} g_{3B}^2(z)
         }
-        $$
-        $$
         \text{where} \quad
         g_{3,3B}(z) = N_{3,3B} \frac{(z^{\beta_{1,2}}+\delta^2_{1,2})(1-z)^{\gamma^2_{1,2}}}{(\hat{z}^{\beta_{1,2}}+\delta^2_{1,2})(1-\hat{z})^{\gamma^2_{1,2}}}, \quad \hat{z} = 0.5
         $$"""

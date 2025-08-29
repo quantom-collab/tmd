@@ -1,0 +1,398 @@
+"""
+Flavor-blind fNP base classes for TMD PDFs and FFs.
+
+This module implements flavor-blind parameterizations where ALL flavors share
+the exact same parameters and evolve together. Unlike the standard system where
+each flavor has its own parameter set, here all flavors use identical parameters
+that change simultaneously during optimization.
+
+Author: Chiara Bissolotti (cbissolotti@anl.gov)
+Based on MAP22 parameterization from NangaParbat
+"""
+
+import torch
+import torch.nn as nn
+from typing import List
+import numpy as np
+
+
+###############################################################################
+# 1. Shared Evolution (same as standard fNP)
+###############################################################################
+class fNP_evolution(nn.Module):
+    """
+    Evolution factor S_NP(ζ, b_T) = exp[-g₂² b_T²/4 \cdot ln(ζ/Q₀²)]
+
+    This is identical to the standard fNP evolution since evolution is already
+    shared across flavors in the standard implementation.
+    """
+
+    def __init__(self, init_g2: float = 0.12840, free_mask: List[bool] = [True]):
+        """
+        Initialize evolution module.
+
+        Args:
+            init_g2 (float): Initial value for g₂ parameter
+            free_mask (List[bool]): Trainability mask for g₂
+        """
+        super().__init__()
+
+        if len(free_mask) != 1:
+            raise ValueError(f"Evolution expects 1 mask element, got {len(free_mask)}")
+
+        # Reference scale Q₀² = 1 GeV² (MAP22 standard)
+        self.register_buffer("Q0_squared", torch.tensor(1.0, dtype=torch.float32))
+
+        # Parameter setup with masking
+        mask = torch.tensor(free_mask, dtype=torch.float32)
+        self.register_buffer("mask", mask)
+
+        # Fixed part
+        fixed_init = torch.tensor([init_g2]) * (1 - mask)
+        self.register_buffer("fixed_g2", fixed_init)
+
+        # Free part (trainable)
+        free_init = torch.tensor([init_g2]) * mask
+        self.free_g2 = nn.Parameter(free_init)
+
+        # Gradient hook
+        self.free_g2.register_hook(lambda grad: grad * self.mask)
+
+    @property
+    def get_g2_value(self):
+        """Return the full g₂ value (fixed + free parts)."""
+        return self.fixed_g2 + self.free_g2
+
+    def forward(self, b: torch.Tensor, zeta: torch.Tensor) -> torch.Tensor:
+        """
+        Compute evolution factor S_NP(ζ, b_T).
+
+        Args:
+            b (torch.Tensor): Impact parameter b_T in GeV⁻¹
+            zeta (torch.Tensor): Rapidity scale ζ in GeV²
+
+        Returns:
+            torch.Tensor: Evolution factor S_NP
+        """
+        g2 = self.get_g2_value[0]  # Extract scalar g₂ value
+
+        return torch.exp(-(g2**2) * b**2 * torch.log(zeta / self.Q0_squared) / 4.0)
+
+
+###############################################################################
+# 2. Flavor-Blind TMD PDF Class
+###############################################################################
+class TMDPDFFlavorBlind(nn.Module):
+    """
+    Flavor-blind TMD PDF class where ALL flavors share identical parameters.
+
+    In contrast to the standard TMDPDFBase where each flavor has its own parameter set,
+    this class uses a single parameter set that applies to all flavors. All flavors
+    evolve together when parameters are updated during optimization.
+
+    The parameterization follows MAP22:
+    f_NP(x, b_T) = NP_evol x [numerator] / [denominator]
+
+    But now the same parameters are used for u, d, s, ubar, dbar, sbar, etc.
+    """
+
+    def __init__(self, init_params: List[float], free_mask: List[bool]):
+        """
+        Initialize flavor-blind TMD PDF.
+
+        Args:
+            init_params (List[float]): 11 parameters [N₁, α₁, σ₁, λ, N₁ᵦ, N₁ᶜ, λ₂, α₂, α₃, σ₂, σ₃]
+            free_mask (List[bool]): Trainability mask for each parameter
+        """
+        super().__init__()
+
+        # Validate parameters
+        if len(init_params) != 11:
+            raise ValueError(
+                f"\033[92m[fnp_base_flavor_blind.py] MAP22 TMD PDF requires 11 parameters, got {len(init_params)}\033[0m"
+            )
+        if len(free_mask) != len(init_params):
+            raise ValueError(
+                f"\033[92m[fnp_base_flavor_blind.py] free_mask length must match init_params length\033[0m"
+            )
+
+        self.n_params = len(init_params)
+
+        # Reference point x_hat = 0.1 (MAP22 standard)
+        self.register_buffer("x_hat", torch.tensor(0.1, dtype=torch.float32))
+
+        # Parameter setup with masking - SINGLE SET FOR ALL FLAVORS.
+        # As opposed to the flavor dependent case, TMDPDFBase, here
+        # everything is 1-D: params are a single vector: shape (P,)
+        # shared for all flavors
+        mask = torch.tensor(free_mask, dtype=torch.float32)
+        self.register_buffer("mask", mask)
+
+        # Fixed parameters (non-trainable)
+        fixed_init = torch.tensor(init_params) * (1 - mask)
+        self.register_buffer("fixed_params", fixed_init)
+
+        # Free parameters (trainable) - SHARED ACROSS ALL FLAVORS
+        free_init = torch.tensor(init_params) * mask
+        self.free_params = nn.Parameter(free_init)
+
+        # Gradient hook
+        self.free_params.register_hook(lambda grad: grad * self.mask)
+
+    @property
+    def get_params_tensor(self):
+        """Return the full parameter tensor (fixed + free parts)."""
+        return self.fixed_params + self.free_params
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        b: torch.Tensor,
+        zeta: torch.Tensor,
+        NP_evol: torch.Tensor,
+        **kwargs,  # Accept any additional args (like flavor) but ignore them
+    ) -> torch.Tensor:
+        """
+        Compute TMD PDF using MAP22 parameterization.
+
+        Args:
+            x (torch.Tensor): Bjorken x variable
+            b (torch.Tensor): Impact parameter (GeV⁻¹)
+            zeta (torch.Tensor): Rapidity scale ζ (GeV²) [not used in MAP22]
+            NP_evol (torch.Tensor): Evolution factor from fNP_evolution
+            **kwargs: Additional arguments (like flavor) are accepted but ignored
+                     since all flavors are identical in this flavor-blind implementation
+
+        Returns:
+            torch.Tensor: TMD PDF f_NP(x, b) - identical for all flavors
+        """
+        # Handle x >= 1 case (return zero)
+        if torch.any(x >= 1):
+            mask_val = (x < 1).type_as(NP_evol)
+        else:
+            mask_val = torch.ones_like(x)
+
+        # Extract parameters (same for ALL flavors)
+        p = self.get_params_tensor
+        N1 = p[0]  # N₁
+        alpha1 = p[1]  # α₁
+        sigma1 = p[2]  # σ₁
+        lam = p[3]  # λ
+        N1B = p[4]  # N₁ᵦ
+        N1C = p[5]  # N₁ᶜ
+        lam2 = p[6]  # λ₂
+        alpha2 = p[7]  # α₂
+        alpha3 = p[8]  # α₃
+        sigma2 = p[9]  # σ₂
+        sigma3 = p[10]  # σ₃
+
+        # Compute intermediate g-functions (MAP22 exact implementation)
+        g1 = (
+            N1
+            * torch.pow(x / self.x_hat, sigma1)
+            * torch.pow((1 - x) / (1 - self.x_hat), alpha1**2)
+        )
+        g1B = (
+            N1B
+            * torch.pow(x / self.x_hat, sigma2)
+            * torch.pow((1 - x) / (1 - self.x_hat), alpha2**2)
+        )
+        g1C = (
+            N1C
+            * torch.pow(x / self.x_hat, sigma3)
+            * torch.pow((1 - x) / (1 - self.x_hat), alpha3**2)
+        )
+
+        # Compute (b/2)² term
+        b_half_sq = (b / 2.0) ** 2
+
+        # Numerator (exact MAP22 formula)
+        numerator = (
+            g1 * torch.exp(-g1 * b_half_sq)
+            + lam**2 * g1B**2 * (1 - g1B * b_half_sq) * torch.exp(-g1B * b_half_sq)
+            + g1C * lam2**2 * torch.exp(-g1C * b_half_sq)
+        )
+
+        # Denominator (exact MAP22 formula)
+        denominator = g1 + lam**2 * g1B**2 + g1C * lam2**2
+
+        # Avoid division by zero
+        denominator = torch.clamp(denominator, min=1e-12)
+
+        # Final result with evolution and x-boundary handling
+        result = NP_evol * (numerator / denominator) * mask_val
+
+        return result
+
+
+###############################################################################
+# 3. Flavor-Blind TMD FF Class
+###############################################################################
+class TMDFFFlavorBlind(nn.Module):
+    """
+    Flavor-blind TMD FF class where ALL flavors share identical parameters.
+
+    Similar to TMDPDFFlavorBlind, this class uses a single parameter set for all
+    fragmentation functions. The MAP22 parameterization is applied uniformly
+    across all flavors.
+
+    D_NP(z, b_T) = NP_evol × [numerator] / [denominator]
+    """
+
+    def __init__(self, init_params: List[float], free_mask: List[bool]):
+        """
+        Initialize flavor-blind TMD FF.
+
+        Args:
+            init_params (List[float]): 9 parameters [N₃, β₁, δ₁, γ₁, λ_F, N₃ᵦ, β₂, δ₂, γ₂]
+            free_mask (List[bool]): Trainability mask for each parameter
+        """
+        super().__init__()
+
+        # Validate parameters
+        if len(init_params) != 9:
+            raise ValueError(
+                f"[fnp_base_flavor_blind.py] MAP22 TMD FF requires 9 parameters, got {len(init_params)}"
+            )
+        if len(free_mask) != len(init_params):
+            raise ValueError(
+                f"[fnp_base_flavor_blind.py] free_mask length must match init_params length"
+            )
+
+        self.n_params = len(init_params)
+
+        # Reference point z_hat = 0.5 (MAP22 standard)
+        self.register_buffer("z_hat", torch.tensor(0.5, dtype=torch.float32))
+
+        # Parameter setup with masking - SINGLE SET FOR ALL FLAVORS
+        mask = torch.tensor(free_mask, dtype=torch.float32)
+        self.register_buffer("mask", mask)
+
+        # Fixed parameters (non-trainable)
+        fixed_init = torch.tensor(init_params) * (1 - mask)
+        self.register_buffer("fixed_params", fixed_init)
+
+        # Free parameters (trainable) - SHARED ACROSS ALL FLAVORS
+        free_init = torch.tensor(init_params) * mask
+        self.free_params = nn.Parameter(free_init)
+
+        # Gradient hook
+        self.free_params.register_hook(lambda grad: grad * self.mask)
+
+    @property
+    def get_params_tensor(self):
+        """Return the full parameter tensor (fixed + free parts)."""
+        return self.fixed_params + self.free_params
+
+    def forward(
+        self,
+        z: torch.Tensor,
+        b: torch.Tensor,
+        zeta: torch.Tensor,
+        NP_evol: torch.Tensor,
+        **kwargs,  # Accept any additional args (like flavor) but ignore them
+    ) -> torch.Tensor:
+        """
+        Compute TMD FF using MAP22 parameterization.
+
+        Args:
+            z (torch.Tensor): Energy fraction z variable
+            b (torch.Tensor): Impact parameter (GeV⁻¹)
+            zeta (torch.Tensor): Rapidity scale ζ (GeV²) [not used in MAP22]
+            NP_evol (torch.Tensor): Evolution factor from fNP_evolution
+            **kwargs: Additional arguments (like flavor) are accepted but ignored
+                     since all flavors are identical in this flavor-blind implementation
+
+        Returns:
+            torch.Tensor: TMD FF D_NP(z, b) - identical for all flavors
+        """
+        # Handle z >= 1 case (return zero)
+        if torch.any(z >= 1):
+            mask_val = (z < 1).type_as(NP_evol)
+        else:
+            mask_val = torch.ones_like(z)
+
+        # Extract parameters (same for ALL flavors)
+        p = self.get_params_tensor
+        N3 = p[0]  # N₃
+        beta1 = p[1]  # β₁
+        delta1 = p[2]  # δ₁
+        gamma1 = p[3]  # γ₁
+        lambdaF = p[4]  # λ_F
+        N3B = p[5]  # N₃ᵦ
+        beta2 = p[6]  # β₂
+        delta2 = p[7]  # δ₂
+        gamma2 = p[8]  # γ₂
+
+        # Compute intermediate functions (MAP22 exact implementation)
+        cmn1 = (
+            (z**beta1 + delta1**2) / (self.z_hat**beta1 + delta1**2)
+        ) * torch.pow((1 - z) / (1 - self.z_hat), gamma1**2)
+        cmn2 = (
+            (z**beta2 + delta2**2) / (self.z_hat**beta2 + delta2**2)
+        ) * torch.pow((1 - z) / (1 - self.z_hat), gamma2**2)
+
+        g3 = N3 * cmn1
+        g3B = N3B * cmn2
+
+        # z² factor (important for FF parameterization)
+        z2 = z * z
+
+        # Compute (b/2)² term
+        b_half_sq = (b / 2.0) ** 2
+
+        # Numerator (exact MAP22 formula)
+        numerator = g3 * torch.exp(-g3 * b_half_sq / z2) + (lambdaF / z2) * g3B**2 * (
+            1 - g3B * b_half_sq / z2
+        ) * torch.exp(-g3B * b_half_sq / z2)
+
+        # Denominator (exact MAP22 formula)
+        denominator = g3 + (lambdaF / z2) * g3B**2
+
+        # Avoid division by zero
+        denominator = torch.clamp(denominator, min=1e-12)
+
+        # Final result with evolution and z-boundary handling
+        result = NP_evol * (numerator / denominator) * mask_val
+
+        return result
+
+
+# Default parameter sets for flavor-blind system
+MAP22_DEFAULT_EVOLUTION_FLAVOR_BLIND = {
+    "init_g2": 0.12840,  # g2 from MAP22
+    "free_mask": [True],
+}
+
+MAP22_DEFAULT_PDF_PARAMS_FLAVOR_BLIND = {
+    "init_params": [
+        0.28516,  # N₁
+        2.9755,  # α₁
+        0.17293,  # σ₁
+        0.39432,  # λ
+        0.28516,  # N₁ᵦ
+        0.28516,  # N₁ᶜ
+        0.39432,  # λ₂
+        2.9755,  # α₂
+        2.9755,  # α₃
+        0.17293,  # σ₂
+        0.17293,  # σ₃
+    ],
+    "free_mask": [True] * 11,  # All parameters trainable by default
+}
+
+MAP22_DEFAULT_FF_PARAMS_FLAVOR_BLIND = {
+    "init_params": [
+        0.21012,  # N₃
+        2.12062,  # β₁
+        0.093554,  # δ₁
+        0.25246,  # γ₁
+        5.2915,  # λ_F
+        0.033798,  # N₃ᵦ
+        2.1012,  # β₂
+        0.093554,  # δ₂
+        0.25246,  # γ₂
+    ],
+    "free_mask": [True] * 9,  # All parameters trainable by default
+}
+
