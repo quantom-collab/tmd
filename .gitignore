@@ -37,6 +37,7 @@ ipython_config.py
 .venv
 env/
 venv/
+tmd-env/
 
 # Other files
 2024-11-14-Collaboration_Meeting.pdf
