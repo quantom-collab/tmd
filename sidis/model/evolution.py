@@ -1,12 +1,23 @@
 import numpy as np
+import pathlib
+from omegaconf import OmegaConf
 import mpmath
 import torch
 from scipy.special import spence
 
-import qcdlib.params as params
-from qcdlib.alphaS  import ALPHAS
-from qcdlib.tmdmodel import MODEL_TORCH
+import sys
+import os
 
+# Add the sidis directory to Python path for imports
+current_dir = pathlib.Path(__file__).resolve().parent
+sidis_dir = current_dir.parent
+if str(sidis_dir) not in sys.path:
+    sys.path.insert(0, str(sidis_dir))
+
+# Now we can import directly
+import qcdlib.params as params
+from qcdlib.alphaS import ALPHAS
+from qcdlib.tmdmodel import MODEL_TORCH
 from qcdlib.evolution_precalcs import r_Gamma, r_gamma, rbar, rbar0prime, delta
 
 alphaS = ALPHAS()
@@ -433,3 +444,20 @@ class PERTURBATIVE_EVOLUTION(torch.nn.Module):
         #total_evolution = RGE_factor #(nbT,nQ2)
 
         return total_evolution.real
+
+if __name__ == "__main__":    
+    import pathlib
+    rootdir = pathlib.Path(__file__).resolve().parent
+
+    import time
+
+    torch.set_default_dtype(torch.float64)
+
+    t0 = time.time()
+    pert_evo = PERTURBATIVE_EVOLUTION(order=3)
+    bT = torch.linspace(0.01,10,100)
+    Q20 = torch.tensor([1.28**2])
+    Q2 = torch.linspace(1.28**2,100,1000000)
+    sudakov = pert_evo.forward(bT, Q20, Q2)
+    t1 = time.time()
+    print(f"Time taken for evolution of shape {sudakov.shape}: {t1-t0} seconds")

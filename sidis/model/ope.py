@@ -1,13 +1,17 @@
 import torch
 import numpy as np
 import pathlib
+import sys
 from omegaconf import OmegaConf
 
-# Handle both direct execution and module import
-try:
-    from .utils import get_akima_derivatives_2d, interp_2d
-except ImportError:
-    from utils import get_akima_derivatives_2d, interp_2d
+# Add the sidis directory to Python path for imports
+current_dir = pathlib.Path(__file__).resolve().parent
+sidis_dir = current_dir.parent
+if str(sidis_dir) not in sys.path:
+    sys.path.insert(0, str(sidis_dir))
+
+# Now we can import directly
+from model.utils import get_akima_derivatives_2d, interp_2d
 
 class OPE(torch.nn.Module):
     def __init__(self):
