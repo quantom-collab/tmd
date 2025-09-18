@@ -7,6 +7,10 @@
 # Perturbative order of the computation. 0: LL, 1: NLL, 2: NNLL, 3: NNNLL, -1: NLL', -2: NNLL'
 PerturbativeOrder: 3
 
+# Path of the OPE grids
+ope:
+  grid_file: "../../grids/grids/tmdpdf_u_Q_1.txt"
+
 # Collinear PDF set and member to be used
 pdfset:
   name: "MMHT2014nnlo68cl"
