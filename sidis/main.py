@@ -11,14 +11,14 @@ if __name__ == "__main__":
     rootdir = pathlib.Path(__file__).resolve().parent
     conf = OmegaConf.load(rootdir.joinpath("config.yaml"))
     # conf.outdir = rootdir.joinpath(conf.outdir)
-    print(conf)
+    #print(conf)
 
     model = TrainableModel()
-    x = torch.tensor([0.1,0.2,0.3])
-    pT = torch.tensor([0.1,0.2,0.3])
-    Q = torch.tensor([1,2,3])
-    z = torch.tensor([0.1,0.2,0.3])
-    print(model(x, pT, Q, z))
+    x = torch.tensor([0.1,0.2])
+    PhT = torch.tensor([0.1,0.2])
+    Q = torch.tensor([3,4])
+    z = torch.tensor([0.3,0.4])
+    print(model(x, PhT, Q, z))
 
     # from model.evolution import PERTURBATIVE_EVOLUTION
     # import qcdlib.params as params

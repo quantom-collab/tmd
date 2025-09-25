@@ -87,6 +87,10 @@ def interp_2d(x:torch.Tensor, y: torch.Tensor, x_grid: torch.Tensor, y_grid: tor
         idx_x1 = idx_x1[:,None]
         idx_x2 = idx_x2[:,None]
         idx_y1, idx_y2 = locate_1d(y, y_grid)
+        # print('idx_x1.shape', idx_x1.shape)
+        # print('idx_x2.shape', idx_x2.shape)
+        # print('idx_y1.shape', idx_y1.shape)
+        # print('idx_y2.shape', idx_y2.shape)
 
         h_x = x_grid[idx_x2] - x_grid[idx_x1]
         h_y = y_grid[idx_y2] - y_grid[idx_y1]
@@ -126,8 +130,92 @@ def interp_2d(x:torch.Tensor, y: torch.Tensor, x_grid: torch.Tensor, y_grid: tor
             theta_y_vec = torch.stack([torch.ones(theta_y.shape), theta_y, theta_y**2, theta_y**3],axis=-1)
 
             M1 = base_mat.T @ coeff_mat @ base_mat
+            # print('M1.shape', M1.shape)
+            # print('theta_x_vec.shape', theta_x_vec.shape)
+            # print('theta_y_vec.shape', theta_y_vec.shape)
 
             return (theta_x_vec[:,None,None,:] @ M1 @theta_y_vec[None,:,:,None]).squeeze()
+        else:
+            raise ValueError(f"Invalid interpolation type: {type}")
+
+def interp_2d_multiple_events(x:torch.Tensor, y: torch.Tensor, x_grid: torch.Tensor, y_grid: torch.Tensor, z_grid: torch.Tensor, dx_grid: torch.Tensor, dy_grid: torch.Tensor, dx_dy_grid: torch.Tensor, type:str="cubic") -> torch.Tensor:
+        """
+        Interpolate the OPE over the saved grids.
+        x has shape (Nevents,)
+        y has shape (Nevents, Nb)
+        x_grid has shape (Nx,)
+        y_grid has shape (Ny,)
+        z_grid has shape (Nx, Ny)
+        dx_grid has shape (Nx, Ny)
+        dy_grid has shape (Nx, Ny)
+        dx_dy_grid has shape (Nx, Ny)
+        """
+        x = torch.clamp(x, x_grid[0], x_grid[-1])
+        y = torch.clamp(y, y_grid[0], y_grid[-1])
+
+        idx_x1, idx_x2 = locate_1d(x, x_grid)
+        idx_x1 = idx_x1[:,None]
+        idx_x2 = idx_x2[:,None]
+        idx_y1, idx_y2 = locate_1d(y, y_grid)
+        #print('idx_x1.shape', idx_x1.shape)
+        #print('idx_x2.shape', idx_x2.shape)
+        #print('idx_y1.shape', idx_y1.shape)
+        #print('idx_y2.shape', idx_y2.shape)
+        #print('y.shape', y.shape)
+        #print('y_grid.shape', y_grid.shape)
+        #print('indexing y grid shape', y_grid[idx_y1].shape)
+        #print('unique y points shape', y.unique().shape)
+        #print('idx_y1 unique shape', idx_y1.unique().shape)
+        #print('unique y grid points shape', y_grid[idx_y1].unique().shape)
+
+
+        h_x = x_grid[idx_x2] - x_grid[idx_x1]
+        h_y = y_grid[idx_y2] - y_grid[idx_y1]
+        h_x_y = h_x * h_y
+        #print('h_x.shape', h_x.shape)
+        #print('h_y.shape', h_y.shape)
+        #print('h_x_y.shape', h_x_y.shape)
+
+        theta_x = (x - x_grid[idx_x1][:,0]) / h_x[:,0]
+        theta_y = (y - y_grid[idx_y1]) / h_y
+        #--may need nan to num here on theta_bT
+
+        if type.lower() == "bilinear":
+            # Corner values
+            z00 = z_grid[idx_x1,   idx_y1   ]   # (Nx,Ny)
+            z01 = z_grid[idx_x1,   idx_y2 ]   # (Nx,Ny)
+            z10 = z_grid[idx_x2,   idx_y1   ]   # (Nx,Ny)
+            z11 = z_grid[idx_x2,   idx_y2 ]   # (Nx,Ny)
+
+            tx = theta_x[:, None]   # (Nx,1) broadcast over y
+            ty = theta_y[None, :]   # (1,Ny) broadcast over x
+
+            # Standard bilinear blend
+            out = (1 - tx) * (1 - ty) * z00 \
+                + (1 - tx) * ty       * z01 \
+                + tx       * (1 - ty) * z10 \
+                + tx       * ty       * z11
+            return out
+
+        elif type.lower() == "cubic":
+            #--cubic interpolation
+            base_mat = torch.tensor([ [1.,0.,-3.,2.], [0.,0.,3.,-2.], [0.,1.,-2.,1.], [0.,0.,-1.,1.] ])
+            coeff_mat = torch.stack([torch.stack([z_grid[idx_x1,idx_y1], z_grid[idx_x1,idx_y2], h_y * dy_grid[idx_x1,idx_y1], h_y * dy_grid[idx_x1,idx_y2]],axis=-1),
+                                    torch.stack([z_grid[idx_x2,idx_y1], z_grid[idx_x2,idx_y2], h_y * dy_grid[idx_x2,idx_y1], h_y * dy_grid[idx_x2,idx_y2]],axis=-1),
+                                    torch.stack([h_x * dx_grid[idx_x1,idx_y1], h_x * dx_grid[idx_x1,idx_y2], h_x_y * dx_dy_grid[idx_x1,idx_y1], h_x_y * dx_dy_grid[idx_x1,idx_y2]],axis=-1),
+                                    torch.stack([h_x * dx_grid[idx_x2,idx_y1], h_x * dx_grid[idx_x2,idx_y2], h_x_y * dx_dy_grid[idx_x2,idx_y1], h_x_y * dx_dy_grid[idx_x2,idx_y2]],axis=-1)
+                                    ], axis=-2)
+            #print('coeff_mat.shape', coeff_mat.shape)
+            
+            theta_x_vec = torch.stack([torch.ones(theta_x.shape), theta_x, theta_x**2, theta_x**3],axis=-1)
+            theta_y_vec = torch.stack([torch.ones(theta_y.shape), theta_y, theta_y**2, theta_y**3],axis=-1)
+
+            M1 = base_mat.T @ coeff_mat @ base_mat
+            #print('M1.shape', M1.shape)
+            #print('theta_x_vec.shape', theta_x_vec.shape)
+            #print('theta_y_vec.shape', theta_y_vec.shape)
+
+            return (theta_x_vec[:,None,None,:] @ M1 @theta_y_vec[...,None]).squeeze()
         else:
             raise ValueError(f"Invalid interpolation type: {type}")
 

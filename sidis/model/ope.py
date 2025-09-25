@@ -11,7 +11,7 @@ if str(sidis_dir) not in sys.path:
     sys.path.insert(0, str(sidis_dir))
 
 # Now we can import directly
-from model.utils import get_akima_derivatives_2d, interp_2d
+from model.utils import get_akima_derivatives_2d, interp_2d,interp_2d_multiple_events
 
 class OPE(torch.nn.Module):
     def __init__(self):
@@ -145,7 +145,8 @@ class OPE(torch.nn.Module):
         """
         Interpolate the OPE over the saved grids.
         """
-        return interp_2d(x, bT, self.xvals, self.bTvals, self.opevals, self.d_x, self.d_bT, self.d_x_bT, type)
+        return interp_2d_multiple_events(x, bT, self.xvals, self.bTvals, self.opevals, self.d_x, self.d_bT, self.d_x_bT, type)
+        #return interp_2d(x, bT, self.xvals, self.bTvals, self.opevals, self.d_x, self.d_bT, self.d_x_bT, type)
 
     def forward(self, x: torch.Tensor, bT: torch.Tensor) -> torch.Tensor:
         """
@@ -156,8 +157,13 @@ class OPE(torch.nn.Module):
         # ope = self.interpolate(x, bT)
         # return ope
 
+        #--here x has shape (Nevents,) and bT has shape (Nevents, Nb)
+        # opes = []
+        # for i in range(len(x)):
+        #     ope = self.interp_ope(torch.tensor(x[i,None]), torch.tensor(bT[i]))
+        #     opes.append(ope)
+        # ope = torch.stack(opes, axis=0)
         ope = self.interp_ope(x, bT)
-
         return ope
 
         # return self.model(x)
