@@ -219,10 +219,6 @@ class TMDPDFBase(nn.Module):
 
         Returns:
             torch.Tensor: TMD PDF f_NP(x, b)
-
-        Note:
-            MAP22 parameterization doesn't use zeta evolution, so it's removed
-            from the interface for clarity.
         """
         # Handle x >= 1 case (return zero)
         if torch.any(x >= 1):

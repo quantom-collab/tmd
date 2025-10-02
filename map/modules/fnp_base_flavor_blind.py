@@ -306,10 +306,6 @@ class TMDFFFlavorBlind(nn.Module):
 
         Returns:
             torch.Tensor: TMD FF D_NP(z, b) - identical for all flavors
-
-        Note:
-            Unlike the standard implementation, this flavor-blind version doesn't
-            accept zeta (not used in MAP22) or flavor (all flavors identical).
         """
         # Handle z >= 1 case (return zero)
         if torch.any(z >= 1):
