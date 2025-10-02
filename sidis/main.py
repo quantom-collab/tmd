@@ -29,19 +29,17 @@ if __name__ == "__main__":
     # parton distribution functions and fragmentation functions
     model = TrainableModel()
 
-    # Create test input tensors:
-    # x: Bjorken x (momentum fraction of parton in nucleon)
-    x = torch.tensor([0.1, 0.2])
-    # PhT: transverse momentum of detected hadron
-    PhT = torch.tensor([0.1, 0.2])
-    # Q: hard scale (virtuality of photon in SIDIS process)
-    Q = torch.tensor([3, 4])
-    # z: energy fraction of hadron relative to struck quark
-    z = torch.tensor([0.3, 0.4])
+    # Load event data from file as a tensor
+    events_file = rootdir.joinpath("toy_events.dat")
 
-    # Run the model forward pass and print the result
-    # This computes the TMD cross section prediction
-    print(model(x, PhT, Q, z))
+    events_tensor = torch.load(events_file)
+
+    print(f"Loaded events from {events_file}")
+    print(f"Event data shape: {events_tensor.shape}")
+    print(f"Events tensor:\n{events_tensor}")
+
+    # Run the model forward pass with the full tensor
+    print(model(events_tensor))
 
     # from model.evolution import PERTURBATIVE_EVOLUTION
     # import qcdlib.params as params
