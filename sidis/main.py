@@ -16,14 +16,8 @@ if __name__ == "__main__":
     # Get the directory containing this script
     rootdir = pathlib.Path(__file__).resolve().parent
 
-    # Load configuration from YAML file
-    conf = OmegaConf.load(rootdir.joinpath("config.yaml"))
-
     # Uncomment to set output directory relative to script location:
     # conf.outdir = rootdir.joinpath(conf.outdir)
-
-    # Print the full configuration:
-    # print(conf)
 
     # Initialize the trainable model for TMD
     # parton distribution functions and fragmentation functions

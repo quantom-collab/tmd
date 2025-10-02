@@ -11,6 +11,9 @@ PerturbativeOrder: 3
 ope:
   grid_file: "../../grids/grids/tmdpdf_u_Q_1.txt"
 
+# Define initial scale for the evolution
+Q20: 1.0
+
 # Collinear PDF set and member to be used
 pdfset:
   name: "MMHT2014nnlo68cl"

@@ -3,9 +3,10 @@ This is the main module for the trainable model for SIDIS and TMDs.
 """
 
 import torch
+import pathlib
+from omegaconf import OmegaConf
 from .ope import OPE
 from .evolution import PERTURBATIVE_EVOLUTION
-from .evolution_events import PERTURBATIVE_EVOLUTION_EVENT
 from .ogata import OGATA
 
 
@@ -13,9 +14,17 @@ class TrainableModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.opepdf = OPE()
-        # self.evo = PERTURBATIVE_EVOLUTION()
-        self.evo = PERTURBATIVE_EVOLUTION_EVENT()
+        # Load configuration from YAML file
+        # rootdir is the folder named model
+        rootdir = pathlib.Path(__file__).resolve().parent
+
+        # rootdir.joinpath puts everything relative to the model folder
+        self.conf = OmegaConf.load(rootdir.joinpath("../config.yaml"))
+
+        self.opepdf = OPE(rootdir.joinpath(self.conf.ope.grid_file))
+        # self.opeff = OPE() # NOTE: not implemented yet
+
+        self.evo = PERTURBATIVE_EVOLUTION()
 
         self.ogata = OGATA()
 
@@ -30,37 +39,52 @@ class TrainableModel(torch.nn.Module):
         Q = events_tensor[:, 2]  # Hard scale
         z = events_tensor[:, 3]  # Energy fraction of hadron relative to struck quark
 
+        # Compute qT
         qT = PhT / z
 
+        # Setting the bT values for ogata, given qT
         bT = self.ogata.get_bTs(qT)
 
-        # bT = torch.linspace(0.001,10,100)
-        Q20 = torch.tensor([1])  # --we should get this from config
+        # Setting the initial scale
+        Q20 = self.conf.Q20
         Q2 = Q**2
 
+        # OPE for TMD PDFs
         ope = self.opepdf(x, bT)
+
+        # Perturbative evolution
         evolution = self.evo(bT, Q20, Q2)
+
+        # Check
         # print('ope.shape',ope.shape, 'evolution.shape', evolution.shape)
+
+        # NOTE: this is not implemented yet
         # nonperturbative = self.nonperturbative(x, bT, Q2, Q20)
 
         ftilde = ope * evolution  # * nonperturbative
 
         # #--for fragmentation functions (need to build)
-        # ope = self.opepdf(x, bT)
-        # evolution = self.evo(bT, Q20, Q2)
+        # ope = self.opeff(x, bT)
+
+        # Check
         # print('ope.shape',ope.shape, 'evolution.shape', evolution.shape)
+
         # nonperturbative = self.nonperturbative(x, bT, Q2, Q20)
 
         # Dtilde = ope * evolution * nonperturbative
         # #ftilde = evolution
-        # integrand = Dtilde * ftilde #--sum over quark flavors
-        # #print('ope.shape',ope.shape, 'evolution.shape', evolution.shape)
-        # print('evolution.shape', evolution.shape)
 
-        # ogata = self.ogata.eval_ogata_func_var_h(integrand, bT, qT)
-        ogata = self.ogata.eval_ogata_func_var_h(ftilde, bT, qT)
+        # Build integrand, sum over quark flavors
+        integrand = ftilde
+        # integrand = Dtilde * ftilde
+
+        # Check
+        # print('ope.shape',ope.shape, 'evolution.shape', evolution.shape)
+
+        # Hankel transform
+        ogata = self.ogata.eval_ogata_func_var_h(integrand, bT, qT)
+
+        # Check
         # print('ogata.shape', ogata.shape)
-        return ogata
 
-        # --call real Ogata quadrature here
-        # return ope @ evolution
+        return ogata
