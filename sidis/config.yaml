@@ -33,7 +33,8 @@ alphaem:
   run: true
 
 # Parameters of the x-space subgrids on which collinear PDFs are tabulated
-# The first element is the number of points, the second is the initial x point and the third is the interpolation degree
+# The first element is the number of points, the second is the initial x 
+# point and the third is the interpolation degree
 xgridpdf:
   - [100, 1.0e-4, 3]
   - [60, 1.0e-1, 3]
