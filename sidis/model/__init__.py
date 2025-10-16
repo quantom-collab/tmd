@@ -8,6 +8,7 @@ from omegaconf import OmegaConf
 from .ope import OPE
 from .evolution import PERTURBATIVE_EVOLUTION
 from .ogata import OGATA
+from .fnp import *  # Import all from the fnp module
 
 
 class TrainableModel(torch.nn.Module):
@@ -20,6 +21,7 @@ class TrainableModel(torch.nn.Module):
 
         # rootdir.joinpath puts everything relative to the model folder
         self.conf = OmegaConf.load(rootdir.joinpath("../config.yaml"))
+        self.fnpconf = OmegaConf.load(rootdir.joinpath("fNPconfig_flavor_blind.yaml"))
 
         self.opepdf = OPE(rootdir.joinpath(self.conf.ope.grid_file))
         # self.opeff = OPE() # NOTE: not implemented yet
@@ -27,6 +29,12 @@ class TrainableModel(torch.nn.Module):
         self.evo = PERTURBATIVE_EVOLUTION()
 
         self.ogata = OGATA()
+
+        # # Placeholder for non-perturbative function. It initially returns 1.0
+        # self.nonperturbative = (
+        #     lambda x, bT: 2.0
+        # )
+        self.nonperturbative = fnp.fNPManager(self.fnpconf)
 
     def forward(self, events_tensor: torch.Tensor) -> torch.Tensor:
         """
@@ -58,10 +66,13 @@ class TrainableModel(torch.nn.Module):
         # Check
         # print('ope.shape',ope.shape, 'evolution.shape', evolution.shape)
 
-        # NOTE: this is not implemented yet
-        # nonperturbative = self.nonperturbative(x, bT, Q2, Q20)
+        # NOTE: this is not implemented yet.
+        # We ultimately want it to depend on x, bT, Q2, Q20.
+        nonperturbative = self.nonperturbative(x, z, bT)
 
-        ftilde = ope * evolution  # * nonperturbative
+        ftilde = (
+            ope * evolution * nonperturbative["pdfs"]["u"]
+        )  # Using up quark as example
 
         # #--for fragmentation functions (need to build)
         # ope = self.opeff(x, bT)

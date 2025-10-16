@@ -30,9 +30,10 @@ if __name__ == "__main__":
 
     print(f"Loaded events from {events_file}")
     print(f"Event data shape: {events_tensor.shape}")
-    print(f"Events tensor:\n{events_tensor}")
+    print(f"Events tensor:\n{events_tensor}\n")
 
     # Run the model forward pass with the full tensor
+    print("Results from model forward pass:")
     print(model(events_tensor))
 
     # from model.evolution import PERTURBATIVE_EVOLUTION
