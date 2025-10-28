@@ -95,6 +95,7 @@ class fNPManager(nn.Module):
                 print(
                     f"\033[93m[fNPManager] \033[92mUsing MAP22 defaults for PDF flavor '{flavor}'\033[0m"
                 )
+            # TODO: add here the check the else statement if the flavor_cfg is not None
 
             # Create TMD PDF module for this flavor
             pdf_modules[flavor] = TMDPDFBase(

@@ -8,11 +8,11 @@ from omegaconf import OmegaConf
 from .ope import OPE
 from .evolution import PERTURBATIVE_EVOLUTION
 from .ogata import OGATA
-from .fnp import *  # Import all from the fnp module
+from .fnp_manager import fNPManager
 
 
 class TrainableModel(torch.nn.Module):
-    def __init__(self):
+    def __init__(self): # TODO: add configuration in the init
         super().__init__()
 
         # Load configuration from YAML file
@@ -34,7 +34,7 @@ class TrainableModel(torch.nn.Module):
         # self.nonperturbative = (
         #     lambda x, bT: 2.0
         # )
-        self.nonperturbative = fnp.fNPManager(self.fnpconf)
+        self.nonperturbative = fNPManager(self.fnpconf)
 
     def forward(self, events_tensor: torch.Tensor) -> torch.Tensor:
         """
