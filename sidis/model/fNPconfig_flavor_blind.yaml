@@ -9,7 +9,13 @@
 
 # Global settings
 hadron: proton
-zeta: 1.0  # Reference rapidity scale in GeV^2
+
+# Combo selection: specifies which fNP combo implementation to use
+# Available combos: "standard" (flavor-dependent), "flavor_blind" (shared parameters)
+combo: flavor_blind
+
+# Note: zeta (rapidity scale) is no longer specified here.
+# It is computed from Q in the forward methods as zeta = Q² (standard SIDIS).
 
 # Shared evolution factor (applies to both PDFs and FFs)
 evolution:
@@ -36,6 +42,7 @@ ff:
   init_params: [0.21012, 2.12062, 0.093554, 0.25246, 5.2915, 0.033798, 2.1012, 0.093554, 0.25246]
   free_mask: [true, true, true, true, true, true, true, true, true]
 
+# ==========================================
 # Parameter Summary for Flavor-Blind System:
 # ==========================================
 # Evolution: 1 parameter (g2)
@@ -45,25 +52,14 @@ ff:
 #
 # All 21 parameters are trainable by default in this configuration.
 #
-# Comparison with standard system:
-# - Standard: ~161 parameters (8 flavors × 11 PDF + 8 flavors × 9 FF + 1 evolution)
-# - Flavor-blind: 21 parameters  
-# - Parameter reduction: 87%
+# Comparison with flavor-dependent system:
+# - Flavor-dependent: ~161 parameters (8 flavors × 11 PDF + 8 flavors × 9 FF + 1 evolution)
+# - Flavor-blind: 21 parameters 
 #
 # Physical interpretation:
 # - All quark flavors have identical TMD shapes in x and b_T
 # - Only the collinear PDFs/FFs (from APFEL++) distinguish flavors
 # - The non-perturbative contributions are universal across flavors
 # - This is a strong assumption but may be reasonable for phenomenology
-#
-# Benefits:
-# - Dramatically faster fitting (21 vs 161 parameters)
-# - Reduced overfitting risk
-# - Cleaner physical interpretation
-# - Easier parameter analysis and uncertainty propagation
-#
-# Limitations:
-# - Cannot capture flavor-specific TMD behavior
-# - May not describe data as accurately as full flavor-dependent system
-# - Less flexibility for fine-tuning individual flavors
+
 

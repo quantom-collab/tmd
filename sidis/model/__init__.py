@@ -8,11 +8,11 @@ from omegaconf import OmegaConf
 from .ope import OPE
 from .evolution import PERTURBATIVE_EVOLUTION
 from .ogata import OGATA
-from .fnp_manager import fNPManager
+from .fnp_factory import create_fnp_manager
 
 
 class TrainableModel(torch.nn.Module):
-    def __init__(self): # TODO: add configuration in the init
+    def __init__(self):  # TODO: add configuration in the init
         super().__init__()
 
         # Load configuration from YAML file
@@ -30,11 +30,8 @@ class TrainableModel(torch.nn.Module):
 
         self.ogata = OGATA()
 
-        # # Placeholder for non-perturbative function. It initially returns 1.0
-        # self.nonperturbative = (
-        #     lambda x, bT: 2.0
-        # )
-        self.nonperturbative = fNPManager(self.fnpconf)
+        # Create fNP manager using factory (selects combo based on config)
+        self.nonperturbative = create_fnp_manager(config_dict=self.fnpconf)
 
     def forward(self, events_tensor: torch.Tensor) -> torch.Tensor:
         """
@@ -66,21 +63,17 @@ class TrainableModel(torch.nn.Module):
         # Check
         # print('ope.shape',ope.shape, 'evolution.shape', evolution.shape)
 
-        # NOTE: this is not implemented yet.
-        # We ultimately want it to depend on x, bT, Q2, Q20.
-        nonperturbative = self.nonperturbative(x, z, bT)
+        # Compute non-perturbative fNP (depends on x, z, bT, and Q)
+        # Zeta is computed internally as zeta = Q² (standard SIDIS)
+        fNP = self.nonperturbative(x, z, bT, Q)
 
-        ftilde = (
-            ope * evolution * nonperturbative["pdfs"]["u"]
-        )  # Using up quark as example
+        ftilde = ope * evolution * fNP["pdfs"]["u"]  # Using up quark as example
 
         # #--for fragmentation functions (need to build)
         # ope = self.opeff(x, bT)
 
         # Check
         # print('ope.shape',ope.shape, 'evolution.shape', evolution.shape)
-
-        # nonperturbative = self.nonperturbative(x, bT, Q2, Q20)
 
         # Dtilde = ope * evolution * nonperturbative
         # #ftilde = evolution

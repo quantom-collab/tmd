@@ -1,10 +1,20 @@
 """
-Base classes for TMD PDF and FF non-perturbative parameterizations.
+Standard Flavor-Dependent fNP Implementation
 
-This module contains the fundamental building blocks for TMD fNP parameterizations:
-- Evolution factor module (shared across PDFs and FFs)
-- Base TMD PDF class with MAP22 parameterization
-- Base TMD FF class with MAP22 parameterization
+This is a module that provides a specific combination of TMD PDF and TMD FF
+non-perturbative parameterizations in a way that is inspired by the MAP22 parameterization.
+This combo implements the standard flavor-dependent
+system where each quark flavor (u, d, s, ubar, dbar, sbar, c, cbar) has its own
+independent set of parameters.
+
+Contents of this file:
+- Evolution factor module (fNP_evolution): Shared across PDFs and FFs
+- TMD PDF class (TMDPDFBase): MAP22 parameterization with flavor-specific parameters
+- TMD FF class (TMDFFBase): MAP22 parameterization with flavor-specific parameters
+- Default parameter dictionaries: MAP22_DEFAULT_EVOLUTION,
+                                  MAP22_DEFAULT_PDF_PARAMS,
+                                  MAP22_DEFAULT_FF_PARAMS
+- Manager class (fNPManager): Orchestrates the standard combo implementation for PDFs and FFs
 
 Author: Chiara Bissolotti (cbissolotti@anl.gov)
 Based on: MAP22g52.h from NangaParbat C++ implementation
@@ -12,7 +22,7 @@ Based on: MAP22g52.h from NangaParbat C++ implementation
 
 import torch
 import torch.nn as nn
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import math
 
 # IPython imports - handle gracefully if not available
@@ -103,13 +113,17 @@ class fNP_evolution(nn.Module):
         Compute evolution factor S_NP(ζ, b_T).
 
         Args:
-            b (torch.Tensor): fourier-conjugate of k_T (GeV⁻¹)
-            zeta (torch.Tensor): Rapidity scale ζ (GeV²)
+            b (torch.Tensor): fourier-conjugate of k_T (GeV⁻¹) (can be 2D: [n_events, n_b])
+            zeta (torch.Tensor): Rapidity scale ζ (GeV²) (1D: [n_events])
 
         Returns:
             torch.Tensor: Evolution factor exp[-g2² b_T²/4 x ln(ζ/Q₀²)]. Tensor
             has the same shape as b.
         """
+        # Ensure zeta can broadcast with b
+        # If b is 2D [n_events, n_b] and zeta is 1D [n_events], unsqueeze zeta
+        if b.dim() > zeta.dim():
+            zeta = zeta.unsqueeze(-1)
         return torch.exp(
             -(self.g2**2) * (b**2) * torch.log(zeta / self.Q0_squared) / 4.0
         )
@@ -497,3 +511,137 @@ MAP22_DEFAULT_FF_PARAMS = {
     ],
     "free_mask": [True] * 9,
 }
+
+
+###############################################################################
+# 4. Manager Class
+###############################################################################
+class fNPManager(nn.Module):
+    """
+    Manager for standard (flavor-dependent) fNP system.
+
+    This manager orchestrates the standard combo implementation for PDFs and FFs
+    where each flavor has its own independent set of parameters.
+    """
+
+    def __init__(self, config: Dict[str, Any]):
+        """
+        Initialize the fNP manager with unified PDF/FF configuration.
+
+        Args:
+            config (Dict): Configuration dictionary containing:
+                - hadron: target hadron type
+                - evolution: shared evolution parameters
+                - pdfs: PDF flavor configurations
+                - ffs: FF flavor configurations
+        """
+        super().__init__()
+
+        self.hadron = config.get("hadron", "proton")
+        self.pdf_flavor_keys = ["u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"]
+        self.ff_flavor_keys = ["u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"]
+
+        # Setup evolution
+        evolution_config = config.get("evolution", {})
+        init_g2 = evolution_config.get("init_g2", 0.12840)
+        free_mask = evolution_config.get("free_mask", [True])
+        self.evolution = fNP_evolution(init_g2=init_g2, free_mask=free_mask)
+
+        # Setup PDF modules
+        pdf_config = config.get("pdfs", {})
+        pdf_modules = {}
+        for flavor in self.pdf_flavor_keys:
+            flavor_cfg = pdf_config.get(flavor, None)
+            if flavor_cfg is None:
+                flavor_cfg = MAP22_DEFAULT_PDF_PARAMS.copy()
+            pdf_modules[flavor] = TMDPDFBase(
+                n_flavors=1,
+                init_params=flavor_cfg["init_params"],
+                free_mask=flavor_cfg["free_mask"],
+            )
+        self.pdf_modules = nn.ModuleDict(pdf_modules)
+
+        # Setup FF modules
+        ff_config = config.get("ffs", {})
+        ff_modules = {}
+        for flavor in self.ff_flavor_keys:
+            flavor_cfg = ff_config.get(flavor, None)
+            if flavor_cfg is None:
+                flavor_cfg = MAP22_DEFAULT_FF_PARAMS.copy()
+            ff_modules[flavor] = TMDFFBase(
+                n_flavors=1,
+                init_params=flavor_cfg["init_params"],
+                free_mask=flavor_cfg["free_mask"],
+            )
+        self.ff_modules = nn.ModuleDict(ff_modules)
+
+    def _compute_zeta(self, Q: torch.Tensor) -> torch.Tensor:
+        """
+        Compute rapidity scale zeta from hard scale Q.
+
+        zeta = Q²
+
+        This is a standard choice in the TMD framework.
+        """
+        return Q**2
+
+    def forward_pdf(
+        self,
+        x: torch.Tensor,
+        b: torch.Tensor,
+        Q: torch.Tensor,
+        flavors: Optional[List[str]] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """Evaluate TMD PDFs for specified flavors."""
+        if flavors is None:
+            flavors = self.pdf_flavor_keys
+
+        zeta = self._compute_zeta(Q)
+        shared_evol = self.evolution(b, zeta)
+
+        outputs = {}
+        for flavor in flavors:
+            if flavor in self.pdf_modules:
+                outputs[flavor] = self.pdf_modules[flavor](x, b, shared_evol, 0)
+            else:
+                raise ValueError(f"Unknown PDF flavor: {flavor}")
+        return outputs
+
+    def forward_ff(
+        self,
+        z: torch.Tensor,
+        b: torch.Tensor,
+        Q: torch.Tensor,
+        flavors: Optional[List[str]] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """Evaluate TMD FFs for specified flavors."""
+        if flavors is None:
+            flavors = self.ff_flavor_keys
+
+        zeta = self._compute_zeta(Q)
+        shared_evol = self.evolution(b, zeta)
+
+        outputs = {}
+        for flavor in flavors:
+            if flavor in self.ff_modules:
+                outputs[flavor] = self.ff_modules[flavor](z, b, shared_evol, 0)
+            else:
+                raise ValueError(f"Unknown FF flavor: {flavor}")
+        return outputs
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        z: torch.Tensor,
+        b: torch.Tensor,
+        Q: torch.Tensor,
+        pdf_flavors: Optional[List[str]] = None,
+        ff_flavors: Optional[List[str]] = None,
+    ) -> Dict[str, Dict[str, torch.Tensor]]:
+        """Evaluate both TMD PDFs and FFs simultaneously."""
+        x = x.unsqueeze(-1)
+        z = z.unsqueeze(-1)
+        return {
+            "pdfs": self.forward_pdf(x, b, Q, pdf_flavors),
+            "ffs": self.forward_ff(z, b, Q, ff_flavors),
+        }

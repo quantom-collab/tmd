@@ -1,10 +1,23 @@
 """
-Flavor-blind fNP base classes for TMD PDFs and FFs.
+COMBO FILE: Flavor-Blind fNP Implementation
 
-This module implements flavor-blind parameterizations where ALL flavors share
-the exact same parameters and evolve together. Unlike the standard system where
-each flavor has its own parameter set, here all flavors use identical parameters
-that change simultaneously during optimization.
+This is a "combo" file that provides a specific combination of TMD PDF and TMD FF
+non-perturbative parameterizations. This combo implements a flavor-blind system where
+ALL flavors (u, d, s, ubar, dbar, sbar, c, cbar) share the exact same parameters and
+evolve together. Unlike the standard system where each flavor has its own parameter set,
+here all flavors use identical parameters that change simultaneously during optimization.
+
+COMBO CONTENTS:
+- Evolution factor module (fNP_evolution): Shared across PDFs and FFs
+- TMD PDF class (TMDPDFFlavorBlind): MAP22 parameterization with shared parameters for all flavors
+- TMD FF class (TMDFFFlavorBlind): MAP22 parameterization with shared parameters for all flavors
+- Default parameter dictionaries: MAP22_DEFAULT_EVOLUTION_FLAVOR_BLIND, MAP22_DEFAULT_PDF_PARAMS_FLAVOR_BLIND, MAP22_DEFAULT_FF_PARAMS_FLAVOR_BLIND
+
+This combo is registered in the fNP registry as "flavor_blind" and is used by fNPManagerFlavorBlind.
+
+Parameter count comparison:
+- Standard combo: ~160 parameters (8 flavors x 11 PDF + 8 flavors x 9 FF + 1 evolution)
+- Flavor-blind combo: 21 parameters (11 PDF + 9 FF + 1 evolution)
 
 Author: Chiara Bissolotti (cbissolotti@anl.gov)
 Based on MAP22 parameterization from NangaParbat (MAP22g52.h)
@@ -12,7 +25,7 @@ Based on MAP22 parameterization from NangaParbat (MAP22g52.h)
 
 import torch
 import torch.nn as nn
-from typing import List
+from typing import List, Dict, Any, Optional
 import numpy as np
 
 
@@ -73,13 +86,17 @@ class fNP_evolution(nn.Module):
         Compute evolution factor S_NP(ζ, b_T).
 
         Args:
-            b (torch.Tensor): b_T in GeV⁻¹
-            zeta (torch.Tensor): Rapidity scale ζ in GeV²
+            b (torch.Tensor): b_T in GeV⁻¹ (can be 2D: [n_events, n_b])
+            zeta (torch.Tensor): Rapidity scale ζ in GeV² (1D: [n_events])
 
         Returns:
             torch.Tensor: Evolution factor S_NP. The tensor
             has the same shape as b.
         """
+        # Ensure zeta can broadcast with b
+        # If b is 2D [n_events, n_b] and zeta is 1D [n_events], unsqueeze zeta
+        if b.dim() > zeta.dim():
+            zeta = zeta.unsqueeze(-1)
         return torch.exp(-(self.g2**2) * b**2 * torch.log(zeta / self.Q0_squared) / 4.0)
 
 
@@ -170,6 +187,10 @@ class TMDPDFFlavorBlind(nn.Module):
             Unlike the standard implementation, this flavor-blind version doesn't
             accept zeta (not used in MAP22) or flavor (all flavors identical).
         """
+        # Ensure x can broadcast with b (x: [n_events], b: [n_events, n_b])
+        if b.dim() > x.dim():
+            x = x.unsqueeze(-1)
+
         # Handle x >= 1 case (return zero)
         if torch.any(x >= 1):
             mask_val = (x < 1).type_as(NP_evol)
@@ -307,6 +328,10 @@ class TMDFFFlavorBlind(nn.Module):
         Returns:
             torch.Tensor: TMD FF D_NP(z, b) - identical for all flavors
         """
+        # Ensure z can broadcast with b (z: [n_events], b: [n_events, n_b])
+        if b.dim() > z.dim():
+            z = z.unsqueeze(-1)
+
         # Handle z >= 1 case (return zero)
         if torch.any(z >= 1):
             mask_val = (z < 1).type_as(NP_evol)
@@ -396,3 +421,139 @@ MAP22_DEFAULT_FF_PARAMS_FLAVOR_BLIND = {
     ],
     "free_mask": [True] * 9,  # All parameters trainable by default
 }
+
+
+###############################################################################
+# 4. Manager Class (incorporated into combo file)
+###############################################################################
+class fNPManager(nn.Module):
+    """
+    Manager for flavor-blind fNP system.
+
+    This manager orchestrates the flavor-blind combo implementation where
+    all flavors share identical parameters.
+    """
+
+    def __init__(self, config: Dict[str, Any]):
+        """
+        Initialize flavor-blind fNP manager from configuration.
+
+        Args:
+            config (Dict[str, Any]): Configuration dictionary containing:
+                - hadron: Hadron type (e.g., "proton")
+                - evolution: Evolution configuration
+                - pdf: Single PDF configuration (applies to all flavors)
+                - ff: Single FF configuration (applies to all flavors)
+        """
+        super().__init__()
+
+        self.config = config
+        self.hadron = config.get("hadron", "proton")
+        self.flavor_keys = ["u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"]
+
+        # Setup evolution
+        evolution_config = config.get("evolution", {})
+        if not evolution_config:
+            evolution_config = MAP22_DEFAULT_EVOLUTION_FLAVOR_BLIND.copy()
+        self.evolution = fNP_evolution(
+            init_g2=evolution_config.get("init_g2", 0.12840),
+            free_mask=evolution_config.get("free_mask", [True]),
+        )
+
+        # Setup PDF module
+        pdf_config = config.get("pdf", {})
+        if not pdf_config:
+            pdf_config = MAP22_DEFAULT_PDF_PARAMS_FLAVOR_BLIND.copy()
+        self.pdf_module = TMDPDFFlavorBlind(
+            init_params=pdf_config.get(
+                "init_params", MAP22_DEFAULT_PDF_PARAMS_FLAVOR_BLIND["init_params"]
+            ),
+            free_mask=pdf_config.get(
+                "free_mask", MAP22_DEFAULT_PDF_PARAMS_FLAVOR_BLIND["free_mask"]
+            ),
+        )
+
+        # Setup FF module
+        ff_config = config.get("ff", {})
+        if not ff_config:
+            ff_config = MAP22_DEFAULT_FF_PARAMS_FLAVOR_BLIND.copy()
+        self.ff_module = TMDFFFlavorBlind(
+            init_params=ff_config.get(
+                "init_params", MAP22_DEFAULT_FF_PARAMS_FLAVOR_BLIND["init_params"]
+            ),
+            free_mask=ff_config.get(
+                "free_mask", MAP22_DEFAULT_FF_PARAMS_FLAVOR_BLIND["free_mask"]
+            ),
+        )
+
+    def _compute_zeta(self, Q: torch.Tensor) -> torch.Tensor:
+        """
+        Compute rapidity scale zeta from hard scale Q.
+
+        ZETA COMPUTATION: zeta = Q² (standard SIDIS)
+
+        This is the standard choice for SIDIS processes. If you need a different
+        formula (e.g., zeta = Q² * z), modify this method.
+        """
+        return Q**2
+
+    def forward_pdf(
+        self,
+        x: torch.Tensor,
+        b: torch.Tensor,
+        Q: torch.Tensor,
+        flavors: Optional[List[str]] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """Evaluate TMD PDFs for specified flavors."""
+        if flavors is None:
+            flavors = self.flavor_keys
+
+        zeta = self._compute_zeta(Q)
+        shared_evol = self.evolution(b, zeta)
+        shared_pdf_result = self.pdf_module(x, b, shared_evol)
+
+        outputs = {}
+        for flavor in flavors:
+            if flavor in self.flavor_keys:
+                outputs[flavor] = shared_pdf_result
+            else:
+                raise ValueError(f"Unknown PDF flavor: {flavor}")
+        return outputs
+
+    def forward_ff(
+        self,
+        z: torch.Tensor,
+        b: torch.Tensor,
+        Q: torch.Tensor,
+        flavors: Optional[List[str]] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """Evaluate TMD FFs for specified flavors."""
+        if flavors is None:
+            flavors = self.flavor_keys
+
+        zeta = self._compute_zeta(Q)
+        shared_evol = self.evolution(b, zeta)
+        shared_ff_result = self.ff_module(z, b, shared_evol)
+
+        outputs = {}
+        for flavor in flavors:
+            if flavor in self.flavor_keys:
+                outputs[flavor] = shared_ff_result
+            else:
+                raise ValueError(f"Unknown FF flavor: {flavor}")
+        return outputs
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        z: torch.Tensor,
+        b: torch.Tensor,
+        Q: torch.Tensor,
+        pdf_flavors: Optional[List[str]] = None,
+        ff_flavors: Optional[List[str]] = None,
+    ) -> Dict[str, Dict[str, torch.Tensor]]:
+        """Evaluate both TMD PDFs and FFs simultaneously."""
+        return {
+            "pdfs": self.forward_pdf(x, b, Q, pdf_flavors),
+            "ffs": self.forward_ff(z, b, Q, ff_flavors),
+        }

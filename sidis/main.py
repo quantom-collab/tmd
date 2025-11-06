@@ -16,26 +16,29 @@ if __name__ == "__main__":
     # Get the directory containing this script
     rootdir = pathlib.Path(__file__).resolve().parent
 
-    # Uncomment to set output directory relative to script location:
-    # conf.outdir = rootdir.joinpath(conf.outdir)
-
     # Initialize the trainable model for TMD
     # parton distribution functions and fragmentation functions
     model = TrainableModel()
 
     # Load event data from file as a tensor
     events_file = rootdir.joinpath("toy_events.dat")
-
     events_tensor = torch.load(events_file)
 
+    # Print out some information about the events
     print(f"Loaded events from {events_file}")
     print(f"Event data shape: {events_tensor.shape}")
     print(f"Events tensor:\n{events_tensor}\n")
 
     # Run the model forward pass with the full tensor
-    print("Results from model forward pass:")
+    print(f"\033[92mResults from model forward pass:\033[0m")
     print(model(events_tensor))
 
+    """
+    NOTE FROM CHIARA: I'm not sure if this is needed, or why the following is here
+    but I'm keeping it here for now.
+    Isn't the perturbative evolution part of the model, and therefore already called
+    in the model = TrainableModel() instantiation?
+    """
     # from model.evolution import PERTURBATIVE_EVOLUTION
     # import qcdlib.params as params
 
