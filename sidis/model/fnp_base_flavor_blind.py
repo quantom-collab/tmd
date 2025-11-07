@@ -26,6 +26,15 @@ import torch.nn as nn
 from typing import List, Dict, Any, Optional
 import numpy as np
 
+# Import tcolors - handle both relative and absolute imports
+try:
+    from ..utilities.colors import tcolors
+except ImportError:
+    try:
+        from utilities.colors import tcolors
+    except ImportError:
+        from sidis.utilities.colors import tcolors
+
 
 ###############################################################################
 # 1. Shared Evolution (same as standard fNP)
@@ -140,11 +149,11 @@ class TMDPDFFlavorBlind(nn.Module):
         # Validate parameters
         if len(init_params) != 11:
             raise ValueError(
-                f"\033[91m[fnp_base_flavor_blind.py] MAP22 TMD PDF requires 11 parameters, got {len(init_params)}\033[0m"
+                f"{tcolors.FAIL}[fnp_base_flavor_blind.py] MAP22 TMD PDF requires 11 parameters, got {len(init_params)}{tcolors.ENDC}"
             )
         if len(free_mask) != len(init_params):
             raise ValueError(
-                f"\033[91m[fnp_base_flavor_blind.py] free_mask length ({len(free_mask)}) must match init_params length ({len(init_params)})\033[0m"
+                f"{tcolors.FAIL}[fnp_base_flavor_blind.py] free_mask length ({len(free_mask)}) must match init_params length ({len(init_params)}){tcolors.ENDC}"
             )
 
         self.n_params = len(init_params)
@@ -498,38 +507,38 @@ class fNPManager(nn.Module):
         self.flavor_keys = ["u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"]
 
         # Print out messages to the user
-        print(f"\033[94m\n[fNPManager] Initializing flavor-blind fNP manager")
+        print(f"{tcolors.BLUE}\n[fNPManager] Initializing flavor-blind fNP manager")
         print(f"  Hadron: {self.hadron}")
         print(f"  Total number of flavors: {len(self.flavor_keys)}")
-        print(f"  All flavors will share identical parameters\n\033[0m")
+        print(f"  All flavors will share identical parameters\n{tcolors.ENDC}")
 
         # Setup evolution (shared across PDFs and FFs)
         evolution_config = config.get("evolution", {})
         if not evolution_config:
             print(
-                f"\033[93m[fNPManager] Warning: Using MAP22 defaults for evolution parameters\033[0m"
+                f"{tcolors.WARNING}[fNPManager] Warning: Using MAP22 defaults for evolution parameters{tcolors.ENDC}"
             )
             evolution_config = MAP22_DEFAULT_EVOLUTION_FLAVOR_BLIND.copy()
         else:
             print(
-                f"\033[34m[fNPManager] Using user-defined evolution parameters\033[0m"
+                f"{tcolors.OKLIGHTBLUE}[fNPManager] Using user-defined evolution parameters{tcolors.ENDC}"
             )
         self.evolution = fNP_evolution(
             init_g2=evolution_config.get("init_g2", 0.12840),
             free_mask=evolution_config.get("free_mask", [True]),
         )
-        print(f"\033[92m[fNPManager] Initialized shared evolution module\033[0m")
+        print(f"{tcolors.GREEN}[fNPManager] Initialized shared evolution module{tcolors.ENDC}")
 
         # Setup PDF module (single module serves all flavors)
         pdf_config = config.get("pdf", {})
         if not pdf_config:
             print(
-                f"\033[93m[fNPManager] Warning: Using MAP22 defaults for PDF parameters (applies to all flavors)\033[0m"
+                f"{tcolors.WARNING}[fNPManager] Warning: Using MAP22 defaults for PDF parameters (applies to all flavors){tcolors.ENDC}"
             )
             pdf_config = MAP22_DEFAULT_PDF_PARAMS_FLAVOR_BLIND.copy()
         else:
             print(
-                f"\033[34m[fNPManager] Using user-defined PDF parameters (applies to all flavors)\033[0m"
+                f"{tcolors.OKLIGHTBLUE}[fNPManager] Using user-defined PDF parameters (applies to all flavors){tcolors.ENDC}"
             )
         self.pdf_module = TMDPDFFlavorBlind(
             init_params=pdf_config.get(
@@ -540,19 +549,19 @@ class fNPManager(nn.Module):
             ),
         )
         print(
-            f"\033[92m[fNPManager] Initialized single PDF module serving all {len(self.flavor_keys)} flavors\n\033[0m"
+            f"{tcolors.GREEN}[fNPManager] Initialized single PDF module serving all {len(self.flavor_keys)} flavors\n{tcolors.ENDC}"
         )
 
         # Setup FF module (single module serves all flavors)
         ff_config = config.get("ff", {})
         if not ff_config:
             print(
-                f"\033[93m[fNPManager] Warning: Using MAP22 defaults for FF parameters (applies to all flavors)\033[0m"
+                f"{tcolors.WARNING}[fNPManager] Warning: Using MAP22 defaults for FF parameters (applies to all flavors){tcolors.ENDC}"
             )
             ff_config = MAP22_DEFAULT_FF_PARAMS_FLAVOR_BLIND.copy()
         else:
             print(
-                f"\033[34m[fNPManager] Using user-defined FF parameters (applies to all flavors)\033[0m"
+                f"{tcolors.OKLIGHTBLUE}[fNPManager] Using user-defined FF parameters (applies to all flavors){tcolors.ENDC}"
             )
         self.ff_module = TMDFFFlavorBlind(
             init_params=ff_config.get(
@@ -563,7 +572,7 @@ class fNPManager(nn.Module):
             ),
         )
         print(
-            f"\033[92m[fNPManager] Initialized single FF module serving all {len(self.flavor_keys)} flavors\n\033[0m"
+            f"{tcolors.GREEN}[fNPManager] Initialized single FF module serving all {len(self.flavor_keys)} flavors\n{tcolors.ENDC}"
         )
 
     def _compute_zeta(self, Q: torch.Tensor) -> torch.Tensor:
@@ -631,7 +640,7 @@ class fNPManager(nn.Module):
 
         # # Print out message to the user
         # print(
-        #     f"\033[92m[fNPManager] Outputs for {len(outputs)} PDF flavors: all identical (flavor-blind)\n\033[0m"
+        #     f"{tcolors.GREEN}[fNPManager] Outputs for {len(outputs)} PDF flavors: all identical (flavor-blind)\n{tcolors.ENDC}"
         # )
         return outputs
 

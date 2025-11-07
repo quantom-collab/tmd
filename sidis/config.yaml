@@ -1,10 +1,6 @@
 
-# This is an example of the configuration file for the SIDIS cross section computation.
-# It is based on the configuration used in SIDIS_apfelpy.ipynb from the map codes.
-# We need to modify this file to fit our needs.
-
-
-# Perturbative order of the computation. 0: LL, 1: NLL, 2: NNLL, 3: NNNLL, -1: NLL', -2: NNLL'
+# Perturbative order of the computation. 
+# 0: LL, 1: NLL, 2: NNLL, 3: NNNLL, -1: NLL', -2: NNLL'
 PerturbativeOrder: 3
 
 # Path of the OPE grids
@@ -35,48 +31,8 @@ alphaem:
   Qref: 91.1876
   run: true
 
-# Parameters of the x-space subgrids on which collinear PDFs are tabulated
-# The first element is the number of points, the second is the initial x 
-# point and the third is the interpolation degree
-xgridpdf:
-  - [100, 1.0e-4, 3]
-  - [60, 1.0e-1, 3]
-  - [50, 6.0e-1, 3]
-  - [50, 8.0e-1, 3]
-
-# Parameters of the x-space subgrids on which collinear FFs are tabulated
-xgridff:
-  - [60, 1.0e-2, 3]
-  - [50, 6.0e-1, 3]
-  - [50, 8.0e-1, 3]
-
-# Number of points, interpolation degree, and integration accuracy of the grid in Q
-Qgrid:
-  n: 100
-  InterDegree: 3
-  eps: 1.0e-3
-
-# Number of points, interpolation degree, and integration accuracy of the grid in Bjorken x (used for SIDIS)
-xbgrid:
-  n: 100
-  InterDegree: 2
-  eps: 1.0e-3
-
-# Number of points, interpolation degree, and integration accuracy of the grid in z (used for SIDIS)
-zgrid:
-  n: 100
-  InterDegree: 2
-  eps: 1.0e-3
-
 # qT/Q cut for computation
-qToQcut: 10
-
-# # b-space grid configuration for PyTorch integration
-# # Used for differentiable trapezoidal integration as alternative to Ogata quadrature
-# bgrid:
-#   b_min: 1.0e-2    # Minimum b value (GeV^-1)
-#   b_max: 2.0       # Maximum b value (GeV^-1)  
-#   Nb: 256          # Number of grid points (logarithmically spaced)
+qToQcut: 0.2
 
 # b-space grid configuration for PyTorch integration for Ogata quadrature
 # Used for differentiable trapezoidal integration as alternative to Ogata quadrature

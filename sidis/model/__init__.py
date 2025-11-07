@@ -12,7 +12,14 @@ from .fnp_factory import create_fnp_manager
 
 
 class TrainableModel(torch.nn.Module):
-    def __init__(self):  # TODO: add configuration in the init
+    def __init__(self, fnp_config: str = None):
+        """
+        Initialize the trainable model for SIDIS TMD cross-section computation.
+
+        Args:
+            fnp_config (str, optional): Name of the fNP configuration file in cards/ directory.
+                                       If None, defaults to 'fNPconfig_base_flavor_blind.yaml'.
+        """
         super().__init__()
 
         # Load configuration from YAML file
@@ -23,9 +30,19 @@ class TrainableModel(torch.nn.Module):
         self.conf = OmegaConf.load(rootdir.joinpath("../config.yaml"))
 
         # Load fNP config from cards folder
-        # Change this path to switch between available configurations.
-        # fnp_config_path = rootdir.joinpath("../cards/fNPconfig_base_flavor_dep.yaml")
-        fnp_config_path = rootdir.joinpath("../cards/fNPconfig_base_flavor_blind.yaml")
+        # If fnp_config is not provided, use default
+        if fnp_config is None:
+            fnp_config = "fNPconfig_base_flavor_blind.yaml"
+
+        # Construct full path to config file in cards/ directory
+        fnp_config_path = rootdir.joinpath("../cards", fnp_config)
+
+        # Validate that the config file exists
+        if not fnp_config_path.exists():
+            raise FileNotFoundError(
+                f"fNP configuration file not found: {fnp_config_path}\n"
+                f"Please ensure the file exists in the cards/ directory."
+            )
 
         self.fnpconf = OmegaConf.load(fnp_config_path)
 

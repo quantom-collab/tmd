@@ -25,6 +25,15 @@ import torch.nn as nn
 from typing import List, Optional, Dict, Any
 import math
 
+# Import tcolors - handle both relative and absolute imports
+try:
+    from ..utilities.colors import tcolors
+except ImportError:
+    try:
+        from utilities.colors import tcolors
+    except ImportError:
+        from sidis.utilities.colors import tcolors
+
 # IPython imports - handle gracefully if not available
 try:
     import importlib
@@ -80,7 +89,7 @@ class fNP_evolution(nn.Module):
         # Validate input
         if len(free_mask) != 1:
             raise ValueError(
-                f"[fnp_base.py] \033[91mEvolution free_mask must have exactly 1 element, got {len(free_mask)}\033[0m"
+                f"[fnp_base.py] {tcolors.FAIL}Evolution free_mask must have exactly 1 element, got {len(free_mask)}{tcolors.ENDC}"
             )
 
         # Reference scale Q_0^2 = 1 GeV^2 (MAP22 standard)
@@ -169,11 +178,11 @@ class TMDPDFBase(nn.Module):
         # Validate parameters
         if len(init_params) != 11:
             raise ValueError(
-                f"[fnp_base.py] \033[91mMAP22 TMD PDF requires 11 parameters, got {len(init_params)}\033[0m"
+                f"[fnp_base.py] {tcolors.FAIL}MAP22 TMD PDF requires 11 parameters, got {len(init_params)}{tcolors.ENDC}"
             )
         if len(free_mask) != len(init_params):
             raise ValueError(
-                f"[fnp_base.py] \033[91mfree_mask length ({len(free_mask)}) must match init_params length ({len(init_params)})\033[0m"
+                f"[fnp_base.py] {tcolors.FAIL}free_mask length ({len(free_mask)}) must match init_params length ({len(init_params)}){tcolors.ENDC}"
             )
 
         # Set attributes
@@ -376,11 +385,11 @@ class TMDFFBase(nn.Module):
         # Validate parameters
         if len(init_params) != 9:
             raise ValueError(
-                f"[fnp_base.py] \033[91mMAP22 TMD FF requires 9 parameters, got {len(init_params)}\033[0m"
+                f"[fnp_base.py] {tcolors.FAIL}MAP22 TMD FF requires 9 parameters, got {len(init_params)}{tcolors.ENDC}"
             )
         if len(free_mask) != len(init_params):
             raise ValueError(
-                f"[fnp_base.py] \033[91mfree_mask length ({len(free_mask)}) must match init_params length ({len(init_params)})\033[0m"
+                f"[fnp_base.py] {tcolors.FAIL}free_mask length ({len(free_mask)}) must match init_params length ({len(init_params)}){tcolors.ENDC}"
             )
 
         self.n_flavors = n_flavors  # Number of flavors sharing this parameter set
@@ -580,9 +589,9 @@ class fNPManager(nn.Module):
         self.ff_flavor_keys = ["u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"]
 
         # Print out messages to the user
-        print(f"\033[94m\n[fNPManager] Initializing flavor-dependent fNP manager")
+        print(f"{tcolors.BLUE}\n[fNPManager] Initializing flavor-dependent fNP manager")
         print(f"  Hadron: {self.hadron}")
-        print(f"  Total number of flavors: {len(self.pdf_flavor_keys)}\n\033[0m")
+        print(f"  Total number of flavors: {len(self.pdf_flavor_keys)}\n{tcolors.ENDC}")
 
         # Setup evolution
         evolution_config = config.get("evolution", {})
@@ -597,12 +606,12 @@ class fNPManager(nn.Module):
             flavor_cfg = pdf_config.get(flavor, None)
             if flavor_cfg is None:
                 print(
-                    f"\033[93m[fNPManager] Warning: Using MAP22 defaults for PDF flavor '{flavor}'\033[0m"
+                    f"{tcolors.WARNING}[fNPManager] Warning: Using MAP22 defaults for PDF flavor '{flavor}'{tcolors.ENDC}"
                 )
                 flavor_cfg = MAP22_DEFAULT_PDF_PARAMS.copy()
             else:
                 print(
-                    f"\033[34m[fNPManager] Using user-defined PDF flavor '{flavor}'\033[0m"
+                    f"{tcolors.OKLIGHTBLUE}[fNPManager] Using user-defined PDF flavor '{flavor}'{tcolors.ENDC}"
                 )
             # Create TMD PDF module for this flavor
             pdf_modules[flavor] = TMDPDFBase(
@@ -613,7 +622,7 @@ class fNPManager(nn.Module):
         # Register the PDF modules as a module dictionary
         self.pdf_modules = nn.ModuleDict(pdf_modules)
         print(
-            f"\033[92m[fNPManager] Initialized {len(self.pdf_modules)} PDF flavor modules\n\033[0m"
+            f"{tcolors.GREEN}[fNPManager] Initialized {len(self.pdf_modules)} PDF flavor modules\n{tcolors.ENDC}"
         )
 
         # Setup FF modules
@@ -623,11 +632,11 @@ class fNPManager(nn.Module):
             flavor_cfg = ff_config.get(flavor, None)
             if flavor_cfg is None:
                 print(
-                    f"\033[93m[fNPManager] Warning: Using MAP22 defaults for FF flavor '{flavor}'\033[0m"
+                    f"{tcolors.WARNING}[fNPManager] Warning: Using MAP22 defaults for FF flavor '{flavor}'{tcolors.ENDC}"
                 )
             else:
                 print(
-                    f"\033[34m[fNPManager] Using user-defined FF flavor '{flavor}'\033[0m"
+                    f"{tcolors.OKLIGHTBLUE}[fNPManager] Using user-defined FF flavor '{flavor}'{tcolors.ENDC}"
                 )
             ff_modules[flavor] = TMDFFBase(
                 n_flavors=1,
@@ -640,7 +649,7 @@ class fNPManager(nn.Module):
             )
         self.ff_modules = nn.ModuleDict(ff_modules)
         print(
-            f"\033[92m[fNPManager] Initialized {len(self.ff_modules)} FF flavor modules\n\033[0m"
+            f"{tcolors.GREEN}[fNPManager] Initialized {len(self.ff_modules)} FF flavor modules\n{tcolors.ENDC}"
         )
 
     def _compute_zeta(self, Q: torch.Tensor) -> torch.Tensor:
@@ -676,7 +685,7 @@ class fNPManager(nn.Module):
 
         # # Print out message to the user
         # print(
-        #     f"\033[92m[fNPManager] Outputs for {len(outputs)} PDF flavors: {outputs[list(outputs.keys())]} (events, b_T, flavors)\n\033[0m"
+        #     f"{tcolors.GREEN}[fNPManager] Outputs for {len(outputs)} PDF flavors: {outputs[list(outputs.keys())]} (events, b_T, flavors)\n{tcolors.ENDC}"
         # )
         return outputs
 
