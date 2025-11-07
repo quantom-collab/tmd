@@ -59,6 +59,7 @@ def create_fnp_manager(config_path: str = None, config_dict: Dict[str, Any] = No
     combo_name = config.get("combo", "flavor_blind")  # Default to flavor_blind
 
     if combo_name not in COMBO_MODULES:
+        # Print available combos
         available = ", ".join(COMBO_MODULES.keys())
         raise ValueError(f"Unknown combo '{combo_name}'. Available combos: {available}")
 
@@ -75,9 +76,11 @@ def create_fnp_manager(config_path: str = None, config_dict: Dict[str, Any] = No
             f"Combo module '{module_path}' does not export 'fNPManager' class"
         )
 
+    # Get the manager class from the module
     manager_class = module.fNPManager
 
     # Create and return manager instance
+    # The manager class is initialized with the configuration
     manager = manager_class(config)
 
     return manager

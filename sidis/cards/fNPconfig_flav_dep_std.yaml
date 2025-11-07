@@ -1,0 +1,121 @@
+# Unified fNP Configuration for TMD PDFs and FFs
+# Based on MAP22 parameterization from NangaParbat
+# Author: Chiara Bissolotti (cbissolotti@anl.gov)
+
+# Global settings
+hadron: proton
+
+# Combo selection: specifies which fNP combo implementation to use
+# Available combos: "standard" (flavor-dependent), "flavor_blind" (shared parameters)
+combo: standard
+
+# Note: zeta (rapidity scale) is no longer specified here.
+# It is computed from Q in the forward methods as zeta = Q² (standard SIDIS).
+
+# Shared evolution factor (applies to both PDFs and FFs)
+# S_NP(ζ, b_T) = exp[-g₂² b_T²/4 × ln(ζ/Q₀²)]
+evolution:
+  init_g2: 0.12840      # Evolution parameter g₂ (from MAP22)
+  free_mask: [true]     # g2 is trainable
+
+# TMD PDF parameterizations (MAP22 implementation)
+# f_NP(x, b_T) = S_NP × [numerator] / [denominator]
+# Parameters: [N₁, α₁, σ₁, λ, N₁ᵦ, N₁ᶜ, λ₂, α₂, α₃, σ₂, σ₃] (11 params)
+pdfs:
+  u:
+    # Up quark - fully parameterized with MAP22
+    init_params: [0.28516, 2.9755, 0.17293, 0.39432, 0.28516, 0.28516, 0.39432, 2.9755, 2.9755, 0.17293, 0.17293]
+    free_mask: [true, true, true, true, true, true, true, true, true, true, true]
+    
+  d:
+    # Down quark - independent parameterization
+    init_params: [0.25000, 2.8000, 0.16000, 0.35000, 0.25000, 0.25000, 0.35000, 2.8000, 2.8000, 0.16000, 0.16000]
+    free_mask: [true, true, true, true, true, true, true, true, true, true, true]
+    
+  s:
+    # Strange quark - reduced parameterization
+    init_params: [0.20000, 2.5000, 0.15000, 0.30000, 0.20000, 0.20000, 0.30000, 2.5000, 2.5000, 0.15000, 0.15000]
+    free_mask: [true, true, false, true, false, false, false, true, true, false, false]
+    
+  ubar:
+    # Up antiquark - simplified (fewer free parameters)
+    init_params: [0.15000, 2.0000, 0.12000, 0.25000, 0.15000, 0.15000, 0.25000, 2.0000, 2.0000, 0.12000, 0.12000]
+    free_mask: [true, true, false, true, false, false, false, false, false, false, false]
+    
+  dbar:
+    # Down antiquark - simplified (fewer free parameters)
+    init_params: [0.15000, 2.0000, 0.12000, 0.25000, 0.15000, 0.15000, 0.25000, 2.0000, 2.0000, 0.12000, 0.12000]
+    free_mask: [true, true, false, true, false, false, false, false, false, false, false]
+    
+  sbar:
+    # Strange antiquark - minimal parameterization
+    init_params: [0.10000, 2.0000, 0.10000, 0.20000, 0.10000, 0.10000, 0.20000, 2.0000, 2.0000, 0.10000, 0.10000]
+    free_mask: [true, false, false, false, false, false, false, false, false, false, false]
+    
+  c:
+    # Charm quark - minimal parameterization (mostly fixed)
+    init_params: [0.05000, 1.5000, 0.08000, 0.15000, 0.05000, 0.05000, 0.15000, 1.5000, 1.5000, 0.08000, 0.08000]
+    free_mask: [true, false, false, false, false, false, false, false, false, false, false]
+    
+  cbar:
+    # Charm antiquark - minimal parameterization (mostly fixed)
+    init_params: [0.05000, 1.5000, 0.08000, 0.15000, 0.05000, 0.05000, 0.15000, 1.5000, 1.5000, 0.08000, 0.08000]
+    free_mask: [true, false, false, false, false, false, false, false, false, false, false]
+
+# TMD FF parameterizations (MAP22 implementation)
+# D_NP(z, b_T) = S_NP × [numerator] / [denominator]
+# Parameters: [N₃, β₁, δ₁, γ₁, λ_F, N₃ᵦ, β₂, δ₂, γ₂] (9 params)
+ffs:
+  u:
+    # Up quark fragmentation - fully parameterized
+    init_params: [0.21012, 2.12062, 0.093554, 0.25246, 5.2915, 0.033798, 2.1012, 0.093554, 0.25246]
+    free_mask: [true, true, true, true, true, true, true, true, true]
+    
+  d:
+    # Down quark fragmentation - independent parameterization
+    init_params: [0.19000, 2.00000, 0.090000, 0.24000, 5.0000, 0.030000, 2.0000, 0.090000, 0.24000]
+    free_mask: [true, true, true, true, true, true, true, true, true]
+    
+  s:
+    # Strange quark fragmentation - reduced parameterization
+    init_params: [0.15000, 1.80000, 0.080000, 0.22000, 4.5000, 0.025000, 1.8000, 0.080000, 0.22000]
+    free_mask: [true, true, false, true, true, false, true, false, true]
+    
+  ubar:
+    # Up antiquark fragmentation - simplified
+    init_params: [0.12000, 1.50000, 0.070000, 0.20000, 4.0000, 0.020000, 1.5000, 0.070000, 0.20000]
+    free_mask: [true, true, false, false, true, false, false, false, false]
+    
+  dbar:
+    # Down antiquark fragmentation - simplified
+    init_params: [0.12000, 1.50000, 0.070000, 0.20000, 4.0000, 0.020000, 1.5000, 0.070000, 0.20000]
+    free_mask: [true, true, false, false, true, false, false, false, false]
+    
+  sbar:
+    # Strange antiquark fragmentation - minimal
+    init_params: [0.08000, 1.20000, 0.060000, 0.18000, 3.5000, 0.015000, 1.2000, 0.060000, 0.18000]
+    free_mask: [true, false, false, false, false, false, false, false, false]
+    
+  c:
+    # Charm quark fragmentation - minimal (mostly fixed)
+    init_params: [0.05000, 1.00000, 0.050000, 0.15000, 3.0000, 0.010000, 1.0000, 0.050000, 0.15000]
+    free_mask: [true, false, false, false, false, false, false, false, false]
+    
+  cbar:
+    # Charm antiquark fragmentation - minimal (mostly fixed)
+    init_params: [0.05000, 1.00000, 0.050000, 0.15000, 3.0000, 0.010000, 1.0000, 0.050000, 0.15000]
+    free_mask: [true, false, false, false, false, false, false, false, false]
+
+# Parameter Summary:
+# =================
+# Evolution: 1 parameter (g₂)
+# PDFs: 8 flavors × 11 parameters = 88 parameters
+# FFs: 8 flavors × 9 parameters = 72 parameters
+# Total: 161 parameters
+#
+# Trainable parameters (based on masks above):
+# Evolution: 1 trainable
+# PDFs: u(11) + d(11) + s(7) + ubar(4) + dbar(4) + sbar(1) + c(1) + cbar(1) = 40 trainable
+# FFs: u(9) + d(9) + s(5) + ubar(3) + dbar(3) + sbar(1) + c(1) + cbar(1) = 32 trainable
+# Total trainable: 73 parameters
+

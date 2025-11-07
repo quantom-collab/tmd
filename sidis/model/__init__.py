@@ -21,7 +21,13 @@ class TrainableModel(torch.nn.Module):
 
         # rootdir.joinpath puts everything relative to the model folder
         self.conf = OmegaConf.load(rootdir.joinpath("../config.yaml"))
-        self.fnpconf = OmegaConf.load(rootdir.joinpath("fNPconfig_flavor_blind.yaml"))
+
+        # Load fNP config from cards folder
+        # Change this path to switch between available configurations.
+        # fnp_config_path = rootdir.joinpath("../cards/fNPconfig_flav_dep_std.yaml")
+        fnp_config_path = rootdir.joinpath("../cards/fNPconfig_flav_blind_std.yaml")
+
+        self.fnpconf = OmegaConf.load(fnp_config_path)
 
         self.opepdf = OPE(rootdir.joinpath(self.conf.ope.grid_file))
         # self.opeff = OPE() # NOTE: not implemented yet
@@ -30,7 +36,7 @@ class TrainableModel(torch.nn.Module):
 
         self.ogata = OGATA()
 
-        # Create fNP manager using factory (selects combo based on config)
+        # Create fNP manager based on its config
         self.nonperturbative = create_fnp_manager(config_dict=self.fnpconf)
 
     def forward(self, events_tensor: torch.Tensor) -> torch.Tensor:
