@@ -24,8 +24,8 @@ class TrainableModel(torch.nn.Module):
 
         # Load fNP config from cards folder
         # Change this path to switch between available configurations.
-        # fnp_config_path = rootdir.joinpath("../cards/fNPconfig_flav_dep_std.yaml")
-        fnp_config_path = rootdir.joinpath("../cards/fNPconfig_flav_blind_std.yaml")
+        # fnp_config_path = rootdir.joinpath("../cards/fNPconfig_base_flavor_dep.yaml")
+        fnp_config_path = rootdir.joinpath("../cards/fNPconfig_base_flavor_blind.yaml")
 
         self.fnpconf = OmegaConf.load(fnp_config_path)
 

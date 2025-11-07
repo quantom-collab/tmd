@@ -7,10 +7,7 @@ hadron: proton
 
 # Combo selection: specifies which fNP combo implementation to use
 # Available combos: "standard" (flavor-dependent), "flavor_blind" (shared parameters)
-combo: standard
-
-# Note: zeta (rapidity scale) is no longer specified here.
-# It is computed from Q in the forward methods as zeta = Q² (standard SIDIS).
+combo: flavor_dep
 
 # Shared evolution factor (applies to both PDFs and FFs)
 # S_NP(ζ, b_T) = exp[-g₂² b_T²/4 × ln(ζ/Q₀²)]
@@ -19,7 +16,6 @@ evolution:
   free_mask: [true]     # g2 is trainable
 
 # TMD PDF parameterizations (MAP22 implementation)
-# f_NP(x, b_T) = S_NP × [numerator] / [denominator]
 # Parameters: [N₁, α₁, σ₁, λ, N₁ᵦ, N₁ᶜ, λ₂, α₂, α₃, σ₂, σ₃] (11 params)
 pdfs:
   u:
@@ -63,7 +59,6 @@ pdfs:
     free_mask: [true, false, false, false, false, false, false, false, false, false, false]
 
 # TMD FF parameterizations (MAP22 implementation)
-# D_NP(z, b_T) = S_NP × [numerator] / [denominator]
 # Parameters: [N₃, β₁, δ₁, γ₁, λ_F, N₃ᵦ, β₂, δ₂, γ₂] (9 params)
 ffs:
   u:
@@ -106,6 +101,7 @@ ffs:
     init_params: [0.05000, 1.00000, 0.050000, 0.15000, 3.0000, 0.010000, 1.0000, 0.050000, 0.15000]
     free_mask: [true, false, false, false, false, false, false, false, false]
 
+# =================
 # Parameter Summary:
 # =================
 # Evolution: 1 parameter (g₂)
