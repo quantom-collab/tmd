@@ -74,11 +74,11 @@ except Exception:
 try:
     # Try importing from map.modules first (when run from repo root)
     import map.modules.utilities as utl
-    from map.modules.fnp import fNPManager
+    from map.modules.fnp_factory import create_fnp_manager
 except ImportError:
     # Fallback to direct import (when run from map directory)
     import modules.utilities as utl
-    from modules.fnp import fNPManager
+    from modules.fnp_factory import create_fnp_manager
 
 
 class SIDISComputationPyTorch:
@@ -601,7 +601,7 @@ class SIDISComputationPyTorch:
         """
         Instantiate PyTorch non-perturbative (fNP) model.
         This method initializes the fNP model for non-perturbative function using the PyTorch
-        module defined in modules/fNP.py.
+        module defined in modules/fnp_factory.py.
 
         Notes:
             - On failure, Gaussian fallback used (exp(-a b^2))
@@ -612,24 +612,18 @@ class SIDISComputationPyTorch:
         try:
             # Use the provided fNP config file
             if os.path.exists(self.fnp_config_file):
-                # Print the path of the fNP configuration file being loaded in green
+                # Print the path of the fNP configuration file being loaded
                 print(
                     f"\033[95m\nLoading fNP configuration from {self.fnp_config_file}\033[0m"
                 )
                 config_fnp = utl.load_yaml_file(self.fnp_config_file)
 
-                # Initialize PyTorch fNP model.
-                # Set self.model_fNP to the fNP instance from the fNP module
-                # with the provided fNP configuration. The following line does two things:
-                # 1. fNPManager(config_fnp) instantiates the model/class fNPManager with the given config
-                # 2. .to(self.device) moves all its parameters and buffers to the device stored
-                # in self.device (commonly something like torch.device("cuda"), "cpu", or "mps").
-                # It returns the same module (after moving it), which you assign to self.model_fNP
-                self.model_fNP = fNPManager(config_fnp).to(self.device)
+                # Initialize PyTorch fNP model using factory
+                # The factory automatically selects the correct combo based on config
+                self.model_fNP = create_fnp_manager(config_dict=config_fnp).to(
+                    self.device
+                )
                 print("✅ PyTorch fNP model loaded successfully")
-
-                # Use the enhanced parameter analysis from the fNP module
-                self.model_fNP.print_parameter_summary()
 
                 # Additional information for debugging/development
                 print("📊 Additional PyTorch Information:")
@@ -640,17 +634,15 @@ class SIDISComputationPyTorch:
                 print(f"   PyTorch total parameters: {total_params}")
                 print(f"   PyTorch requires_grad=True: {pytorch_trainable}")
 
-                # # Check
-                # # Print parameter names and values
-                # for name, param in self.model_fNP.named_parameters():
-                #     print(f"   - {name}: {param.numel()}, {param}: {param.data}")
-
             else:
                 print(f"Warning: fNP config not found at {self.fnp_config_file}")
                 self.model_fNP = None
 
         except Exception as e:
             print(f"⚠️  Warning: Could not load PyTorch fNP model: {e}")
+            import traceback
+
+            traceback.print_exc()
             self.model_fNP = None
 
     def bstar_min(self, b: float, Q: float) -> float:
@@ -876,7 +868,7 @@ class SIDISComputationPyTorch:
         return kinematic_data
 
     def compute_fnp_pytorch_pdf(
-        self, x: torch.Tensor, b: torch.Tensor, flavor: str
+        self, x: torch.Tensor, b: torch.Tensor, Q: torch.Tensor, flavor: str
     ) -> torch.Tensor:
         """
         Evaluate TMD PDF non-perturbative factor fNP1(x,b) for a flavor using the PyTorch fNP model.
@@ -884,6 +876,7 @@ class SIDISComputationPyTorch:
         Args:
             @param x: Bjorken x tensor
             @param b: impact parameter tensor (GeV^-1)
+            @param Q: Hard scale Q tensor (GeV) - used to compute zeta = Q²
             @param flavor: flavor label ('u','d','ubar',...)
         Returns:
             torch.Tensor: fNP PDF values
@@ -894,7 +887,8 @@ class SIDISComputationPyTorch:
                 # Ensure tensors are on the correct device and dtype
                 x = x.to(self.device, dtype=self.dtype)
                 b = b.to(self.device, dtype=self.dtype)
-                pdf_outputs = self.model_fNP.forward_pdf(x, b, flavors=[flavor])
+                Q = Q.to(self.device, dtype=self.dtype)
+                pdf_outputs = self.model_fNP.forward_pdf(x, b, Q, flavors=[flavor])
                 return pdf_outputs[flavor]
             except Exception as e:
                 # Print in yellow to indicate a warning
@@ -913,7 +907,7 @@ class SIDISComputationPyTorch:
             return torch.exp(-0.1 * b**2)
 
     def compute_fnp_pytorch_ff(
-        self, z: torch.Tensor, b: torch.Tensor, flavor: str
+        self, z: torch.Tensor, b: torch.Tensor, Q: torch.Tensor, flavor: str
     ) -> torch.Tensor:
         """
         Evaluate TMD FF non-perturbative factor fNP2(z,b) for a flavor using the PyTorch fNP model.
@@ -921,6 +915,7 @@ class SIDISComputationPyTorch:
         Args:
             @param z: energy fraction z tensor
             @param b: impact parameter tensor (GeV^-1)
+            @param Q: Hard scale Q tensor (GeV) - used to compute zeta = Q²
             @param flavor: flavor label ('u','d','ubar',...)
         Returns:
             torch.Tensor: fNP FF values
@@ -931,7 +926,8 @@ class SIDISComputationPyTorch:
                 # Ensure tensors are on the correct device and dtype
                 z = z.to(self.device, dtype=self.dtype)
                 b = b.to(self.device, dtype=self.dtype)
-                ff_outputs = self.model_fNP.forward_ff(z, b, flavors=[flavor])
+                Q = Q.to(self.device, dtype=self.dtype)
+                ff_outputs = self.model_fNP.forward_ff(z, b, Q, flavors=[flavor])
                 return ff_outputs[flavor]
             except Exception as e:
                 # Print in yellow to indicate a warning
@@ -950,7 +946,7 @@ class SIDISComputationPyTorch:
             return torch.exp(-0.1 * b**2)
 
     def compute_fnp_pytorch(
-        self, x: torch.Tensor, b: torch.Tensor, flavor: str
+        self, x: torch.Tensor, b: torch.Tensor, Q: torch.Tensor, flavor: str
     ) -> torch.Tensor:
         """
         Legacy method for backward compatibility - defaults to PDF evaluation.
@@ -958,11 +954,12 @@ class SIDISComputationPyTorch:
         Args:
             @param x: Bjorken x (or z for FF usage) tensor
             @param b: impact parameter tensor (GeV^-1)
+            @param Q: Hard scale Q tensor (GeV) - used to compute zeta = Q²
             @param flavor: flavor label ('u','d','ubar',...)
         Returns:
             torch.Tensor: fNP values (PDF by default)
         """
-        return self.compute_fnp_pytorch_pdf(x, b, flavor)
+        return self.compute_fnp_pytorch_pdf(x, b, Q, flavor)
 
     def compute_flavor_sum_pytorch(
         self, x: torch.Tensor, z: torch.Tensor, b: torch.Tensor, Q: torch.Tensor
@@ -1007,8 +1004,8 @@ class SIDISComputationPyTorch:
             try:
                 # Get non-perturbative factors (these maintain gradients!)
                 # fnp1 = PDF, fnp2 = FF as requested by user
-                fnp1 = self.compute_fnp_pytorch_pdf(x, b, flavor_str)  # PDF
-                fnp2 = self.compute_fnp_pytorch_ff(z, b, flavor_str)  # FF
+                fnp1 = self.compute_fnp_pytorch_pdf(x, b, Q, flavor_str)  # PDF
+                fnp2 = self.compute_fnp_pytorch_ff(z, b, Q, flavor_str)  # FF
 
                 # Add this flavor's contribution to the sum
                 flavor_sum += eq2 * fnp1 * fnp2
@@ -1208,10 +1205,12 @@ class SIDISComputationPyTorch:
 
             # Non-perturbative factors (convert tensors to floats)
             # fnp1_val = PDF, fnp2_val = FF as requested by user
+            Q_t = torch.tensor(Qm, device=self.device, dtype=self.dtype)
             fnp1_val = float(
                 self.compute_fnp_pytorch_pdf(
                     torch.tensor(xm, device=self.device, dtype=self.dtype),
                     torch.tensor(b_val, device=self.device, dtype=self.dtype),
+                    Q_t,
                     "u",  # PDF flavor
                 ).item()
             )
@@ -1220,6 +1219,7 @@ class SIDISComputationPyTorch:
                 self.compute_fnp_pytorch_ff(
                     torch.tensor(zm, device=self.device, dtype=self.dtype),
                     torch.tensor(b_val, device=self.device, dtype=self.dtype),
+                    Q_t,
                     "u",  # FF flavor
                 ).item()
             )
@@ -1286,16 +1286,17 @@ class SIDISComputationPyTorch:
         x_t = x_tensor[iqT].to(self.device).to(self.integration_dtype)
         z_t = z_tensor[iqT].to(self.device).to(self.integration_dtype)
         qT_t = qT_tensor[iqT].to(self.device).to(self.integration_dtype)
+        Q_t = Q_tensor[iqT].to(self.device).to(self.integration_dtype)
 
         # Evaluate fNP for chosen flavors as tensors; keep gradients
         # fnp_pdf = fnp1 (PDF), fnp_ff = fnp2 (FF) as requested by user
         pdf_flavor = "u"
         ff_flavor = "u"
         fnp_pdf = self.compute_fnp_pytorch_pdf(
-            x_t.expand_as(b), b.to(self.dtype), pdf_flavor
+            x_t.expand_as(b), b.to(self.dtype), Q_t.expand_as(b), pdf_flavor
         ).to(self.integration_dtype)
         fnp_ff = self.compute_fnp_pytorch_ff(
-            z_t.expand_as(b), b.to(self.dtype), ff_flavor
+            z_t.expand_as(b), b.to(self.dtype), Q_t.expand_as(b), ff_flavor
         ).to(self.integration_dtype)
 
         # Bessel J0 and integrand

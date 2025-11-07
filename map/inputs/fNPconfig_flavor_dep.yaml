@@ -4,7 +4,13 @@
 
 # Global settings
 hadron: proton
-zeta: 1.0  # Reference rapidity scale in GeV^2
+
+# Combo selection: specifies which fNP combo implementation to use
+# Available combos: "flavor_dep" (flavor-dependent), "flavor_blind" (shared parameters)
+combo: flavor_dep
+
+# Note: zeta (rapidity scale) is no longer specified here.
+# It is computed from Q in the forward methods as zeta = Q² (standard SIDIS).
 
 # Shared evolution factor (applies to both PDFs and FFs)
 # S_NP(ζ, b_T) = exp[-g₂² b_T²/4 × ln(ζ/Q₀²)]
