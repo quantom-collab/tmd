@@ -1,6 +1,6 @@
 import numpy as np
-from qcdlib import params as par
-from qcdlib import cfg
+from . import params as par
+from . import config_loader as cfg
 
 
 class ALPHAS:

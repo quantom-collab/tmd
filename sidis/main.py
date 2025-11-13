@@ -2,15 +2,21 @@ import torch
 import time
 import argparse
 import pathlib
+import sys
 
 # This ensures the code only runs when the script is executed directly,
 # not when imported as a module. This is a Python best practice that
 # prevents unintended code execution during imports.
 if __name__ == "__main__":
+    # Add parent directory to path so sidis can be imported as a package
+    # This allows running as: python3 sidis/main.py from tmd/ directory
+    parent_dir = pathlib.Path(__file__).resolve().parent.parent
+    if str(parent_dir) not in sys.path:
+        sys.path.insert(0, str(parent_dir))
 
     from omegaconf import OmegaConf
-    from model import TrainableModel
-    from utilities.colors import tcolors
+    from sidis.model import TrainableModel
+    from sidis.utilities.colors import tcolors
 
     # Set default tensor dtype to float64 for high precision calculations
     # (important for QCD calculations that require numerical stability)
@@ -92,21 +98,3 @@ if __name__ == "__main__":
     # Run the model forward pass with the full tensor
     print(f"{tcolors.GREEN}Results from model forward pass:{tcolors.ENDC}")
     print(model(events_tensor))
-
-    """
-    NOTE FROM CHIARA: I'm not sure if this is needed, or why the following is here
-    but I'm keeping it here for now.
-    Isn't the perturbative evolution part of the model, and therefore already called
-    in the model = TrainableModel() instantiation?
-    """
-    # from model.evolution import PERTURBATIVE_EVOLUTION
-    # import qcdlib.params as params
-
-    # t0 = time.time()
-    # pert_evo = PERTURBATIVE_EVOLUTION(order=3)
-    # bT = torch.linspace(0.01,10,100)
-    # Q20 = torch.tensor([params.mc2])
-    # Q2 = torch.linspace(params.mc2,100,10000)
-    # sudakov = pert_evo.forward(bT, Q20, Q2)
-    # t1 = time.time()
-    # print(f"Time taken for evolution of shape {sudakov.shape}: {t1-t0} seconds")

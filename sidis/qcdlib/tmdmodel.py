@@ -1,7 +1,7 @@
 
-import qcdlib.special as special
+from . import special
 import torch
-import qcdlib.cfg as cfg
+from . import config_loader as cfg
 
 class MODEL_TORCH:
     

@@ -5,20 +5,11 @@ import mpmath
 import torch
 from scipy.special import spence
 
-import sys
-import os
-
-# Add the sidis directory to Python path for imports
-current_dir = pathlib.Path(__file__).resolve().parent
-sidis_dir = current_dir.parent
-if str(sidis_dir) not in sys.path:
-    sys.path.insert(0, str(sidis_dir))
-
-# Now we can import directly
-import qcdlib.params as params
-from qcdlib.alphaS import ALPHAS
-from qcdlib.tmdmodel import MODEL_TORCH
-from qcdlib.evolution_precalcs import r_Gamma, r_gamma, rbar, rbar0prime, delta
+# Relative imports for proper package structure
+from ..qcdlib import params
+from ..qcdlib.alphaS import ALPHAS
+from ..qcdlib.tmdmodel import MODEL_TORCH
+from ..qcdlib.evolution_precalcs import r_Gamma, r_gamma, rbar, rbar0prime, delta
 
 alphaS = ALPHAS()
 tmdmodel = MODEL_TORCH()
@@ -524,11 +515,33 @@ class PERTURBATIVE_EVOLUTION(torch.nn.Module):
         # mc2 = params.mc2
         # mb2 = params.mb2
 
+        """
+        Here, we describe the pieces of the evolution factor for the RGE evolution:
+        1. 
+            eta_Gamma = \int_{\mu_0}^{\mu} \frac{d\mu^\prime}{mu^\prime} \Gamma(\alpha_S(mu^\prime))
+            This is the integral of the cusp anomalous dimension over the range of alphaS.
+            In other language, it is \int_{\mu_0}^{\mu} \frac{d\mu^\prime}{mu^\prime} -\gamma_K(mu^\prime)
+        2. 
+            K_gamma = \int_{\mu_0}^{\mu} \frac{d\mu^\prime}{mu^\prime} \gamma(\alpha_S(mu^\prime))
+            This is the integral of the anomalous dimension over the range of alphaS.
+            In other language, it is \int_{\mu_0}^{\mu} \frac{d\mu^\prime}{mu^\prime} \gamma_F(\alpha_S(mu^\prime);1)
+        3. 
+            K_Gamma = \int_{\mu_0}^{\mu} \frac{d\mu^\prime}{mu^\prime} \Gamma(\alpha_S(mu^\prime)) \log(\frac{\mu^\prime}{\mu_0})
+            This is the integral of the cusp anomalous dimension multiplied by the log of the ratio of the scales over the range of alphaS.
+            In other language, it is \int_{\mu_0}^{\mu} \frac{d\mu^\prime}{mu^\prime} -\gamma_K(mu^\prime) \log(\frac{\mu^\prime}{\mu_0})
+        """
         eta_Gamma, K_gamma, K_Gamma = self.compute_evolution_components(
             alphaS_f, alphaS_i, Nf0, Nf
         )
         # print('eta_Gamma.shape', eta_Gamma.shape)
 
+        """
+        Here, we describe the pieces of the evolution factor for the rapidity evolution:
+        1. 
+            S_rapidity = \exp(0.5 * \log(\frac{Q^2}{Q^2_0}) * (Ktilde(bstar, mub) + eta_Gamma(Q_0 -> mub)))
+            Ktilde is an analytic function of bstar and mub.
+            eta_Gamma is the integral of the cusp anomalous dimension over the range of alphaS, but instead of Q0 to Q as above, it is from Q0 to mub.
+        """
         # --get rapidity evolution factor
         S_rapidity = self.get_S_rapidity(bT, Q20, Q2)
         # print('S_rapidity.shape', S_rapidity.shape)
@@ -538,6 +551,10 @@ class PERTURBATIVE_EVOLUTION(torch.nn.Module):
         K_Gamma_2d = K_Gamma.unsqueeze(-1)
         log_ratio_2d = torch.log(Q2 / Q20).unsqueeze(-1)
 
+        """
+        Note the difference in the sign when computing the RGE factor of eta_Gamma_2d and K_Gamma_2d with Ebert 2110.11360 as \Gamma(mu) = -\gamma_K(mu)
+        Because the \gamma(\alpha_S(mu)) is the same as the \gamma_F(\alpha_S(mu);1) in the Ebert 2110.11360 paper, we do not need to invert the sign of K_Gamma_2d.
+        """
         RGE_factor = torch.exp(
             K_gamma_2d - 0.5 * log_ratio_2d * eta_Gamma_2d + K_Gamma_2d
         )

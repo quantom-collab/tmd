@@ -6,18 +6,28 @@ import sys
 # import from utils module
 from .utils import get_akima_derivatives_2d, interp_2d, interp_2d_multiple_events
 
+# Import tcolors - handle both relative and absolute imports
+try:
+    from ..utilities.colors import tcolors
+except ImportError:
+    try:
+        from utilities.colors import tcolors
+    except ImportError:
+        from sidis.utilities.colors import tcolors
 
 class OPE(torch.nn.Module):
     def __init__(self, grid_file: str):
         super().__init__()
 
-        # --this is an example of the OPE grids. Right now, only for u quark at Q=1 GeV.
-        # --we'll update this for other quarks.
+        # Print out messages to the user
+        print(f"{tcolors.BLUE}\n[OPE] Initializing OPE")
+        print(f"  Grid file: {grid_file}\n{tcolors.ENDC}")
 
         # Get grid file path
         opegrids = np.genfromtxt(grid_file, skip_header=1)
 
         self.opegrids = torch.tensor(opegrids)  # shape: (25000,3)
+
         self.setup_interpolation()
 
     def setup_interpolation(self):
@@ -40,6 +50,7 @@ class OPE(torch.nn.Module):
     ) -> torch.Tensor:
         """
         Interpolate the OPE over the saved grids.
+        Here, x represents both x and z, depending on the type of OPE.
         """
         return interp_2d_multiple_events(
             x,

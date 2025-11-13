@@ -1,9 +1,9 @@
 import mpmath
 import torch
 
-import qcdlib.params as params
-import qcdlib.cfg as cfg
-from qcdlib.alphaS  import ALPHAS
+from . import params
+from . import config_loader as cfg
+from .alphaS import ALPHAS
 
 from scipy.special import zeta
 

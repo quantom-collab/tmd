@@ -1,5 +1,5 @@
 import numpy as np
-from qcdlib import params as par 
+from . import params as par 
 
 class EWEAK:
     """
