@@ -45,34 +45,6 @@ ope:
         db: "../../grids/grids/tmdff_db_Q_1.28.txt"
         ub: "../../grids/grids/tmdff_ub_Q_1.28.txt"
 
-# Define initial scale for the evolution
-#Q20: 1.0 #--I think we should use the charm quark mass squared instead of 1 GeV^2.
-
-# We do not use these. Let's delete them.
-# Collinear PDF set and member to be used
-pdfset:
-  name: "MMHT2014nnlo68cl"
-  member: 0
-
-# Collinear FF set and member to be used
-ffset:
-  name: "MAPFF10NNLOPIp"
-  member: 0
-
-# We do not use these. Let's delete them.
-# Initial and final scale-variation factors around mub = 2e^{-gamma_E} / b and Q, respectively
-TMDscales:
-  Ci: 1.0
-  Cf: 1.0
-
-# We do not use these. Let's delete them.
-# Reference value of alpha_em
-alphaem:
-  aref: 0.0072973525693
-  Qref: 91.1876
-  run: true
-
-# We do not use these. Let's delete them.
 # qT/Q cut for computation
 qToQcut: 0.2
 
