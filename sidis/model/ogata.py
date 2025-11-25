@@ -101,3 +101,86 @@ class OGATA(torch.nn.Module):
         
         # weights = ogata_weights(xi_vals)
         # return (torch.pi/qT * torch.sum(weights*func_vals*j_vals*psip_vals,axis=1), func_eval_points)
+
+class OGATA1(torch.nn.Module):
+    """
+    Ogata-based Hankel transform of order nu = 1 (J1 kernel).
+    """
+
+    def __init__(self):
+        super().__init__()
+
+        # Load config (same as OGATA)
+        current_dir = pathlib.Path(__file__).parent
+        config_file = current_dir / "../config.yaml"
+        conf = OmegaConf.load(config_file)
+
+        self.nu = 1  # Hankel order
+
+        # Zeros of J1
+        self.besselj1 = torch.tensor(
+            jn_zeros(1, conf.bgrid.Nb), dtype=torch.get_default_dtype()
+        ).unsqueeze(0)  # (1, Nb)
+
+        self.bTmin = 1e-3
+        self.xi = self.besselj1 / torch.pi  # (1, Nb)
+
+        # ---- Compute J2 using recurrence (Torch-native) ----
+        # J2(x) = 2 J1(x) / x - J0(x)
+        x = torch.pi * self.xi
+        J0 = torch.special.bessel_j0(x)
+        J1 = torch.special.bessel_j1(x)
+        J2 = 2 * J1 / x - J0
+
+        # Ogata weights for nu = 1 (use J2)
+        self.ogata_weights = 2.0 / (torch.pi**2 * self.xi * J2**2)  # (1, Nb)
+
+
+    def get_psi(self, t: torch.Tensor) -> torch.Tensor:
+        return t * torch.tanh(torch.pi / 2 * torch.sinh(t))
+
+    def get_psi_prime(self, t: torch.Tensor) -> torch.Tensor:
+        tanh_term = torch.tanh(torch.pi / 2 * torch.sinh(t))
+        sech2_term = 1 - tanh_term**2
+        return tanh_term + (torch.pi / 2) * t * sech2_term * torch.cosh(t)
+
+
+    def get_h_fixed(self) -> torch.Tensor:
+        return torch.tensor(0.0001, dtype=torch.get_default_dtype())
+
+
+    def get_h_dynamic(self, qT: torch.Tensor) -> torch.Tensor:
+        # h(qT) formula analogous to J0 case (but using J1's first root)
+        first_zero = self.besselj1[:, 0]
+        return torch.arcsinh(
+            2 / torch.pi * torch.arctanh(self.bTmin * qT / first_zero)
+        ) / (first_zero / torch.pi)
+
+
+    def get_bTs(self, qT: torch.Tensor) -> torch.Tensor:
+        qT = qT.unsqueeze(1)  # (Nevents, 1)
+        h = self.get_h_dynamic(qT)
+        return torch.pi / h * self.get_psi(h * self.xi) / qT
+
+
+    def eval_ogata_func_var_h(self,
+        integrand: torch.Tensor,
+        bT: torch.Tensor,
+        qT: torch.Tensor
+    ) -> torch.Tensor:
+
+        qT = qT.unsqueeze(1)
+        h_val = self.get_h_dynamic(qT)
+
+        bT_qT = bT * qT
+
+        # J1 kernel (Torch built-in)
+        J_vals = torch.special.bessel_j1(bT_qT)
+
+        psi_prime_vals = self.get_psi_prime(h_val * self.xi)
+
+        # Weighting: identical pattern to J0 case
+        total = self.ogata_weights * integrand * J_vals * psi_prime_vals
+        summed = torch.sum(total, dim=1)
+
+        return torch.pi / qT.squeeze() * summed
