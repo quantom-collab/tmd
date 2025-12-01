@@ -282,6 +282,82 @@ class TMDPDFFlavorBlind(nn.Module):
 
 
 ###############################################################################
+# 2b. Flavor-Blind Sivers Function Class
+###############################################################################
+class SiversFlavorBlind(nn.Module):
+    """
+    Flavor-blind Sivers function class where ALL flavors share identical parameters.
+
+    This is a simplified parameterization for the Sivers TMD PDF, used for
+    transverse single-spin asymmetries. All flavors share the same g1_T parameter.
+
+    The Sivers function formula:
+        f_{1T}^{perp}(x, b_T) = S_NP(ζ, b_T) × exp(-g1_T × b_T²)
+    """
+
+    def __init__(self, g1_T: float = 0.045, free_mask: List[bool] = [True]):
+        """
+        Initialize flavor-blind Sivers function.
+
+        Args:
+            g1_T (float): Initial value for g1_T parameter
+            free_mask (List[bool]): Single-element list [True/False] for g1_T trainability
+        """
+        super().__init__()
+
+        # Validate input
+        if len(free_mask) != 1:
+            raise ValueError(f"Sivers expects 1 mask element, got {len(free_mask)}")
+
+        self.n_params = 1
+
+        # Parameter setup with masking
+        mask = torch.tensor(free_mask, dtype=torch.float32)
+        self.register_buffer("mask", mask)
+
+        # Fixed part (non-trainable)
+        fixed_init = torch.tensor([g1_T]) * (1 - mask)
+        self.register_buffer("fixed_g1_T", fixed_init)
+
+        # Free part (trainable)
+        free_init = torch.tensor([g1_T]) * mask
+        self.free_g1_T = nn.Parameter(free_init)
+
+        # Gradient hook
+        self.free_g1_T.register_hook(lambda grad: grad * self.mask)
+
+    @property
+    def g1_T(self):
+        """Return the full g1_T value (fixed + free parts)."""
+        return (self.fixed_g1_T + self.free_g1_T)[0]
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        b: torch.Tensor,
+        NP_evol: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Compute Sivers function using simplified parameterization.
+
+        Formula: f_{1T}^{perp}(x, b_T) = S_NP(ζ, b_T) × exp(-g1_T × b_T²)
+
+        Args:
+            x (torch.Tensor): Bjorken x variable (can be 1D [n_events] or 2D [n_events, n_b])
+            b (torch.Tensor): Impact parameter b_T (GeV⁻¹) (2D: [n_events, n_b])
+            NP_evol (torch.Tensor): Evolution factor from fNP_evolution (2D: [n_events, n_b])
+
+        Returns:
+            torch.Tensor: Sivers function f_{1T}^{perp}(x, b) - identical for all flavors.
+                         Shape: [n_events, n_b] (same as b and NP_evol)
+        """
+        # Compute Sivers function: NP_evol * exp(-g1_T * b²)
+        result = NP_evol * torch.exp(-self.g1_T * b * b)
+
+        return result
+
+
+###############################################################################
 # 3. Flavor-Blind TMD FF Class
 ###############################################################################
 class TMDFFFlavorBlind(nn.Module):
@@ -575,6 +651,13 @@ class fNPManager(nn.Module):
             f"{tcolors.GREEN}[fNPManager] Initialized single FF module serving all {len(self.flavor_keys)} flavors\n{tcolors.ENDC}"
         )
 
+        # Setup Sivers module (flavor-blind)
+        g1_T = evolution_config.get("g1_T", 0.045)
+        self.sivers_module = SiversFlavorBlind(g1_T=g1_T, free_mask=[True])
+        print(
+            f"{tcolors.GREEN}[fNPManager] Initialized Sivers module with g1_T={g1_T}{tcolors.ENDC}"
+        )
+
     def _compute_zeta(self, Q: torch.Tensor) -> torch.Tensor:
         """
         Compute rapidity scale zeta from hard scale Q.
@@ -689,6 +772,38 @@ class fNPManager(nn.Module):
             else:
                 raise ValueError(f"Unknown FF flavor: {flavor}")
         return outputs
+
+    def forward_sivers(
+        self,
+        x: torch.Tensor,
+        b: torch.Tensor,
+        Q: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Evaluate Sivers function using shared parameters.
+
+        In the flavor-blind system, all flavors share the same Sivers parameters,
+        so the computation returns a single result for all flavors.
+
+        Args:
+            x (torch.Tensor): Bjorken x values (1D: [n_events])
+            b (torch.Tensor): Impact parameter values (2D: [n_events, n_b])
+            Q (torch.Tensor): Hard scale Q in GeV (1D: [n_events], used to compute zeta = Q²)
+
+        Returns:
+            torch.Tensor: Sivers function values - identical for all flavors.
+                         Shape: [n_events, n_b] (same as b)
+        """
+        # Compute zeta from Q (zeta = Q² for standard SIDIS)
+        zeta = self._compute_zeta(Q)
+
+        # Compute shared evolution factor
+        shared_evol = self.evolution(b, zeta)
+
+        # Evaluate Sivers using shared parameters
+        sivers_result = self.sivers_module(x, b, shared_evol)
+
+        return sivers_result
 
     def forward(
         self,

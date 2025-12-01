@@ -20,6 +20,7 @@ combo: flavor_blind
 # Shared evolution factor (applies to both PDFs and FFs)
 evolution:
   init_g2: 0.12840      # Evolution parameter g₂ (from MAP22)
+  g1_T: 0.045
   free_mask: [true]     # g2 is trainable
 
 # TMD PDF parameterization (MAP22 implementation)

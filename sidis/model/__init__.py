@@ -8,7 +8,7 @@ from omegaconf import OmegaConf
 from typing import List
 from .ope import OPE
 from .evolution import PERTURBATIVE_EVOLUTION
-from .ogata import OGATA
+from .ogata import OGATA, OGATA1
 from .fnp_factory import create_fnp_manager
 from qcdlib.eweak import EWEAK
 from qcdlib import params
@@ -76,9 +76,10 @@ class TrainableModel(torch.nn.Module):
 
         self.evo = PERTURBATIVE_EVOLUTION(order=self.conf.tmd_resummation_order)
 
-        self.ogata = OGATA()
+        self.ogata0 = OGATA()      # J0 Hankel transform for FUUT
+        self.ogata1 = OGATA1()    # J1 Hankel transform for FUTS
 
-        # Create fNP manager based on its config
+        # Create fNP manager based on its config (includes Sivers function)
         self.nonperturbative = create_fnp_manager(config_dict=self.fnpconf)
 
         #--set up alpha_EM
@@ -119,66 +120,88 @@ class TrainableModel(torch.nn.Module):
     def forward(self, events_tensor: torch.Tensor, expt_setup: List[str] = ["p","pi_plus"], s: float = 140.0) -> torch.Tensor:
         """
         Forward pass for batch of events.
-        events_tensor: shape (n_events, 4) containing [x, PhT, Q, z] for each event
+        events_tensor: shape (n_events, 6) containing [x, PhT, Q, z, phih, phis] for each event
         """
         # Unpack the variables from the events tensor
         x = events_tensor[:, 0]  # Bjorken x
         PhT = events_tensor[:, 1]  # Transverse momentum of detected hadron
         Q = events_tensor[:, 2]  # Hard scale
         z = events_tensor[:, 3]  # Energy fraction of hadron relative to struck quark
+        phih = events_tensor[:, 4]  # Azimuthal angle of hadron (radians)
+        phis = events_tensor[:, 5]  # Azimuthal angle of target spin (radians)
 
         # Compute qT
         qT = PhT / z
 
-        # Setting the bT values for ogata, given qT
-        bT = self.ogata.get_bTs(qT)
+        # Setting the bT values for ogata quadrature (different grids for J0 and J1)
+        bT0 = self.ogata0.get_bTs(qT)  # bT grid for J0 (FUUT)
+        bT1 = self.ogata1.get_bTs(qT)  # bT grid for J1 (FUTS)
 
         # Setting the initial scale
         Q20 = self.conf.Q20
         Q2 = Q**2
 
-        # OPE for TMD PDFs
-        # ope = self.opepdf(x, bT)
+        # OPE for TMD PDFs and FFs on bT0 grid (for FUUT)
         initial_hadron = expt_setup[0]
         fragmented_hadron = expt_setup[1]
-        opepdf = {}
+        opepdf0 = {}
+        opeff0 = {}
         for flav in self.flavs:
-            opepdf[flav] = self.ope["pdf"][initial_hadron][flav](x, bT)
-        opeff = {}
+            opepdf0[flav] = self.ope["pdf"][initial_hadron][flav](x, bT0)
+            opeff0[flav] = self.ope["ff"][fragmented_hadron][flav](z, bT0)
+
+        # OPE for TMD PDFs and FFs on bT1 grid (for FUTS)
+        opepdf1 = {}
+        opeff1 = {}
         for flav in self.flavs:
-            opeff[flav] = self.ope["ff"][fragmented_hadron][flav](z, bT)
+            opepdf1[flav] = self.ope["pdf"][initial_hadron][flav](x, bT1)
+            opeff1[flav] = self.ope["ff"][fragmented_hadron][flav](z, bT1)
 
-        # Perturbative evolution
-        evolution = self.evo(bT, Q20, Q2)
+        # Perturbative evolution on both grids
+        evolution0 = self.evo(bT0, Q20, Q2)
+        evolution1 = self.evo(bT1, Q20, Q2)
 
-        # Check
-        # print('ope.shape',ope.shape, 'evolution.shape', evolution.shape)
-
-        # Compute non-perturbative fNP (depends on x, z, bT, and Q)
+        # Compute non-perturbative fNP on both grids
         # Zeta is computed internally as zeta = Q² (standard SIDIS)
-        fNP = self.nonperturbative(x, z, bT, Q)
+        fNP0 = self.nonperturbative(x, z, bT0, Q)
+        fNP1 = self.nonperturbative(x, z, bT1, Q)
+
+        # Compute Sivers function on bT1 grid (for FUTS)
+        sivers1 = self.nonperturbative.forward_sivers(x, bT1, Q)
         
-        # Set up the integrand for the FUUT structure function
-        FUUT_integrand = torch.zeros_like(bT)
+        # Set up the integrand for the FUUT structure function (on bT0 grid)
+        FUUT_integrand = torch.zeros_like(bT0)
         for flav in self.flavs:
             if 'b' in flav and len(flav) > 1:
                 npflav = flav[0]+'bar'
             else:
                 npflav = flav
-            FUUT_integrand += self.quark_charges_squared[flav] * opepdf[flav] * opeff[flav] * evolution**2 * fNP["pdfs"][npflav] * fNP["ffs"][npflav]
+            FUUT_integrand += self.quark_charges_squared[flav] * opepdf0[flav] * opeff0[flav] * evolution0**2 * fNP0["pdfs"][npflav] * fNP0["ffs"][npflav]
 
-        # Hankel transform for FUUT structure function
-        FUUT = self.ogata.eval_ogata_func_var_h(FUUT_integrand, bT, qT)
+        # Set up the integrand for the FUTS structure function (on bT1 grid)
+        # Uses Sivers function instead of regular PDF fNP
+        FUTS_integrand = torch.zeros_like(bT1)
+        for flav in self.flavs:
+            if 'b' in flav and len(flav) > 1:
+                npflav = flav[0]+'bar'
+            else:
+                npflav = flav
+            FUTS_integrand += bT1/2 * self.quark_charges_squared[flav] * opepdf1[flav] * opeff1[flav] * evolution1**2 * sivers1 * fNP1["ffs"][npflav]
 
-        # Compute the prefactors for the SIDIS cross-section
+        # Hankel transform for FUUT structure function (J0)
+        FUUT = self.ogata0.eval_ogata_func_var_h(FUUT_integrand, bT0, qT)
+        # Hankel transform for FUTS structure function (J1)
+        FUTS = self.ogata1.eval_ogata_func_var_h(FUTS_integrand, bT1, qT)
+
+        # Compute the sigma0s for the SIDIS cross-section
         alpha_em = torch.tensor([self.alpha_em.get_alpha(_) for _ in Q2.numpy()])
         # Factors taken from Bacchetta, et al. JHEP 02 (2007) 093
         gamma = 2 * params.M2 * x / Q
         y = Q2 / x / (s - params.M2)
         epsilon = (1 - y - 1/4 * gamma**2 * y**2) / (1 - y + 1/2 * y**2 + 1/4 * gamma**2 * y**2)
-        prefactor = 8 * torch.pi**2 * alpha_em**2 * z**2 * qT / x / Q**3 * y**2 / 2 / (1 - epsilon) * (1 + gamma**2 / 2 / x)
+        sigma0 = 8 * torch.pi**2 * alpha_em**2 * z**2 * qT / x / Q**3 * y**2 / 2 / (1 - epsilon) * (1 + gamma**2 / 2 / x)
 
-        # Compute the SIDIS cross-section according to the prefactors and the structure functions
-        xsec = prefactor * FUUT
+        # Compute the SIDIS cross-section according to the sigma0s and the structure functions
+        xsec = sigma0 * (FUUT + torch.sin(phih - phis) * FUTS)
 
         return xsec
