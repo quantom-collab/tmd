@@ -2,12 +2,10 @@
     // Editor
     "editor.formatOnSave": true,
     "editor.formatOnPaste": false,
-
     // CMake 
     "cmake.configureSettings": {
         "Python3_EXECUTABLE": "/opt/homebrew/opt/python@3.10/bin/python3.10"
     },
-
     // Python
     "python.defaultInterpreterPath": "/opt/homebrew/opt/python@3.10/bin/python3.10",
     "python.languageServer": "None",
@@ -86,13 +84,11 @@
         "reportUnnecessaryReturn": "none",
         "reportUnnecessaryAssign": "none"
     },
-
     // C++
     "[cpp]": {
         "editor.tabSize": 2,
         "editor.insertSpaces": true
     },
-
     // YAML
     "[yaml]": {
         "editor.formatOnSave": false,
@@ -104,11 +100,12 @@
     "prettier.tabWidth": 2,
     "prettier.useTabs": false,
     "prettier.proseWrap": "preserve",
-
     // LaTeX
     "[latex]": {
         "editor.wordWrap": "on",
-        "editor.rulers": [150],
+        "editor.rulers": [
+            150
+        ],
         "editor.defaultFormatter": "James-Yu.latex-workshop"
     },
     "latex-workshop.latex.autoClean.run": "onBuilt",
@@ -193,5 +190,5 @@
     "cursorpyright.analysis.stubPath": "./typings",
     "cursorpyright.analysis.typeCheckingMode": "off",
     "cursorpyright.analysis.useLibraryCodeForTypes": true,
-
+    "python.REPL.enableREPLSmartSend": false,
 }
