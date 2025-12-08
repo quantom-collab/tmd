@@ -27,6 +27,7 @@ class tcolors:
     WARNING = "\033[93m"  # Yellow
     FAIL = "\033[91m"  # Red
     OKLIGHTBLUE = "\033[34m"  # Light blue (darker blue)
+    WHITE = "\033[97m"  # White
 
     # Text styles
     ENDC = "\033[0m"  # Reset/end color
@@ -40,6 +41,7 @@ class tcolors:
     BOLDWARNING = BOLD + WARNING
     BOLDFAIL = BOLD + FAIL
     BOLDLIGHTBLUE = BOLD + OKLIGHTBLUE
+    BOLDWHITE = BOLD + WHITE
 
     # Underlined styles
     UNDERLINEBLUE = UNDERLINE + BLUE
