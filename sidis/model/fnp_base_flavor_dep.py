@@ -249,24 +249,24 @@ class TMDPDFBase(nn.Module):
         self,
         x: torch.Tensor,
         b: torch.Tensor,
-        NP_evol: torch.Tensor,
         flavor_idx: int = 0,
     ) -> torch.Tensor:
         """
         Compute TMD PDF using MAP22 parameterization.
 
+        Note: The non-perturbative evolution factor S_NP(ζ, b_T) is applied in the manager.
+
         Args:
             x (torch.Tensor): Bjorken x variable
             b (torch.Tensor): fourier-conjugate of k_T (GeV⁻¹)
-            NP_evol (torch.Tensor): Evolution factor from fNP_evolution
             flavor_idx (int): Flavor index (typically 0)
 
         Returns:
-            torch.Tensor: TMD PDF f_NP(x, b)
+            torch.Tensor: TMD PDF f_NP(x, b) without evolution factor
         """
         # Handle x >= 1 case (return zero)
         if torch.any(x >= 1):
-            mask_val = (x < 1).type_as(NP_evol)
+            mask_val = (x < 1).type_as(b)
         else:
             mask_val = torch.ones_like(x)
 
@@ -314,9 +314,8 @@ class TMDPDFBase(nn.Module):
         # Denominator (exact MAP22 formula)
         denominator = g1 + (lam**2) * (g1B**2) + g1C * (lam2**2)
 
-        # Complete TMD PDF
+        # Complete TMD PDF (evolution factor applied in manager)
         result = numerator / denominator
-        # result = NP_evol * numerator / denominator
 
         return result * mask_val
 
@@ -430,20 +429,20 @@ class TMDFFBase(nn.Module):
         self,
         z: torch.Tensor,
         b: torch.Tensor,
-        NP_evol: torch.Tensor,
         flavor_idx: int = 0,
     ) -> torch.Tensor:
         """
         Compute TMD FF using MAP22 parameterization.
 
+        Note: The non-perturbative evolution factor S_NP(ζ, b_T) is applied in the manager.
+
         Args:
             z (torch.Tensor): Momentum fraction variable
             b (torch.Tensor): fourier-conjugate of P_T (GeV⁻¹)
-            NP_evol (torch.Tensor): Evolution factor from fNP_evolution
             flavor_idx (int): Flavor index (typically 0)
 
         Returns:
-            torch.Tensor: TMD FF D_NP(z, b)
+            torch.Tensor: TMD FF D_NP(z, b) without evolution factor
 
         Note:
             MAP22 parameterization doesn't use zeta evolution, so it's removed
@@ -451,7 +450,7 @@ class TMDFFBase(nn.Module):
         """
         # Handle z >= 1 case (return zero)
         if torch.any(z >= 1):
-            mask_val = (z < 1).type_as(NP_evol)
+            mask_val = (z < 1).type_as(b)
         else:
             mask_val = torch.ones_like(z)
 
@@ -492,8 +491,8 @@ class TMDFFBase(nn.Module):
         # Denominator (exact MAP22 formula)
         denominator = g3 + (lambdaF / z2) * (g3B**2)
 
-        # Complete TMD FF
-        result = NP_evol * numerator / denominator
+        # Complete TMD FF (evolution factor applied in manager)
+        result = numerator / denominator
 
         return result * mask_val
 
@@ -679,7 +678,10 @@ class fNPManager(nn.Module):
         outputs = {}
         for flavor in flavors:
             if flavor in self.pdf_modules:
-                outputs[flavor] = self.pdf_modules[flavor](x, b, shared_evol, 0)
+                # Note: NP_evol is now applied in the manager, not in the module
+                base_result = self.pdf_modules[flavor](x, b, 0)
+                # Apply evolution factor to the result
+                outputs[flavor] = base_result * shared_evol
             else:
                 raise ValueError(f"Unknown PDF flavor: {flavor}")
 
@@ -706,7 +708,10 @@ class fNPManager(nn.Module):
         outputs = {}
         for flavor in flavors:
             if flavor in self.ff_modules:
-                outputs[flavor] = self.ff_modules[flavor](z, b, shared_evol, 0)
+                # Note: NP_evol is now applied in the manager, not in the module
+                base_result = self.ff_modules[flavor](z, b, 0)
+                # Apply evolution factor to the result
+                outputs[flavor] = base_result * shared_evol
             else:
                 raise ValueError(f"Unknown FF flavor: {flavor}")
         return outputs

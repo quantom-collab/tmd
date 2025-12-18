@@ -91,10 +91,12 @@ if __name__ == "__main__":
     events_tensor = torch.load(events_file)
 
     # Print out some information about the events
+    print(f"{tcolors.BOLDWHITE}\n[main.py] {tcolors.ENDC}")
     print(f"Loaded events from {events_file}")
     print(f"Event data shape: {events_tensor.shape}")
     print(f"Events tensor:\n{events_tensor}\n")
 
     # Run the model forward pass with the full tensor
+    print(f"{tcolors.BOLDWHITE}\n[main.py] {tcolors.ENDC}")
     print(f"{tcolors.GREEN}Results from model forward pass:{tcolors.ENDC}")
     print(model(events_tensor))

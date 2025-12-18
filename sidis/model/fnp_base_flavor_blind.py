@@ -188,7 +188,6 @@ class TMDPDFFlavorBlind(nn.Module):
         self,
         x: torch.Tensor,
         b: torch.Tensor,
-        NP_evol: torch.Tensor,
     ) -> torch.Tensor:
         """
         Compute TMD PDF using MAP22 parameterization.
@@ -199,23 +198,23 @@ class TMDPDFFlavorBlind(nn.Module):
         same parameters and produce identical results.
 
         The computation follows the MAP22 formula:
-        f_NP(x, b_T) = S_NP(ζ, b_T) × [numerator] / [denominator]
+        f_NP(x, b_T) = [numerator] / [denominator]
 
         where the numerator and denominator are computed from the shared parameters.
+        Note: The non-perturbative evolution factor S_NP(ζ, b_T) is applied in the manager.
 
         Args:
             x (torch.Tensor): Bjorken x variable (can be 1D [n_events] or 2D [n_events, n_b])
             b (torch.Tensor): Fourier-conjugate of k_T (GeV⁻¹) (2D: [n_events, n_b])
-            NP_evol (torch.Tensor): Evolution factor from fNP_evolution (2D: [n_events, n_b])
 
         Returns:
-            torch.Tensor: TMD PDF f_NP(x, b) - identical for all flavors.
-                         Shape: [n_events, n_b] (same as b and NP_evol)
+            torch.Tensor: TMD PDF f_NP(x, b) without evolution factor - identical for all flavors.
+                         Shape: [n_events, n_b] (same as b)
 
         Note:
             - Unlike TMDPDFBase, this flavor-blind version doesn't accept a flavor_idx parameter
               since all flavors share the same parameters
-            - The evolution factor NP_evol is computed in the manager from zeta = Q²
+            - The evolution factor is computed and applied in the manager
             - All flavors (u, d, s, etc.) will produce identical results
         """
         # Ensure x can broadcast with b (x: [n_events], b: [n_events, n_b])
@@ -224,7 +223,7 @@ class TMDPDFFlavorBlind(nn.Module):
 
         # Handle x >= 1 case (return zero)
         if torch.any(x >= 1):
-            mask_val = (x < 1).type_as(NP_evol)
+            mask_val = (x < 1).type_as(b)
         else:
             mask_val = torch.ones_like(x)
 
@@ -275,8 +274,8 @@ class TMDPDFFlavorBlind(nn.Module):
         # Avoid division by zero
         denominator = torch.clamp(denominator, min=1e-12)
 
-        # Final result with evolution and x-boundary handling
-        result = NP_evol * (numerator / denominator) * mask_val
+        # Final result with x-boundary handling (evolution factor applied in manager)
+        result = (numerator / denominator) * mask_val
 
         return result
 
@@ -335,24 +334,23 @@ class SiversFlavorBlind(nn.Module):
         self,
         x: torch.Tensor,
         b: torch.Tensor,
-        NP_evol: torch.Tensor,
     ) -> torch.Tensor:
         """
         Compute Sivers function using simplified parameterization.
 
-        Formula: f_{1T}^{perp}(x, b_T) = S_NP(ζ, b_T) × exp(-g1_T × b_T²)
+        Formula: f_{1T}^{perp}(x, b_T) = exp(-g1_T × b_T²)
+        Note: The non-perturbative evolution factor S_NP(ζ, b_T) is applied in the manager.
 
         Args:
             x (torch.Tensor): Bjorken x variable (can be 1D [n_events] or 2D [n_events, n_b])
             b (torch.Tensor): Impact parameter b_T (GeV⁻¹) (2D: [n_events, n_b])
-            NP_evol (torch.Tensor): Evolution factor from fNP_evolution (2D: [n_events, n_b])
 
         Returns:
-            torch.Tensor: Sivers function f_{1T}^{perp}(x, b) - identical for all flavors.
-                         Shape: [n_events, n_b] (same as b and NP_evol)
+            torch.Tensor: Sivers function f_{1T}^{perp}(x, b) without evolution factor - identical for all flavors.
+                         Shape: [n_events, n_b] (same as b)
         """
-        # Compute Sivers function: NP_evol * exp(-g1_T * b²)
-        result = NP_evol * torch.exp(-self.g1_T * b * b)
+        # Compute Sivers function: exp(-g1_T * b²) (evolution factor applied in manager)
+        result = torch.exp(-self.g1_T * b * b)
 
         return result
 
@@ -418,7 +416,6 @@ class TMDFFFlavorBlind(nn.Module):
         self,
         z: torch.Tensor,
         b: torch.Tensor,
-        NP_evol: torch.Tensor,
     ) -> torch.Tensor:
         """
         Compute TMD FF using MAP22 parameterization.
@@ -429,24 +426,24 @@ class TMDFFFlavorBlind(nn.Module):
         same parameters and produce identical results.
 
         The computation follows the MAP22 formula:
-        D_NP(z, b_T) = S_NP(ζ, b_T) × [numerator] / [denominator]
+        D_NP(z, b_T) = [numerator] / [denominator]
 
         where the numerator and denominator are computed from the shared parameters, and
         includes z² factors specific to fragmentation functions.
+        Note: The non-perturbative evolution factor S_NP(ζ, b_T) is applied in the manager.
 
         Args:
             z (torch.Tensor): Energy fraction z variable (can be 1D [n_events] or 2D [n_events, n_b])
             b (torch.Tensor): Impact parameter (GeV⁻¹) (2D: [n_events, n_b])
-            NP_evol (torch.Tensor): Evolution factor from fNP_evolution (2D: [n_events, n_b])
 
         Returns:
-            torch.Tensor: TMD FF D_NP(z, b) - identical for all flavors.
-                         Shape: [n_events, n_b] (same as b and NP_evol)
+            torch.Tensor: TMD FF D_NP(z, b) without evolution factor - identical for all flavors.
+                         Shape: [n_events, n_b] (same as b)
 
         Note:
             - Unlike TMDFFBase, this flavor-blind version doesn't accept a flavor_idx parameter
               since all flavors share the same parameters
-            - The evolution factor NP_evol is computed in the manager from zeta = Q²
+            - The evolution factor is computed and applied in the manager
             - All flavors (u, d, s, etc.) will produce identical results
             - The FF parameterization includes z² factors that are important for fragmentation
         """
@@ -456,7 +453,7 @@ class TMDFFFlavorBlind(nn.Module):
 
         # Handle z >= 1 case (return zero)
         if torch.any(z >= 1):
-            mask_val = (z < 1).type_as(NP_evol)
+            mask_val = (z < 1).type_as(b)
         else:
             mask_val = torch.ones_like(z)
 
@@ -500,8 +497,8 @@ class TMDFFFlavorBlind(nn.Module):
         # Avoid division by zero
         denominator = torch.clamp(denominator, min=1e-12)
 
-        # Final result with evolution and z-boundary handling
-        result = NP_evol * (numerator / denominator) * mask_val
+        # Final result with z-boundary handling (evolution factor applied in manager)
+        result = (numerator / denominator) * mask_val
 
         return result
 
@@ -603,7 +600,9 @@ class fNPManager(nn.Module):
             init_g2=evolution_config.get("init_g2", 0.12840),
             free_mask=evolution_config.get("free_mask", [True]),
         )
-        print(f"{tcolors.GREEN}[fNPManager] Initialized shared evolution module{tcolors.ENDC}")
+        print(
+            f"{tcolors.GREEN}[fNPManager] Initialized shared evolution module{tcolors.ENDC}"
+        )
 
         # Setup PDF module (single module serves all flavors)
         pdf_config = config.get("pdf", {})
@@ -711,7 +710,11 @@ class fNPManager(nn.Module):
         shared_evol = self.evolution(b, zeta)
 
         # Evaluate PDF using shared parameters (same result for all flavors)
-        shared_pdf_result = self.pdf_module(x, b, shared_evol)
+        # Note: NP_evol is now applied in the manager, not in the module
+        shared_pdf_result = self.pdf_module(x, b)
+
+        # Apply evolution factor to the result
+        shared_pdf_result = shared_pdf_result * shared_evol
 
         # Return the same result for all requested flavors
         outputs = {}
@@ -762,7 +765,11 @@ class fNPManager(nn.Module):
         shared_evol = self.evolution(b, zeta)
 
         # Evaluate FF using shared parameters (same result for all flavors)
-        shared_ff_result = self.ff_module(z, b, shared_evol)
+        # Note: NP_evol is now applied in the manager, not in the module
+        shared_ff_result = self.ff_module(z, b)
+
+        # Apply evolution factor to the result
+        shared_ff_result = shared_ff_result * shared_evol
 
         # Return the same result for all requested flavors
         outputs = {}
@@ -801,7 +808,11 @@ class fNPManager(nn.Module):
         shared_evol = self.evolution(b, zeta)
 
         # Evaluate Sivers using shared parameters
-        sivers_result = self.sivers_module(x, b, shared_evol)
+        # Note: NP_evol is now applied in the manager, not in the module
+        sivers_result = self.sivers_module(x, b)
+
+        # Apply evolution factor to the result
+        sivers_result = sivers_result * shared_evol
 
         return sivers_result
 
