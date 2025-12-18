@@ -18,6 +18,7 @@ import importlib
 COMBO_MODULES = {
     "flavor_dep": ".fnp_base_flavor_dep",
     "flavor_blind": ".fnp_base_flavor_blind",
+    "flexible": ".fnp_base_flexible",
 }
 
 
