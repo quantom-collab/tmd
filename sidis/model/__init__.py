@@ -298,7 +298,7 @@ class TrainableModel(torch.nn.Module):
 
         # Factors taken from Bacchetta, et al. JHEP 02 (2007) 093
         gamma = 2 * params.M2 * x / Q
-        y = Q2 / x / (s - params.M2)
+        y = Q2 / x / (rs**2 - params.M2)
         epsilon = (1 - y - 1/4 * gamma**2 * y**2) / (1 - y + 1/2 * y**2 + 1/4 * gamma**2 * y**2)
         sigma0 = 8 * torch.pi**2 * alpha_em**2 * z**2 * qT / x / Q**3 * y**2 / 2 / (1 - epsilon) * (1 + gamma**2 / 2 / x)
 
