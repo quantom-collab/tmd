@@ -254,7 +254,7 @@ class TrainableModel(torch.nn.Module):
         FUT_sin_phih_minus_phis_integrand = self.get_FUT_sin_phih_minus_phis_integrand(x, Q2, z, bT, initial_hadron, fragmented_hadron)
         return self.ogata_for_J1.eval_ogata_func_var_h(FUT_sin_phih_minus_phis_integrand, bT, qT)
 
-    def forward(self, events_tensor: torch.Tensor, expt_setup: List[str] = ["p","pi_plus"], s: float = 140.0) -> torch.Tensor:
+    def forward(self, events_tensor: torch.Tensor, expt_setup: List[str] = ["p","pi_plus"], rs: float = 140.0) -> torch.Tensor:
         """
         Forward pass for batch of events.
         events_tensor: shape (n_events, 6) containing [x, PhT, Q, z, phih, phis] for each event

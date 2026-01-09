@@ -119,7 +119,9 @@ The strong coupling α_s is evolved using the β-function at the order consisten
 **Flavors**: u, d, s, c, ub, db, sb, cb
 
 **Grid dimensions**:
-- x: 500 points, logarithmically spaced from 10⁻³ to 1
+- x: 500 points total, using a two-piece grid  
+  - 300 points, logarithmically spaced from 5×10⁻⁵ to 0.0999  
+  - 200 points, linearly spaced from 0.1 to 1  
 - b_T: 500 points, logarithmically spaced from 10⁻³ to 20 GeV⁻¹
 
 **File format**:

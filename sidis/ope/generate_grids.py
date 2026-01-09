@@ -119,7 +119,9 @@ def main():
     # print('bT axes: ', bT_grid)
 
     # do from my own choice
-    x_grid = 10**torch.linspace(-3, 0, 500, dtype=torch.float64)  # 500 points from 0.001 to 1
+    #x_grid = 10**torch.linspace(-3, 0, 500, dtype=torch.float64)  # 500 points from 0.001 to 1
+    x_grid = 10**torch.linspace(torch.log10(torch.tensor(5e-5)),torch.log10(torch.tensor(0.0999)),300,dtype=torch.float64)  # 300 points from 5e-5 to 0.0999
+    x_grid = torch.cat((x_grid, torch.linspace(0.1,1,200,dtype=torch.float64)))  # 200 points from 0.1 to 1
     bT_grid = 10**torch.linspace(-3, np.log10(20), 500, dtype=torch.float64)  # 500 points from 0.001 to 20 GeV^-1
     z_grid = torch.linspace(0.2, 0.9, 500, dtype=torch.float64)  # 500 points from 0.2 to 0.9
     # print('xs axes: ', x_grid)
