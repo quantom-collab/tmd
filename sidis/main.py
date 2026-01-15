@@ -100,3 +100,78 @@ if __name__ == "__main__":
     print(f"{tcolors.BOLDWHITE}\n[main.py] {tcolors.ENDC}")
     print(f"{tcolors.GREEN}Results from model forward pass:{tcolors.ENDC}")
     print(model(events_tensor))
+
+    #######################
+
+    # Print the parameters of the model
+    print(f"{tcolors.BOLDWHITE}\n[main.py] {tcolors.ENDC}")
+    print(f"{tcolors.GREEN}Model Parameters Summary:{tcolors.ENDC}")
+
+    total_params = 0
+    trainable_params = 0
+    fixed_params = 0
+
+    # Group parameters by module for better readability
+    param_groups = {}
+    for name, param in model.named_parameters():
+        # Extract module name (e.g., "nonperturbative.evolution" or "nonperturbative.pdf_modules.u")
+        parts = name.split(".")
+        if len(parts) >= 2:
+            module_name = ".".join(parts[:-1])
+        else:
+            module_name = "other"
+
+        if module_name not in param_groups:
+            param_groups[module_name] = []
+        param_groups[module_name].append((name, param))
+
+    # Print parameters grouped by module
+    for module_name, params in sorted(param_groups.items()):
+        print(f"\n{tcolors.OKLIGHTBLUE}{'='*125}")
+        print(f"Module: {module_name}")
+        print(f"{'='*125}{tcolors.ENDC}")
+        print(f"{'Parameter Name':<70} {'Shape':<15} {'Trainable':<12} {'Value':<25}")
+        print("-" * 125)
+
+        for name, param in sorted(params):
+            total_params += param.numel()
+            is_trainable = param.requires_grad
+            if is_trainable:
+                trainable_params += param.numel()
+            else:
+                fixed_params += param.numel()
+
+            # Format value display
+            if param.numel() == 1:
+                value_str = f"{param.data.item():.6f}"
+            elif param.numel() <= 5:
+                # Show full values for small tensors
+                value_str = str(param.data.detach().cpu().numpy().tolist())
+            else:
+                # Show summary for large tensors
+                value_str = f"min={param.data.min().item():.6f}, max={param.data.max().item():.6f}"
+
+            # Shorten parameter name for display
+            short_name = name.split(".")[-1] if "." in name else name
+
+            trainable_str = (
+                f"{tcolors.GREEN}Yes{tcolors.ENDC}"
+                if is_trainable
+                else f"{tcolors.WARNING}No (Fixed){tcolors.ENDC}"
+            )
+
+            print(
+                f"{short_name:<70} {str(list(param.shape)):<15} {trainable_str:<25} {value_str[:25]}"
+            )
+
+    print(f"\n{tcolors.BOLDWHITE}{'='*125}")
+    print(f"Summary:{tcolors.ENDC}")
+    print(f"  Total parameters: {total_params:,}")
+    print(
+        f"  {tcolors.GREEN}Trainable (open to fit): {trainable_params:,}{tcolors.ENDC}"
+    )
+    print(f"  {tcolors.WARNING}Fixed (not trainable): {fixed_params:,}{tcolors.ENDC}")
+    print(
+        f"  Trainable percentage: {100 * trainable_params / total_params if total_params > 0 else 0:.2f}%"
+    )
+    print(f"{'='*125}")
