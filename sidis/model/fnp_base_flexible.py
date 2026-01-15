@@ -936,25 +936,49 @@ class fNPManager(nn.Module):
         """Compute rapidity scale zeta from hard scale Q."""
         return Q**2
 
+    def get_evolution(self, b: torch.Tensor, Q: torch.Tensor) -> torch.Tensor:
+        """
+        Compute and return the non-perturbative evolution factor.
+
+        Args:
+            b (torch.Tensor): Impact parameter (2D: [n_events, n_b])
+            Q (torch.Tensor): Hard scale Q in GeV (1D: [n_events])
+
+        Returns:
+            torch.Tensor: Evolution factor S_NP(ζ, b_T) with shape [n_events, n_b]
+        """
+        zeta = self._compute_zeta(Q)
+        return self.evolution(b, zeta)
+
     def forward_pdf(
         self,
         x: torch.Tensor,
         b: torch.Tensor,
-        Q: torch.Tensor,
         flavors: Optional[List[str]] = None,
     ) -> Dict[str, torch.Tensor]:
-        """Evaluate TMD PDFs for specified flavors."""
+        """
+        Evaluate TMD PDFs for specified flavors in bare form (without evolution factor).
+
+        Args:
+            x (torch.Tensor): Bjorken x values (1D: [n_events])
+            b (torch.Tensor): Impact parameter values (2D: [n_events, n_b])
+            Q (torch.Tensor): Hard scale Q in GeV (1D: [n_events])
+            flavors (Optional[List[str]]): List of PDF flavors to evaluate
+
+        Returns:
+            Dict[str, torch.Tensor]: Bare PDF values for each requested flavor.
+                                    Shape: [n_events, n_b] for each flavor
+                                    Note: Evolution factor must be applied separately by caller.
+        """
         if flavors is None:
             flavors = self.pdf_flavor_keys
-
-        zeta = self._compute_zeta(Q)
-        shared_evol = self.evolution(b, zeta)
 
         outputs = {}
         for flavor in flavors:
             if flavor in self.pdf_modules:
+                # Return bare PDF (no evolution applied)
                 base_result = self.pdf_modules[flavor](x, b, 0)
-                outputs[flavor] = base_result * shared_evol
+                outputs[flavor] = base_result
             else:
                 raise ValueError(f"Unknown PDF flavor: {flavor}")
 
@@ -964,21 +988,31 @@ class fNPManager(nn.Module):
         self,
         z: torch.Tensor,
         b: torch.Tensor,
-        Q: torch.Tensor,
         flavors: Optional[List[str]] = None,
     ) -> Dict[str, torch.Tensor]:
-        """Evaluate TMD FFs for specified flavors."""
+        """
+        Evaluate TMD FFs for specified flavors in bare form (without evolution factor).
+
+        Args:
+            z (torch.Tensor): Energy fraction z values (1D: [n_events])
+            b (torch.Tensor): Impact parameter values (2D: [n_events, n_b])
+            Q (torch.Tensor): Hard scale Q in GeV (1D: [n_events])
+            flavors (Optional[List[str]]): List of FF flavors to evaluate
+
+        Returns:
+            Dict[str, torch.Tensor]: Bare FF values for each requested flavor.
+                                    Shape: [n_events, n_b] for each flavor
+                                    Note: Evolution factor must be applied separately by caller.
+        """
         if flavors is None:
             flavors = self.ff_flavor_keys
-
-        zeta = self._compute_zeta(Q)
-        shared_evol = self.evolution(b, zeta)
 
         outputs = {}
         for flavor in flavors:
             if flavor in self.ff_modules:
+                # Return bare FF (no evolution applied)
                 base_result = self.ff_modules[flavor](z, b, 0)
-                outputs[flavor] = base_result * shared_evol
+                outputs[flavor] = base_result
             else:
                 raise ValueError(f"Unknown FF flavor: {flavor}")
 
@@ -988,10 +1022,9 @@ class fNPManager(nn.Module):
         self,
         x: torch.Tensor,
         b: torch.Tensor,
-        Q: torch.Tensor,
     ) -> torch.Tensor:
         """
-        Evaluate Sivers function.
+        Evaluate Sivers function in bare form (without evolution factor).
 
         Note: Sivers function support is not yet implemented in the flexible model.
         This method returns zeros with the correct shape as a placeholder.
@@ -999,25 +1032,19 @@ class fNPManager(nn.Module):
         Args:
             x (torch.Tensor): Bjorken x values (1D: [n_events])
             b (torch.Tensor): Impact parameter values (2D: [n_events, n_b])
-            Q (torch.Tensor): Hard scale Q in GeV (1D: [n_events], used to compute zeta = Q²)
 
         Returns:
-            torch.Tensor: Sivers function values (currently zeros as placeholder).
+            torch.Tensor: Bare Sivers function values (currently zeros as placeholder).
                          Shape: [n_events, n_b] (same as b)
+                         Note: Evolution factor must be applied separately by caller.
         """
         # Ensure x can broadcast with b
         if b.dim() > x.dim():
             x = x.unsqueeze(-1)
 
-        # Compute zeta from Q (zeta = Q² for standard SIDIS)
-        zeta = self._compute_zeta(Q)
-
-        # Compute shared evolution factor
-        shared_evol = self.evolution(b, zeta)
-
         # TODO: Implement Sivers function with parameter linking support
-        # For now, return zeros with correct shape
-        return torch.zeros_like(b) * shared_evol
+        # For now, return zeros with correct shape (bare, no evolution)
+        return torch.zeros_like(b)
 
     def forward(
         self,
@@ -1027,11 +1054,34 @@ class fNPManager(nn.Module):
         Q: torch.Tensor,
         pdf_flavors: Optional[List[str]] = None,
         ff_flavors: Optional[List[str]] = None,
-    ) -> Dict[str, Dict[str, torch.Tensor]]:
-        """Evaluate both TMD PDFs and FFs simultaneously."""
+    ) -> Dict[str, Any]:
+        """
+        Evaluate both TMD PDFs and FFs simultaneously.
+
+        Args:
+            x (torch.Tensor): Bjorken x values (1D: [n_events])
+            z (torch.Tensor): Energy fraction z values (1D: [n_events])
+            b (torch.Tensor): Impact parameter values (2D: [n_events, n_b])
+            Q (torch.Tensor): Hard scale Q in GeV (1D: [n_events])
+            pdf_flavors (Optional[List[str]]): List of PDF flavors to evaluate
+            ff_flavors (Optional[List[str]]): List of FF flavors to evaluate
+
+        Returns:
+            Dict containing:
+                - 'pdfs': Dict of bare PDF values for each flavor
+                - 'ffs': Dict of bare FF values for each flavor
+                - 'evolution': Evolution factor tensor (computed once)
+            Note:
+                Evolution must be applied separately by caller: bare * evolution
+        """
         x = x.unsqueeze(-1)
         z = z.unsqueeze(-1)
+
+        # Compute evolution once
+        evolution = self.get_evolution(b, Q)
+
         return {
-            "pdfs": self.forward_pdf(x, b, Q, pdf_flavors),
-            "ffs": self.forward_ff(z, b, Q, ff_flavors),
+            "pdfs": self.forward_pdf(x, b, pdf_flavors),
+            "ffs": self.forward_ff(z, b, ff_flavors),
+            "evolution": evolution,
         }

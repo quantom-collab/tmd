@@ -675,15 +675,28 @@ class fNPManager(nn.Module):
         """
         return Q**2
 
+    def get_evolution(self, b: torch.Tensor, Q: torch.Tensor) -> torch.Tensor:
+        """
+        Compute and return the non-perturbative evolution factor.
+
+        Args:
+            b (torch.Tensor): Impact parameter (2D: [n_events, n_b])
+            Q (torch.Tensor): Hard scale Q in GeV (1D: [n_events])
+
+        Returns:
+            torch.Tensor: Evolution factor S_NP(ζ, b_T) with shape [n_events, n_b]
+        """
+        zeta = self._compute_zeta(Q)
+        return self.evolution(b, zeta)
+
     def forward_pdf(
         self,
         x: torch.Tensor,
         b: torch.Tensor,
-        Q: torch.Tensor,
         flavors: Optional[List[str]] = None,
     ) -> Dict[str, torch.Tensor]:
         """
-        Evaluate TMD PDFs for specified flavors using shared parameters.
+        Evaluate TMD PDFs for specified flavors using shared parameters in bare form (without evolution factor).
 
         In the flavor-blind system, all flavors share the same parameter set, so
         the PDF computation is performed once and the same result is returned for
@@ -692,29 +705,20 @@ class fNPManager(nn.Module):
         Args:
             x (torch.Tensor): Bjorken x values (1D: [n_events])
             b (torch.Tensor): Impact parameter values (2D: [n_events, n_b])
-            Q (torch.Tensor): Hard scale Q in GeV (1D: [n_events], used to compute zeta = Q²)
             flavors (Optional[List[str]]): List of flavors to evaluate (None = all flavors)
 
         Returns:
-            Dict[str, torch.Tensor]: PDF values for each requested flavor.
+            Dict[str, torch.Tensor]: Bare PDF values for each requested flavor.
                                     All flavors have identical values since they share parameters.
                                     Shape: [n_events, n_b] for each flavor
+                                    Note: Evolution factor must be applied separately by caller.
         """
         if flavors is None:
             flavors = self.flavor_keys
 
-        # Compute zeta from Q (zeta = Q² for standard SIDIS)
-        zeta = self._compute_zeta(Q)
-
-        # Compute shared evolution factor (same for all flavors)
-        shared_evol = self.evolution(b, zeta)
-
         # Evaluate PDF using shared parameters (same result for all flavors)
-        # Note: NP_evol is now applied in the manager, not in the module
+        # Return bare PDF (no evolution applied)
         shared_pdf_result = self.pdf_module(x, b)
-
-        # Apply evolution factor to the result
-        shared_pdf_result = shared_pdf_result * shared_evol
 
         # Return the same result for all requested flavors
         outputs = {}
@@ -724,21 +728,16 @@ class fNPManager(nn.Module):
             else:
                 raise ValueError(f"Unknown PDF flavor: {flavor}")
 
-        # # Print out message to the user
-        # print(
-        #     f"{tcolors.GREEN}[fNPManager] Outputs for {len(outputs)} PDF flavors: all identical (flavor-blind)\n{tcolors.ENDC}"
-        # )
         return outputs
 
     def forward_ff(
         self,
         z: torch.Tensor,
         b: torch.Tensor,
-        Q: torch.Tensor,
         flavors: Optional[List[str]] = None,
     ) -> Dict[str, torch.Tensor]:
         """
-        Evaluate TMD FFs for specified flavors using shared parameters.
+        Evaluate TMD FFs for specified flavors using shared parameters in bare form (without evolution factor).
 
         In the flavor-blind system, all flavors share the same parameter set, so
         the FF computation is performed once and the same result is returned for
@@ -747,29 +746,20 @@ class fNPManager(nn.Module):
         Args:
             z (torch.Tensor): Energy fraction z values (1D: [n_events])
             b (torch.Tensor): Impact parameter values (2D: [n_events, n_b])
-            Q (torch.Tensor): Hard scale Q in GeV (1D: [n_events], used to compute zeta = Q²)
             flavors (Optional[List[str]]): List of flavors to evaluate (None = all flavors)
 
         Returns:
-            Dict[str, torch.Tensor]: FF values for each requested flavor.
+            Dict[str, torch.Tensor]: Bare FF values for each requested flavor.
                                     All flavors have identical values since they share parameters.
                                     Shape: [n_events, n_b] for each flavor
+                                    Note: Evolution factor must be applied separately by caller.
         """
         if flavors is None:
             flavors = self.flavor_keys
 
-        # Compute zeta from Q (zeta = Q² for standard SIDIS)
-        zeta = self._compute_zeta(Q)
-
-        # Compute shared evolution factor (same for all flavors)
-        shared_evol = self.evolution(b, zeta)
-
         # Evaluate FF using shared parameters (same result for all flavors)
-        # Note: NP_evol is now applied in the manager, not in the module
+        # Return bare FF (no evolution applied)
         shared_ff_result = self.ff_module(z, b)
-
-        # Apply evolution factor to the result
-        shared_ff_result = shared_ff_result * shared_evol
 
         # Return the same result for all requested flavors
         outputs = {}
@@ -784,10 +774,9 @@ class fNPManager(nn.Module):
         self,
         x: torch.Tensor,
         b: torch.Tensor,
-        Q: torch.Tensor,
     ) -> torch.Tensor:
         """
-        Evaluate Sivers function using shared parameters.
+        Evaluate Sivers function using shared parameters in bare form (without evolution factor).
 
         In the flavor-blind system, all flavors share the same Sivers parameters,
         so the computation returns a single result for all flavors.
@@ -795,24 +784,15 @@ class fNPManager(nn.Module):
         Args:
             x (torch.Tensor): Bjorken x values (1D: [n_events])
             b (torch.Tensor): Impact parameter values (2D: [n_events, n_b])
-            Q (torch.Tensor): Hard scale Q in GeV (1D: [n_events], used to compute zeta = Q²)
 
         Returns:
-            torch.Tensor: Sivers function values - identical for all flavors.
+            torch.Tensor: Bare Sivers function values - identical for all flavors.
                          Shape: [n_events, n_b] (same as b)
+                         Note: Evolution factor must be applied separately by caller.
         """
-        # Compute zeta from Q (zeta = Q² for standard SIDIS)
-        zeta = self._compute_zeta(Q)
-
-        # Compute shared evolution factor
-        shared_evol = self.evolution(b, zeta)
-
         # Evaluate Sivers using shared parameters
-        # Note: NP_evol is now applied in the manager, not in the module
+        # Return bare Sivers (no evolution applied)
         sivers_result = self.sivers_module(x, b)
-
-        # Apply evolution factor to the result
-        sivers_result = sivers_result * shared_evol
 
         return sivers_result
 
@@ -824,7 +804,7 @@ class fNPManager(nn.Module):
         Q: torch.Tensor,
         pdf_flavors: Optional[List[str]] = None,
         ff_flavors: Optional[List[str]] = None,
-    ) -> Dict[str, Dict[str, torch.Tensor]]:
+    ) -> Dict[str, Any]:
         """
         Evaluate both TMD PDFs and FFs simultaneously using shared parameters.
 
@@ -841,18 +821,27 @@ class fNPManager(nn.Module):
             ff_flavors (Optional[List[str]]): List of FF flavors to evaluate (None = all flavors)
 
         Returns:
-            Dict containing 'pdfs' and 'ffs' sub-dictionaries with flavor results.
+            Dict containing:
+                - 'pdfs': Dict of bare PDF values for each flavor (all identical)
+                - 'ffs': Dict of bare FF values for each flavor (all identical)
+                - 'evolution': Evolution factor tensor (computed once)
             Structure: {
                 "pdfs": {flavor: tensor, ...},  # All flavors have identical values
-                "ffs": {flavor: tensor, ...}   # All flavors have identical values
+                "ffs": {flavor: tensor, ...},  # All flavors have identical values
+                "evolution": tensor             # Evolution factor
             }
 
         Note:
             The inputs are 1D tensors: [n_events] for x, z, Q
             The outputs are 2D tensors: [n_events, n_b] for each flavor
             All flavors have identical values since they share parameters (flavor-blind system)
+            Evolution must be applied separately by caller: bare * evolution
         """
+        # Compute evolution once
+        evolution = self.get_evolution(b, Q)
+
         return {
-            "pdfs": self.forward_pdf(x, b, Q, pdf_flavors),
-            "ffs": self.forward_ff(z, b, Q, ff_flavors),
+            "pdfs": self.forward_pdf(x, b, pdf_flavors),
+            "ffs": self.forward_ff(z, b, ff_flavors),
+            "evolution": evolution,
         }

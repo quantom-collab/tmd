@@ -264,6 +264,10 @@ class TMDPDFBase(nn.Module):
         Returns:
             torch.Tensor: TMD PDF f_NP(x, b) without evolution factor
         """
+        # Ensure x can broadcast with b (x: [n_events], b: [n_events, n_b])
+        if b.dim() > x.dim():
+            x = x.unsqueeze(-1)
+
         # Handle x >= 1 case (return zero)
         if torch.any(x >= 1):
             mask_val = (x < 1).type_as(b)
@@ -448,6 +452,10 @@ class TMDFFBase(nn.Module):
             MAP22 parameterization doesn't use zeta evolution, so it's removed
             from the interface for clarity.
         """
+        # Ensure z can broadcast with b (z: [n_events], b: [n_events, n_b])
+        if b.dim() > z.dim():
+            z = z.unsqueeze(-1)
+
         # Handle z >= 1 case (return zero)
         if torch.any(z >= 1):
             mask_val = (z < 1).type_as(b)
@@ -661,60 +669,112 @@ class fNPManager(nn.Module):
         """
         return Q**2
 
+    def get_evolution(self, b: torch.Tensor, Q: torch.Tensor) -> torch.Tensor:
+        """
+        Compute and return the non-perturbative evolution factor.
+
+        Args:
+            b (torch.Tensor): Impact parameter (2D: [n_events, n_b])
+            Q (torch.Tensor): Hard scale Q in GeV (1D: [n_events])
+
+        Returns:
+            torch.Tensor: Evolution factor S_NP(ζ, b_T) with shape [n_events, n_b]
+        """
+        zeta = self._compute_zeta(Q)
+        return self.evolution(b, zeta)
+
     def forward_pdf(
         self,
         x: torch.Tensor,
         b: torch.Tensor,
-        Q: torch.Tensor,
         flavors: Optional[List[str]] = None,
     ) -> Dict[str, torch.Tensor]:
-        """Evaluate TMD PDFs for specified flavors."""
+        """
+        Evaluate TMD PDFs for specified flavors in bare form (without evolution factor).
+
+        Args:
+            x (torch.Tensor): Bjorken x values (1D: [n_events])
+            b (torch.Tensor): Impact parameter values (2D: [n_events, n_b])
+            flavors (Optional[List[str]]): List of PDF flavors to evaluate
+
+        Returns:
+            Dict[str, torch.Tensor]: Bare PDF values for each requested flavor.
+                                    Shape: [n_events, n_b] for each flavor
+                                    Note: Evolution factor must be applied separately by caller.
+        """
         if flavors is None:
             flavors = self.pdf_flavor_keys
-
-        zeta = self._compute_zeta(Q)
-        shared_evol = self.evolution(b, zeta)
 
         outputs = {}
         for flavor in flavors:
             if flavor in self.pdf_modules:
-                # Note: NP_evol is now applied in the manager, not in the module
+                # Return bare PDF (no evolution applied)
                 base_result = self.pdf_modules[flavor](x, b, 0)
-                # Apply evolution factor to the result
-                outputs[flavor] = base_result * shared_evol
+                outputs[flavor] = base_result
             else:
                 raise ValueError(f"Unknown PDF flavor: {flavor}")
 
-        # # Print out message to the user
-        # print(
-        #     f"{tcolors.GREEN}[fNPManager] Outputs for {len(outputs)} PDF flavors: {outputs[list(outputs.keys())]} (events, b_T, flavors)\n{tcolors.ENDC}"
-        # )
         return outputs
 
     def forward_ff(
         self,
         z: torch.Tensor,
         b: torch.Tensor,
-        Q: torch.Tensor,
         flavors: Optional[List[str]] = None,
     ) -> Dict[str, torch.Tensor]:
-        """Evaluate TMD FFs for specified flavors."""
+        """
+        Evaluate TMD FFs for specified flavors in bare form (without evolution factor).
+
+        Args:
+            z (torch.Tensor): Energy fraction z values (1D: [n_events])
+            b (torch.Tensor): Impact parameter values (2D: [n_events, n_b])
+            flavors (Optional[List[str]]): List of FF flavors to evaluate
+
+        Returns:
+            Dict[str, torch.Tensor]: Bare FF values for each requested flavor.
+                                    Shape: [n_events, n_b] for each flavor
+                                    Note: Evolution factor must be applied separately by caller.
+        """
         if flavors is None:
             flavors = self.ff_flavor_keys
-
-        zeta = self._compute_zeta(Q)
-        shared_evol = self.evolution(b, zeta)
 
         outputs = {}
         for flavor in flavors:
             if flavor in self.ff_modules:
-                # Note: NP_evol is now applied in the manager, not in the module
+                # Return bare FF (no evolution applied)
                 base_result = self.ff_modules[flavor](z, b, 0)
-                # Apply evolution factor to the result
-                outputs[flavor] = base_result * shared_evol
+                outputs[flavor] = base_result
             else:
                 raise ValueError(f"Unknown FF flavor: {flavor}")
         return outputs
+
+    def forward_sivers(
+        self,
+        x: torch.Tensor,
+        b: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Evaluate Sivers function in bare form (without evolution factor).
+
+        Note: Sivers function is not yet implemented in the flavor-dependent model.
+        This method returns zeros with the correct shape as a placeholder.
+
+        Args:
+            x (torch.Tensor): Bjorken x values (1D: [n_events])
+            b (torch.Tensor): Impact parameter values (2D: [n_events, n_b])
+
+        Returns:
+            torch.Tensor: Bare Sivers function values (currently zeros as placeholder).
+                         Shape: [n_events, n_b] (same as b)
+                         Note: Evolution factor must be applied separately by caller.
+        """
+        # Ensure x can broadcast with b
+        if b.dim() > x.dim():
+            x = x.unsqueeze(-1)
+
+        # TODO: Implement Sivers function for flavor-dependent model
+        # For now, return zeros with correct shape (bare, no evolution)
+        return torch.zeros_like(b)
 
     def forward(
         self,
@@ -724,7 +784,7 @@ class fNPManager(nn.Module):
         Q: torch.Tensor,
         pdf_flavors: Optional[List[str]] = None,
         ff_flavors: Optional[List[str]] = None,
-    ) -> Dict[str, Dict[str, torch.Tensor]]:
+    ) -> Dict[str, Any]:
         """
         Evaluate both TMD PDFs and FFs simultaneously.
 
@@ -737,14 +797,23 @@ class fNPManager(nn.Module):
             ff_flavors (Optional[List[str]]): List of FF flavors to evaluate
 
         Returns:
-            Dict containing 'pdfs' and 'ffs' sub-dictionaries with flavor results
-        Note:
-            The inputs are 1D tensors: [n_events]
-            The outputs are 3D tensors: [n_events, b_T, n_flavors]
+            Dict containing:
+                - 'pdfs': Dict of bare PDF values for each flavor
+                - 'ffs': Dict of bare FF values for each flavor
+                - 'evolution': Evolution factor tensor (computed once)
+            Note:
+                The inputs are 1D tensors: [n_events]
+                The outputs are 2D tensors: [n_events, n_b] for each flavor
+                Evolution must be applied separately by caller: bare * evolution
         """
         x = x.unsqueeze(-1)
         z = z.unsqueeze(-1)
+
+        # Compute evolution once
+        evolution = self.get_evolution(b, Q)
+
         return {
-            "pdfs": self.forward_pdf(x, b, Q, pdf_flavors),
-            "ffs": self.forward_ff(z, b, Q, ff_flavors),
+            "pdfs": self.forward_pdf(x, b, pdf_flavors),
+            "ffs": self.forward_ff(z, b, ff_flavors),
+            "evolution": evolution,
         }
