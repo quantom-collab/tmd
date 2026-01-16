@@ -114,8 +114,6 @@ class TruthModel(torch.nn.Module):
         PhT = events_tensor[:, 1]
         Q = events_tensor[:, 2]
         z = events_tensor[:, 3]
-        phih = events_tensor[:, 4] if events_tensor.shape[1] >= 5 else torch.zeros_like(x)
-        phis = events_tensor[:, 5] if events_tensor.shape[1] >= 6 else torch.zeros_like(x)
 
         # Compute qT. This is the qT for which the Fourier transform is defined.
         qT = PhT / z
@@ -124,16 +122,26 @@ class TruthModel(torch.nn.Module):
         initial_hadron = expt_setup[0]
         fragmented_hadron = expt_setup[1]
 
+        # Always compute unpolarized structure function
         FUUT = self.stf['FUUT'](x, Q2, z, qT, initial_hadron, fragmented_hadron)
-        FUT_sin_phih_minus_phis = self.stf['FUTS'](x, Q2, z, qT, initial_hadron, fragmented_hadron)
 
+        # Compute kinematic factors
         alpha_em = torch.tensor([self.alpha_em.get_alpha(_) for _ in Q2.numpy()])
         gamma = 2 * params.M2 * x / Q
         y = Q2 / x / (rs**2 - params.M2)
         epsilon = (1 - y - 1/4 * gamma**2 * y**2) / (1 - y + 1/2 * y**2 + 1/4 * gamma**2 * y**2)
         sigma0 = 8 * torch.pi**2 * alpha_em**2 * z**2 * qT / x / Q**3 * y**2 / 2 / (1 - epsilon) * (1 + gamma**2 / 2 / x)
 
-        xsec = sigma0 * (FUUT + torch.sin(phih - phis) * FUT_sin_phih_minus_phis)
+        # Only compute Sivers if angles are provided
+        if events_tensor.shape[1] >= 6:
+            phih = events_tensor[:, 4]
+            phis = events_tensor[:, 5]
+            FUT_sin_phih_minus_phis = self.stf['FUTS'](x, Q2, z, qT, initial_hadron, fragmented_hadron)
+            xsec = sigma0 * (FUUT + torch.sin(phih - phis) * FUT_sin_phih_minus_phis)
+        else:
+            # Unpolarized only
+            xsec = sigma0 * FUUT
+
         return xsec
 
 class TrainableModel(TruthModel):
