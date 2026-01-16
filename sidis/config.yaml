@@ -8,6 +8,12 @@
 # Single source of truth for all physics and computational settings
 #------------------------------------------------------------------------------
 
+# Computational settings
+# PyTorch default dtype for high-precision calculations
+# Options: "float32" (faster, less precise) or "float64" (slower, more precise)
+# NOTE: OPE grids are stored as float32, but calculations need float64 for accuracy
+default_dtype: "float64"
+
 # Perturbative orders for QCD calculations
 # These control the accuracy of various components of the calculation
 alphaS_order: 2              # Strong coupling running: 0=LO, 1=NLO, 2=NNLO
