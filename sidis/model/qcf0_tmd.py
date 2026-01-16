@@ -34,47 +34,56 @@ class TruefNP(torch.nn.Module):
         # Freeze all parameters
         for param in self.fnp_manager.parameters():
             param.requires_grad = False
+
+    def forward_evolution(self, bT: torch.Tensor, Q:torch.Tensor) -> torch.Tensor:
+        """Compute non-perturbative evolution factor.
         
-    def forward_pdf(self, xi: torch.Tensor, bT: torch.Tensor, Q: torch.Tensor) -> Dict[str, torch.Tensor]:
+        Args:
+            bT: Fourier conjugate of transverse momentum values, shape (n_events, n_bT)
+            Q: Hard scale, shape (n_events,)
+            
+        Returns:
+            Evolution factor tensor (CS kernel)
+        """
+        return self.fnp_manager.get_evolution(bT, Q)
+        
+    def forward_pdf(self, x: torch.Tensor, bT: torch.Tensor) -> Dict[str, torch.Tensor]:
         """Compute non-perturbative TMD PDF factors for all flavors.
         
         Args:
-            xi: Bjorken x values, shape (n_events,)
-            bT: Impact parameter values, shape (n_events, n_bT)
-            Q: Hard scale, shape (n_events,)
+            x: momentum fraction values, shape (n_events,)
+            bT: Fourier conjugate of transverse momentum values, shape (n_events, n_bT)
             
         Returns:
             Dictionary mapping flavor names to fNP tensors
         """
-        return self.fnp_manager.forward_pdf(xi, bT, Q)
+        return self.fnp_manager.forward_pdf(x, bT)
     
-    def forward_ff(self, z: torch.Tensor, bT: torch.Tensor, Q: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward_ff(self, z: torch.Tensor, bT: torch.Tensor) -> Dict[str, torch.Tensor]:
         """Compute non-perturbative fragmentation function factors for all flavors.
         
         Args:
             z: Fragmentation fraction, shape (n_events,)
-            bT: Impact parameter values, shape (n_events, n_bT)
-            Q: Hard scale, shape (n_events,)
+            bT: Fourier conjugate of transverse momentum values, shape (n_events, n_bT)
             
         Returns:
             Dictionary mapping flavor names to fNP tensors
         """
-        return self.fnp_manager.forward_ff(z, bT, Q)
+        return self.fnp_manager.forward_ff(z, bT)
     
-    def forward_sivers(self, xi: torch.Tensor, bT: torch.Tensor, Q: torch.Tensor) -> torch.Tensor:
+    def forward_sivers(self, x: torch.Tensor, bT: torch.Tensor) -> torch.Tensor:
         """Compute non-perturbative Sivers function factor.
         
         Note: Currently does not have flavor dependence.
         
         Args:
-            xi: Bjorken x values, shape (n_events,)
-            bT: Impact parameter values, shape (n_events, n_bT)
-            Q: Hard scale, shape (n_events,)
+            x: momentum fraction values, shape (n_events,)
+            bT: Fourier conjugate of transverse momentum values, shape (n_events, n_bT)
             
         Returns:
             Sivers fNP tensor (no flavor dependence yet)
         """
-        return self.fnp_manager.forward_sivers(xi, bT, Q)
+        return self.fnp_manager.forward_sivers(x, bT)
 
 
 class TrainablefNP(TruefNP):

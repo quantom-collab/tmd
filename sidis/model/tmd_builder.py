@@ -19,7 +19,8 @@ class TMDBuilder(torch.nn.Module):
     This class combines three ingredients to construct TMDs:
     1. OPE: Operator Product Expansion (interpolated from pre-computed grids)
     2. Evolution: Perturbative evolution from Q₀ to Q
-    3. fNP: Non-perturbative function
+    3. Non-perturbative evolution: Non-perturbative evolution factor (CS kernel)
+    4. fNP: Non-perturbative function
     
     Key Methods:
         get_tmd_bT_all_flavors(): Efficient batch computation for all flavors
@@ -28,6 +29,7 @@ class TMDBuilder(torch.nn.Module):
     Caching Strategy:
         - OPE interpolators: Already loaded as grids (no caching needed)
         - Evolution factors: NOT cached (see note below)
+        - Non-perturbative evolution factor: NOT cached (see note below)
         - TMDs: NOT cached (depend on xi which varies per event)
         
     Note on Evolution Caching:
@@ -42,7 +44,7 @@ class TMDBuilder(torch.nn.Module):
     Args:
         ope_dict: Nested dict of OPE interpolators [type][hadron][flav]
         evo: PERTURBATIVE_EVOLUTION instance
-        fnp: fNP manager (TruefNP or TrainablefNP)
+        fnp: fNP manager (TruefNP or TrainablefNP); this includes the non-perturbative evolution factor (CS kernel)
         Q20: Initial scale squared
         flavs: List of flavor strings ['u', 'd', 's', 'c', 'cb', 'sb', 'db', 'ub']
     """
@@ -50,10 +52,11 @@ class TMDBuilder(torch.nn.Module):
     def __init__(self, ope_dict, evo, fnp, Q20, flavs: List[str]):
         super().__init__()
         
-        self.ope = ope_dict  # Pre-loaded OPE grids
-        self.evo = evo       # PERTURBATIVE_EVOLUTION instance
-        self.fnp = fnp       # fNP manager (truth or trainable)
-        self.Q20 = Q20       # Initial scale squared
+        self.ope    = ope_dict  # Pre-loaded OPE grids
+        self.evo    = evo       # PERTURBATIVE_EVOLUTION instance
+        self.fnp    = fnp       # fNP manager (truth or trainable); this includes the non-perturbative evolution factor (CS kernel)
+
+        self.Q20   = Q20     # Initial scale squared
         self.flavs = flavs   # List of flavor strings
         
     def get_tmd_bT_all_flavors(
@@ -81,25 +84,26 @@ class TMDBuilder(torch.nn.Module):
             Each TMD has shape (n_events, n_bT)
             
         Formula:
-            TMD[flav] = OPE[flav](xi, bT) × fNP[flav](xi, bT, Q) × evolution(bT, Q₀→Q)
+            TMD[flav] = OPE[flav](xi, bT) × fNP[flav](xi, bT, Q) × evolution(bT, Q₀→Q) × non_perturbative_evolution(bT, Q)
         """
         # Compute evolution factor (no caching - see class docstring)
         evolution = self.evo(bT, self.Q20, Q2)
-        
+        non_perturbative_evolution = self.fnp.forward_evolution(bT, Q2**0.5)
+
         # Compute fNP once for all flavors (this is the key optimization!)
         if type == "pdf":
-            fNP_dict = self.fnp.forward_pdf(xi, bT, Q2**0.5)  # Returns dict
+            fNP_dict = self.fnp.forward_pdf(xi, bT)  # Returns dict
         elif type == "ff":
-            fNP_dict = self.fnp.forward_ff(xi, bT, Q2**0.5)  # Returns dict
+            fNP_dict = self.fnp.forward_ff(xi, bT)  # Returns dict
         elif type == "Sivers":
             # Sivers doesn't have flavor dependence yet
-            fNP_sivers = self.fnp.forward_sivers(xi, bT, Q2**0.5)
+            fNP_sivers = self.fnp.forward_sivers(xi, bT)
             # Create dict with same value for all flavors
             fNP_dict = {flav: fNP_sivers for flav in self.flavs}
         else:
             raise ValueError(f"Unknown type: {type}")
         
-        # Compute TMD for each flavor: OPE × fNP × evolution
+        # Compute TMD for each flavor: OPE × fNP × evolution × non_perturbative_evolution
         tmd_dict = {}
         for flav in self.flavs:
             # Get OPE value for this flavor
@@ -119,8 +123,8 @@ class TMDBuilder(torch.nn.Module):
             else:
                 fNP = fNP_dict[npflav]
             
-            # Compute TMD: OPE × fNP × evolution
-            tmd_dict[flav] = ope_tmd * fNP * evolution
+            # Compute TMD: OPE × fNP × evolution × non-perturbative evolution
+            tmd_dict[flav] = ope_tmd * fNP * evolution * non_perturbative_evolution
             
         return tmd_dict
         
