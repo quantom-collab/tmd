@@ -111,8 +111,22 @@ if __name__ == "__main__":
     trainable_params = 0
     fixed_params = 0
 
+    # Helper function to check if a buffer name represents a fixed parameter
+    def is_fixed_param_buffer(name: str) -> bool:
+        """Check if buffer name represents a fixed parameter (not internal buffers)."""
+        # Fixed parameters in flexible model: fixed_param_*
+        if "fixed_param_" in name and not name.endswith("_params"):
+            return True
+        # Fixed parameters in flavor_dep/flavor_blind: fixed_params
+        if name.endswith(".fixed_params") or name == "fixed_params":
+            return True
+        return False
+
     # Group parameters by module for better readability
+    # Include both trainable parameters and fixed parameter buffers
     param_groups = {}
+    
+    # Add trainable parameters
     for name, param in model.named_parameters():
         # Extract module name (e.g., "nonperturbative.evolution" or "nonperturbative.pdf_modules.u")
         parts = name.split(".")
@@ -123,7 +137,24 @@ if __name__ == "__main__":
 
         if module_name not in param_groups:
             param_groups[module_name] = []
-        param_groups[module_name].append((name, param))
+        param_groups[module_name].append((name, param, True))  # True = is_parameter (not buffer)
+    
+    # Add fixed parameters from buffers
+    for name, buffer in model.named_buffers():
+        if is_fixed_param_buffer(name):
+            fixed_params += buffer.numel()
+            total_params += buffer.numel()
+            
+            # Extract module name
+            parts = name.split(".")
+            if len(parts) >= 2:
+                module_name = ".".join(parts[:-1])
+            else:
+                module_name = "other"
+            
+            if module_name not in param_groups:
+                param_groups[module_name] = []
+            param_groups[module_name].append((name, buffer, False))  # False = is_buffer
 
     # Print parameters grouped by module
     for module_name, params in sorted(param_groups.items()):
@@ -133,26 +164,39 @@ if __name__ == "__main__":
         print(f"{'Parameter Name':<70} {'Shape':<15} {'Trainable':<12} {'Value':<25}")
         print("-" * 125)
 
-        for name, param in sorted(params):
-            total_params += param.numel()
-            is_trainable = param.requires_grad
-            if is_trainable:
-                trainable_params += param.numel()
+        for name, tensor, is_parameter in sorted(params):
+            if is_parameter:
+                # This is a trainable parameter
+                total_params += tensor.numel()
+                is_trainable = tensor.requires_grad
+                if is_trainable:
+                    trainable_params += tensor.numel()
+                else:
+                    fixed_params += tensor.numel()
             else:
-                fixed_params += param.numel()
+                # This is a fixed parameter buffer (already counted above)
+                is_trainable = False
 
             # Format value display
-            if param.numel() == 1:
-                value_str = f"{param.data.item():.6f}"
-            elif param.numel() <= 5:
+            if tensor.numel() == 1:
+                value_str = f"{tensor.data.item():.6f}"
+            elif tensor.numel() <= 5:
                 # Show full values for small tensors
-                value_str = str(param.data.detach().cpu().numpy().tolist())
+                value_str = str(tensor.data.detach().cpu().numpy().tolist())
             else:
                 # Show summary for large tensors
-                value_str = f"min={param.data.min().item():.6f}, max={param.data.max().item():.6f}"
+                value_str = f"min={tensor.data.min().item():.6f}, max={tensor.data.max().item():.6f}"
 
             # Shorten parameter name for display
             short_name = name.split(".")[-1] if "." in name else name
+            # Clean up fixed parameter names for display
+            if short_name.startswith("fixed_param_"):
+                # Extract the index for better display
+                try:
+                    idx = short_name.replace("fixed_param_", "")
+                    short_name = f"fixed[{idx}]"
+                except:
+                    pass
 
             trainable_str = (
                 f"{tcolors.GREEN}Yes{tcolors.ENDC}"
@@ -161,7 +205,7 @@ if __name__ == "__main__":
             )
 
             print(
-                f"{short_name:<70} {str(list(param.shape)):<15} {trainable_str:<25} {value_str[:25]}"
+                f"{short_name:<70} {str(list(tensor.shape)):<15} {trainable_str:<25} {value_str[:25]}"
             )
 
     print(f"\n{tcolors.BOLDWHITE}{'='*125}")
