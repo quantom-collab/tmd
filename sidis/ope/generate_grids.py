@@ -162,7 +162,7 @@ def main():
 
 
     # 4. Evaluate the OPE for the given x and bT grids for all flavors in one step (no need to loop over)
-    mellin = MELLIN()
+    mellin = MELLIN(extended=True)
     pdf = PDF(mellin, evo.alphaS)
     ope_pdf_vals = {}
     ope_pdf = PDF_OPE(pdf, evo.alphaS, tmdmodel)
