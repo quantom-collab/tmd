@@ -16,6 +16,7 @@ import importlib
 
 # Mapping from combo names to module paths (relative imports)
 COMBO_MODULES = {
+    "base": ".fnp_base",
     "flavor_dep": ".fnp_base_flavor_dep",
     "flavor_blind": ".fnp_base_flavor_blind",
     "flexible": ".fnp_base_flexible",
@@ -26,7 +27,7 @@ def create_fnp_manager(config_path: str = None, config_dict: Dict[str, Any] = No
     """
     Create an fNP manager instance based on configuration.
 
-    This is the main entry point for creating fNP managers. It reads the config,
+    This is the main entry point for creating fNP instances. It reads the config,
     determines which combo to use, and instantiates the manager from that combo module.
 
     Args:
@@ -45,6 +46,7 @@ def create_fnp_manager(config_path: str = None, config_dict: Dict[str, Any] = No
         >>> manager = create_fnp_manager("fNPconfig_flavor_blind.yaml")
         >>> result = manager.forward(x, z, b, Q)
     """
+
     # Load configuration
     if config_dict is not None:
         config = config_dict

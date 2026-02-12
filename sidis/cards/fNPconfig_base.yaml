@@ -1,0 +1,71 @@
+# Exponential fNP parametrization with parameter linking
+#
+# PDF: f̃_{1,NP}^q(x, b_T) = exp[-b_T²/4 · λ_f² · x^{-α} · (1-x)²]
+# FF:  D̃_{1,NP}^q(z, b_T) = exp[-b_T²/4 · λ_D² · z^{-β} · (1-z)²]
+# Evolution: S_NP(ζ, b_T) = exp[-g₂² b_T²/4 × ln(ζ/Q₀²)]
+#
+# Per-flavor parameters: PDF [λ_f, α] (index 0, 1), FF [λ_D, β] (index 0, 1)
+#
+# free_mask supports (same as flexible):
+#   - Boolean: true/false (independent/fixed)
+#   - Reference: u[0], d[1], pdfs.u[0], ffs.d[1]
+#   - Expression: "0.5*u[0]", "0.5*u[1]", "pdfs.u[0]+pdfs.u[1]"
+
+hadron: proton
+combo: base
+
+evolution:
+  init_g2: 0.12840
+  free_mask: [true]
+
+pdfs:
+  u:
+    init_params: [0.5, 0.3]
+    free_mask: [true, true]
+  d:
+    init_params: [0.5, 0.3]
+    free_mask: ["0.5*u[0]", "0.5*u[1]"]
+  s:
+    init_params: [0.5, 0.3]
+    free_mask: [false, false]
+  ubar:
+    init_params: [0.4, 0.25]
+    free_mask: [false, false]
+  dbar:
+    init_params: [0.4, 0.25]
+    free_mask: [false, false]
+  sbar:
+    init_params: [0.35, 0.2]
+    free_mask: [false, false]
+  c:
+    init_params: [0.3, 0.2]
+    free_mask: [false, false]
+  cbar:
+    init_params: [0.3, 0.2]
+    free_mask: [false, false]
+
+ffs:
+  u:
+    init_params: [0.5, 0.3]
+    free_mask: ["pdfs.u[0]+pdfs.u[1]", true]
+  d:
+    init_params: [0.5, 0.3]
+    free_mask: ["0.5*u[0]", true]
+  s:
+    init_params: [0.5, 0.3]
+    free_mask: [false, false]
+  ubar:
+    init_params: [0.4, 0.25]
+    free_mask: [false, false]
+  dbar:
+    init_params: [0.4, 0.25]
+    free_mask: [false, false]
+  sbar:
+    init_params: [0.35, 0.2]
+    free_mask: [false, false]
+  c:
+    init_params: [0.3, 0.2]
+    free_mask: [false, false]
+  cbar:
+    init_params: [0.3, 0.2]
+    free_mask: [false, false]

@@ -26,6 +26,7 @@ class tcolors:
     GREEN = "\033[92m"  # Green
     WARNING = "\033[93m"  # Yellow
     FAIL = "\033[91m"  # Red
+    GIULIA = "\033[35m"  # Purple
     OKLIGHTBLUE = "\033[34m"  # Light blue (darker blue)
     WHITE = "\033[97m"  # White
 
