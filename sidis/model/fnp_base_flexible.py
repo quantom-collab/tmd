@@ -8,12 +8,10 @@ and constraints between flavors. Parameters can be:
 - Complex expressions (e.g., 2*u[1] + 0.1 means parameter = 2 * u[1] + 0.1, evaluated dynamically)
 
 Contents of this file:
-- Parameter Link Parser: Parses free_mask entries to identify references and expressions
-- Parameter Registry: Tracks which parameters are linked and manages shared Parameter objects
-- Dependency Resolver: Resolves circular dependencies and builds parameter dependency graph
-- Expression Evaluator: Safely evaluates mathematical expressions during forward pass
 - Flexible PDF/FF Base Classes: Modified PDF/FF classes that support parameter linking
 - Manager class (fNPManager): Orchestrates the flexible combo implementation
+
+Config parsing (ParameterLinkParser, ParameterRegistry, etc.) is in fnp_config.py.
 
 Author: Chiara Bissolotti (cbissolotti@anl.gov)
 Based on: fnp_base_flavor_dep.py
@@ -22,19 +20,6 @@ Based on: fnp_base_flavor_dep.py
 import torch
 import torch.nn as nn
 from typing import List, Optional, Dict, Any, Union, Tuple
-import re
-import math
-
-# Try to import simpleeval for safe expression evaluation
-try:
-    from simpleeval import SimpleEval
-
-    HAS_SIMPLEEVAL = True
-except ImportError:
-    HAS_SIMPLEEVAL = False
-    print(
-        "Warning: simpleeval not available. Complex expressions will use basic evaluation."
-    )
 
 # Import tcolors - handle both relative and absolute imports
 try:
@@ -53,416 +38,18 @@ from .fnp_base_flavor_dep import (
     MAP22_DEFAULT_FF_PARAMS,
 )
 
-
-###############################################################################
-# 1. Parameter Link Parser
-###############################################################################
-class ParameterLinkParser:
-    """
-    Parser for free_mask entries that can contain:
-    - Boolean values (true/false)
-    - Simple references (u[0], d[1], pdfs.u[2], ffs.d[1], etc.)
-    - Complex expressions (2*u[1] + 0.1, u[0] - d[0], etc.)
-    """
-
-    # Pattern to match parameter references: flavor[index] or type.flavor[index]
-    PARAM_REF_PATTERN = re.compile(r"(\w+)\.(\w+)\[(\d+)\]|(\w+)\[(\d+)\]")
-
-    @staticmethod
-    def parse_entry(
-        entry: Any, current_type: str, current_flavor: str
-    ) -> Dict[str, Any]:
-        """
-        Parse a single free_mask entry.
-
-        Args:
-            entry: The entry to parse (bool, str, int, etc.)
-            current_type: Current parameter type ('pdfs' or 'ffs')
-            current_flavor: Current flavor name (e.g., 'u', 'd')
-
-        Returns:
-            Dict with keys:
-                - 'type': 'boolean', 'reference', or 'expression'
-                - 'value': boolean value, or reference info, or expression string
-                - 'is_fixed': True if parameter is fixed (False)
-        """
-        # Handle boolean values
-        if isinstance(entry, bool):
-            return {"type": "boolean", "value": entry, "is_fixed": not entry}
-
-        # Handle string/int representations of booleans
-        if isinstance(entry, (str, int)):
-            entry_str = str(entry).strip().lower()
-            if entry_str in ("true", "1", "yes"):
-                return {"type": "boolean", "value": True, "is_fixed": False}
-            elif entry_str in ("false", "0", "no"):
-                return {"type": "boolean", "value": False, "is_fixed": True}
-
-        # Handle string expressions
-        if isinstance(entry, str):
-            entry_str = entry.strip()
-
-            # Check if it's a simple reference (e.g., "u[0]" or "pdfs.u[0]")
-            match = ParameterLinkParser.PARAM_REF_PATTERN.match(entry_str)
-            if match and match.group(0) == entry_str:
-                # Simple reference
-                if match.group(1):  # type.flavor[index] format
-                    param_type = match.group(1)
-                    flavor = match.group(2)
-                    param_idx = int(match.group(3))
-                else:  # flavor[index] format (same type)
-                    param_type = current_type
-                    flavor = match.group(4)
-                    param_idx = int(match.group(5))
-
-                return {
-                    "type": "reference",
-                    "value": {
-                        "type": param_type,
-                        "flavor": flavor,
-                        "param_idx": param_idx,
-                    },
-                    "is_fixed": False,
-                }
-            else:
-                # Complex expression
-                return {"type": "expression", "value": entry_str, "is_fixed": False}
-
-        # Default: treat as fixed
-        return {"type": "boolean", "value": False, "is_fixed": True}
-
-    @staticmethod
-    def extract_references(expression: str) -> List[Dict[str, Any]]:
-        """
-        Extract all parameter references from an expression.
-
-        Args:
-            expression: Expression string
-
-        Returns:
-            List of reference dicts with keys: 'type', 'flavor', 'param_idx', 'full_match'
-        """
-        references = []
-        for match in ParameterLinkParser.PARAM_REF_PATTERN.finditer(expression):
-            if match.group(1):  # type.flavor[index]
-                references.append(
-                    {
-                        "type": match.group(1),
-                        "flavor": match.group(2),
-                        "param_idx": int(match.group(3)),
-                        "full_match": match.group(0),
-                    }
-                )
-            else:  # flavor[index]
-                references.append(
-                    {
-                        "type": None,  # Will be resolved later
-                        "flavor": match.group(4),
-                        "param_idx": int(match.group(5)),
-                        "full_match": match.group(0),
-                    }
-                )
-        return references
+# Import config parsing utilities (shared across all models)
+from .fnp_config import (
+    ParameterLinkParser,
+    ParameterRegistry,
+    ExpressionEvaluator,
+    DependencyResolver,
+    parse_bound,
+)
 
 
 ###############################################################################
-# 2. Parameter Registry
-###############################################################################
-class ParameterRegistry:
-    """
-    Registry to track and manage parameter objects across all flavors.
-    Maps (type, flavor, param_idx) -> Parameter object.
-    """
-
-    def __init__(self):
-        self.registry: Dict[Tuple[str, str, int], nn.Parameter] = {}
-        self.shared_groups: Dict[Tuple[str, str, int], Tuple[str, str, int]] = {}
-
-    def register_parameter(
-        self,
-        param_type: str,
-        flavor: str,
-        param_idx: int,
-        param: nn.Parameter,
-        source: Optional[Tuple[str, str, int]] = None,
-    ):
-        """
-        Register a parameter in the registry.
-
-        Args:
-            param_type: 'pdfs' or 'ffs'
-            flavor: Flavor name
-            param_idx: Parameter index
-            param: The Parameter object
-            source: If this parameter is linked, the source (type, flavor, idx)
-        """
-        key = (param_type, flavor, param_idx)
-        self.registry[key] = param
-
-        if source:
-            self.shared_groups[key] = source
-
-    def get_parameter(
-        self, param_type: str, flavor: str, param_idx: int
-    ) -> Optional[nn.Parameter]:
-        """
-        Get a parameter from the registry.
-
-        Args:
-            param_type: 'pdfs' or 'ffs'
-            flavor: Flavor name
-            param_idx: Parameter index
-
-        Returns:
-            Parameter object or None if not found
-        """
-        key = (param_type, flavor, param_idx)
-
-        # If this parameter is linked, return the source parameter
-        if key in self.shared_groups:
-            source_key = self.shared_groups[key]
-            return self.registry.get(source_key)
-
-        return self.registry.get(key)
-
-    def create_shared_parameter(
-        self, source_type: str, source_flavor: str, source_idx: int, init_value: float
-    ) -> nn.Parameter:
-        """
-        Create or get a shared parameter.
-
-        Args:
-            source_type: Source parameter type
-            source_flavor: Source flavor
-            source_idx: Source parameter index
-            init_value: Initial value
-
-        Returns:
-            Shared Parameter object
-        """
-        source_key = (source_type, source_flavor, source_idx)
-
-        if source_key not in self.registry:
-            # Create new shared parameter
-            param = nn.Parameter(torch.tensor([init_value], dtype=torch.float32))
-            self.registry[source_key] = param
-            return param
-        else:
-            # Return existing shared parameter
-            return self.registry[source_key]
-
-
-###############################################################################
-# 3. Dependency Resolver
-###############################################################################
-class DependencyResolver:
-    """
-    Resolves parameter dependencies and handles circular dependencies.
-    """
-
-    @staticmethod
-    def build_dependency_graph(
-        config: Dict[str, Any], param_type: str, flavor_keys: List[str]
-    ) -> Dict[Tuple[str, str, int], List[Tuple[str, str, int]]]:
-        """
-        Build dependency graph from configuration.
-
-        Args:
-            config: Configuration dictionary
-            param_type: 'pdfs' or 'ffs'
-            flavor_keys: List of flavor keys
-
-        Returns:
-            Dict mapping (type, flavor, idx) -> list of dependencies
-        """
-        graph = {}
-        parser = ParameterLinkParser()
-
-        type_config = config.get(param_type, {})
-
-        for flavor in flavor_keys:
-            flavor_cfg = type_config.get(flavor, {})
-            free_mask = flavor_cfg.get("free_mask", [])
-
-            for param_idx, entry in enumerate(free_mask):
-                parsed = parser.parse_entry(entry, param_type, flavor)
-                key = (param_type, flavor, param_idx)
-
-                dependencies = []
-                if parsed["type"] == "reference":
-                    dep = parsed["value"]
-                    # Resolve type if not specified
-                    dep_type = dep["type"] if dep["type"] else param_type
-                    dep_key = (dep_type, dep["flavor"], dep["param_idx"])
-                    dependencies.append(dep_key)
-                elif parsed["type"] == "expression":
-                    # Extract all references from expression
-                    refs = parser.extract_references(parsed["value"])
-                    for ref in refs:
-                        # Resolve type if not specified
-                        ref_type = ref["type"] if ref["type"] else param_type
-                        dep_key = (ref_type, ref["flavor"], ref["param_idx"])
-                        dependencies.append(dep_key)
-
-                graph[key] = dependencies
-
-        return graph
-
-    @staticmethod
-    def resolve_circular_dependencies(
-        graph: Dict[Tuple[str, str, int], List[Tuple[str, str, int]]],
-    ) -> Dict[Tuple[str, str, int], Tuple[str, str, int]]:
-        """
-        Resolve circular dependencies by using the first definition encountered.
-
-        Args:
-            graph: Dependency graph
-
-        Returns:
-            Dict mapping dependent -> source (for circular dependencies)
-        """
-        resolved = {}
-        visited = set()
-        visiting = set()
-
-        def dfs(node):
-            if node in visiting:
-                # Circular dependency detected - use first definition
-                return node
-            if node in visited:
-                return None
-
-            visiting.add(node)
-            for dep in graph.get(node, []):
-                source = dfs(dep)
-                if source and source != node:
-                    resolved[node] = source
-            visiting.remove(node)
-            visited.add(node)
-            return None
-
-        for node in graph:
-            if node not in visited:
-                dfs(node)
-
-        return resolved
-
-
-###############################################################################
-# 4. Expression Evaluator
-###############################################################################
-class ExpressionEvaluator:
-    """
-    Safely evaluates mathematical expressions with parameter references.
-    """
-
-    def __init__(self, registry: ParameterRegistry):
-        self.registry = registry
-        if HAS_SIMPLEEVAL:
-            self.evaluator = SimpleEval()
-            # Register functions
-            self.evaluator.functions.update(
-                {
-                    "exp": math.exp,
-                    "log": math.log,
-                    "sqrt": math.sqrt,
-                    "sin": math.sin,
-                    "cos": math.cos,
-                    "tan": math.tan,
-                }
-            )
-        else:
-            self.evaluator = None
-
-    def evaluate(
-        self, expression: str, current_type: str, current_flavor: str
-    ) -> torch.Tensor:
-        """
-        Evaluate an expression with current parameter values.
-
-        Args:
-            expression: Expression string
-            current_type: Current parameter type
-            current_flavor: Current flavor name
-
-        Returns:
-            Evaluated value as torch.Tensor
-        """
-        # Replace parameter references with actual values
-        parser = ParameterLinkParser()
-        refs = parser.extract_references(expression)
-
-        # Build replacement dict
-        replacements = {}
-        for ref in refs:
-            ref_type = ref["type"] if ref["type"] else current_type
-            param = self.registry.get_parameter(
-                ref_type, ref["flavor"], ref["param_idx"]
-            )
-            if param is not None:
-                # Get current value - handle both scalar and tensor parameters
-                if param.numel() == 1:
-                    value = param.item()
-                else:
-                    value = param[0].item() if len(param.shape) > 0 else param.item()
-                # Use parentheses to ensure proper evaluation order
-                replacements[ref["full_match"]] = f"({value})"
-            else:
-                raise ValueError(
-                    f"Parameter reference '{ref['full_match']}' not found in registry. "
-                    f"Type: {ref_type}, Flavor: {ref['flavor']}, Index: {ref['param_idx']}"
-                )
-
-        # Replace in expression (replace longer matches first to avoid partial replacements)
-        eval_expr = expression
-        for old, new in sorted(replacements.items(), key=lambda x: -len(x[0])):
-            eval_expr = eval_expr.replace(old, new)
-
-        # Evaluate
-        if HAS_SIMPLEEVAL:
-            try:
-                # Create a new evaluator instance for this expression
-                evaluator = SimpleEval(
-                    functions={
-                        "exp": math.exp,
-                        "log": math.log,
-                        "sqrt": math.sqrt,
-                        "sin": math.sin,
-                        "cos": math.cos,
-                        "tan": math.tan,
-                    }
-                )
-                result = evaluator.eval(eval_expr)
-            except Exception as e:
-                raise ValueError(
-                    f"Error evaluating expression '{expression}' (evaluated as '{eval_expr}'): {e}"
-                )
-        else:
-            # Basic evaluation (less safe, but works for simple expressions)
-            try:
-                result = eval(
-                    eval_expr,
-                    {"__builtins__": {}},
-                    {
-                        "exp": math.exp,
-                        "log": math.log,
-                        "sqrt": math.sqrt,
-                        "sin": math.sin,
-                        "cos": math.cos,
-                        "tan": math.tan,
-                        "math": math,
-                    },
-                )
-            except Exception as e:
-                raise ValueError(
-                    f"Error evaluating expression '{expression}' (evaluated as '{eval_expr}'): {e}"
-                )
-
-        return torch.tensor([float(result)], dtype=torch.float32)
-
-
-###############################################################################
-# 5. Flexible PDF Base Class
+# 1. Flexible PDF Base Class
 ###############################################################################
 class TMDPDFFlexible(nn.Module):
     """
@@ -931,6 +518,84 @@ class fNPManager(nn.Module):
         print(
             f"{tcolors.GREEN}[fNPManager] Initialized {len(self.ff_modules)} FF flavor modules\n{tcolors.ENDC}"
         )
+
+        # Build parameter bounds from config (only for source parameters; linked params inherit)
+        # Support both plain dicts and OmegaConf (ListConfig/list-like for bounds)
+        self.param_bounds: Dict[Tuple[str, str, int], Tuple[float, float]] = {}
+        for param_type in ("pdfs", "ffs"):
+            type_config = config.get(param_type, {})
+            flavor_keys = (
+                self.pdf_flavor_keys if param_type == "pdfs" else self.ff_flavor_keys
+            )
+            for flavor in flavor_keys:
+                flavor_cfg = type_config.get(flavor, {})
+                if flavor_cfg is None:
+                    continue
+                bounds_list = flavor_cfg.get("param_bounds") if hasattr(flavor_cfg, "get") else None
+                if bounds_list is None:
+                    continue
+                n_params = 11 if param_type == "pdfs" else 9
+                try:
+                    bound_len = len(bounds_list)
+                except TypeError:
+                    continue
+                for idx in range(min(bound_len, n_params)):
+                    try:
+                        b = bounds_list[idx]
+                    except (TypeError, KeyError):
+                        continue
+                    parsed = parse_bound(b)
+                    if parsed is None:
+                        continue
+                    lo, hi = parsed
+                    key = (param_type, flavor, idx)
+                    if key in self.registry.registry and key not in getattr(
+                        self.registry, "shared_groups", {}
+                    ):
+                        self.param_bounds[key] = (lo, hi)
+
+        self.evolution_bounds: List[Tuple[float, float]] = []
+        ev_bounds = config.get("evolution", {}).get("param_bounds")
+        if ev_bounds is not None:
+            try:
+                for b in ev_bounds:
+                    parsed = parse_bound(b)
+                    if parsed is not None:
+                        self.evolution_bounds.append(parsed)
+            except TypeError:
+                pass
+
+    def get_trainable_bounds(
+        self,
+    ) -> List[Tuple[nn.Parameter, Optional[float], Optional[float]]]:
+        """
+        Return (parameter, low, high) for each trainable parameter that has bounds.
+        Used by the minimizer to clamp or to pass bounds to constrained optimizers.
+        Each parameter appears at most once (shared params included once).
+        """
+        result: List[Tuple[nn.Parameter, Optional[float], Optional[float]]] = []
+        seen: set = set()
+        for key, (lo, hi) in self.param_bounds.items():
+            param = self.registry.get_parameter(key[0], key[1], key[2])
+            if param is not None and id(param) not in seen and param.requires_grad:
+                seen.add(id(param))
+                result.append((param, lo, hi))
+        if self.evolution_bounds and hasattr(self.evolution, "free_g2"):
+            p = self.evolution.free_g2
+            if p.requires_grad and len(self.evolution_bounds) > 0:
+                lo, hi = self.evolution_bounds[0]
+                result.append((p, lo, hi))
+        return result
+
+    def clamp_parameters_to_bounds(self) -> None:
+        """
+        Clamp all trainable parameters to their allowed intervals.
+        Call this after optimizer.step() to enforce bounds.
+        """
+        for param, low, high in self.get_trainable_bounds():
+            if low is not None and high is not None:
+                with torch.no_grad():
+                    param.data.clamp_(low, high)
 
     def _compute_zeta(self, Q: torch.Tensor) -> torch.Tensor:
         """Compute rapidity scale zeta from hard scale Q."""

@@ -19,6 +19,8 @@ combo: flexible
 evolution:
   init_g2: 0.12840      # Evolution parameter g₂ (from MAP22)
   free_mask: [true]     # g2 is trainable
+  # Allowed interval(s) for minimizer: one [low, high] per evolution parameter; use null for no bound
+  param_bounds: [[0.01, 0.5]]
 
 # TMD PDF parameterizations (MAP22 implementation)
 # Parameters: [N₁, α₁, σ₁, λ, N₁ᵦ, N₁ᶜ, λ₂, α₂, α₃, σ₂, σ₃] (11 params)
@@ -27,6 +29,8 @@ pdfs:
     # Up quark - fully parameterized with MAP22
     init_params: [0.28516, 2.9755, 0.17293, 0.39432, 0.28516, 0.28516, 0.39432, 2.9755, 2.9755, 0.17293, 0.17293]
     free_mask: [true, true, true, true, true, true, true, true, true, true, true]
+    # Allowed intervals for minimizer: one [low, high] per parameter; use null for no bound (PDFs: 11 params)
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 1], [0.01, 2], [0.01, 2], [0.01, 2], [0.01, 2], [0.5, 10], [0.5, 10], [0.01, 1], [0.01, 1]]
     
   d:
     # Down quark - links and expressions: d[0]=u[0], d[1]=u[1], d[2]=2*u[1], d[3]=u[0]+u[1], d[4]=u[5]
@@ -70,6 +74,8 @@ ffs:
     # Up quark fragmentation - fully parameterized
     init_params: [0.21012, 2.12062, 0.093554, 0.25246, 5.2915, 0.033798, 2.1012, 0.093554, 0.25246]
     free_mask: [true, true, true, true, true, true, true, true, true]
+    # Allowed intervals for minimizer: one [low, high] per parameter; use null for no bound (FFs: 9 params)
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 0.5], [0.01, 2], [0.5, 20], [0.001, 0.5], [0.5, 10], [0.01, 0.5], [0.01, 2]]
     
   d:
     # Down quark fragmentation - cross-type: ffs.d[0]=pdfs.u[0], ffs.d[1]=2*pdfs.u[0]
@@ -126,3 +132,4 @@ ffs:
 # - Simple reference: flavor[index] (e.g., u[0], d[1]) - links within same type
 # - Cross-type reference: type.flavor[index] (e.g., pdfs.u[0], ffs.d[1])
 # - Expression: mathematical expression with parameter references (e.g., "2*u[1] + 0.1")
+# - param_bounds: optional list of [low, high] per parameter; null or omit for no bound. Fed to minimizer.
