@@ -16,7 +16,8 @@ import importlib
 
 # Mapping from combo names to module paths (relative imports)
 COMBO_MODULES = {
-    "base": ".fnp_base",
+    "simple": ".fnp_simple",
+    "base": ".fnp_simple",  # backward compatibility alias
     "flavor_dep": ".fnp_base_flavor_dep",
     "flavor_blind": ".fnp_base_flavor_blind",
     "flexible": ".fnp_base_flexible",

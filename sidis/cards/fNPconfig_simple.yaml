@@ -1,8 +1,8 @@
-# Exponential fNP parametrization with parameter linking
+# Simple exponential fNP parametrization with parameter linking
 #
-# PDF: f̃_{1,NP}^q(x, b_T) = exp[-b_T²/4 · λ_f² · x^{-α} · (1-x)²]
-# FF:  D̃_{1,NP}^q(z, b_T) = exp[-b_T²/4 · λ_D² · z^{-β} · (1-z)²]
-# Evolution: S_NP(ζ, b_T) = exp[-g₂² b_T²/4 × ln(ζ/Q₀²)]
+# PDF: f̃_{1,NP}^q(x, b_T) = exp[-b_T²/4 · λ_f² · x^{α} · (1-x)²]
+# FF:  D̃_{1,NP}^q(z, b_T) = exp[-b_T²/4 · λ_D² · z^{β} · (1-z)²]
+# Evolution: S_NP(ζ, b_T, Q) = exp[-g₂² b_T²/4 × ln(ζ/Q₀²)]
 #
 # Per-flavor parameters: PDF [λ_f, α] (index 0, 1), FF [λ_D, β] (index 0, 1)
 #
@@ -12,19 +12,23 @@
 #   - Expression: "0.5*u[0]", "0.5*u[1]", "pdfs.u[0]+pdfs.u[1]"
 
 hadron: proton
-combo: base
+combo: simple
 
 evolution:
   init_g2: 0.12840
   free_mask: [true]
+  param_bounds: [[0.01, 0.5]]
 
 pdfs:
   u:
+    # lambda_f^2, alpha
     init_params: [0.5, 0.3]
     free_mask: [true, true]
+    param_bounds: [[0.1, 2], [0.1, 2]]
   d:
-    init_params: [0.5, 0.3]
+    init_params: [0.25, 0.15]
     free_mask: ["0.5*u[0]", "0.5*u[1]"]
+    param_bounds: [[0.1, 2], [0.1, 2]]
   s:
     init_params: [0.5, 0.3]
     free_mask: [false, false]
@@ -46,11 +50,13 @@ pdfs:
 
 ffs:
   u:
-    init_params: [0.5, 0.3]
+    init_params: [0.4, 0.3]
     free_mask: ["pdfs.u[0]+pdfs.u[1]", true]
+    param_bounds: [[0.1, 2], [0.01, 2]]
   d:
-    init_params: [0.5, 0.3]
+    init_params: [0.2, 0.3]
     free_mask: ["0.5*u[0]", true]
+    param_bounds: [[0.1, 2], [0.01, 2]]
   s:
     init_params: [0.5, 0.3]
     free_mask: [false, false]

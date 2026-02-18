@@ -7,8 +7,8 @@ Supports parameter linking and expressions (same as flexible model):
 - Expressions: "0.5*u[0]", "0.5*u[1]", "2*u[0]+0.1"
 
 Formulas:
-  PDF: f̃_{1,NP}^q(x, b_T) = exp[-b_T²/4 · λ_f² · x^{-α} · (1-x)²]
-  FF:  D̃_{1,NP}^q(z, b_T) = exp[-b_T²/4 · λ_D² · z^{-β} · (1-z)²]
+  PDF: f̃_{1,NP}^q(x, b_T) = exp[-b_T²/4 · λ_f² · x^{α} · (1-x)²]
+  FF:  D̃_{1,NP}^q(z, b_T) = exp[-b_T²/4 · λ_D² · z^{β} · (1-z)²]
   Evolution: S_NP(ζ, b_T) = exp[-g₂² b_T²/4 × ln(ζ/Q₀²)]
 
 Per-flavor parameters: PDF [λ_f, α], FF [λ_D, β]
@@ -29,11 +29,12 @@ except ImportError:
         from sidis.utilities.colors import tcolors
 
 from .fnp_base_flavor_dep import fNP_evolution
-from .fnp_base_flexible import (
+from .fnp_config import (
     ParameterLinkParser,
     ParameterRegistry,
     ExpressionEvaluator,
     DependencyResolver,
+    parse_bound,
 )
 
 
@@ -42,8 +43,9 @@ from .fnp_base_flexible import (
 ###############################################################################
 class TMDPDFExponential(nn.Module):
     """
-    TMD PDF: f̃_{1,NP}^q(x, b_T) = exp[-b_T²/4 · λ_f² · x^{-α} · (1-x)²]
+    TMD PDF: f̃_{1,NP}^q(x, b_T) = exp[-b_T²/4 · λ_f² · x^{α} · (1-x)²]
     Parameters: [λ_f, α] (index 0, 1). Supports linking and expressions in free_mask.
+    Bounded params use sigmoid rescaling: value = lo + (hi - lo) * sigmoid(theta).
     """
 
     def __init__(
@@ -54,15 +56,20 @@ class TMDPDFExponential(nn.Module):
         registry: ParameterRegistry,
         evaluator: ExpressionEvaluator,
         param_type: str = "pdfs",
+        param_bounds: Optional[List[Any]] = None,
+        param_bounds_map: Optional[
+            Dict[Tuple[str, str, int], Tuple[float, float]]
+        ] = None,
     ):
         super().__init__()
+        self.param_bounds_map = param_bounds_map or {}
         if len(init_params) != 2:
             raise ValueError(
-                f"{tcolors.FAIL}[fnp_base.py] Exponential PDF requires 2 params [λ_f, α], got {len(init_params)}{tcolors.ENDC}"
+                f"{tcolors.FAIL}[fnp_simple.py] Exponential PDF requires 2 params [λ_f, α], got {len(init_params)}{tcolors.ENDC}"
             )
         if len(free_mask) != 2:
             raise ValueError(
-                f"{tcolors.FAIL}[fnp_base.py] free_mask length must match init_params (2){tcolors.ENDC}"
+                f"{tcolors.FAIL}[fnp_simple.py] free_mask length must match init_params (2){tcolors.ENDC}"
             )
 
         self.flavor = flavor
@@ -72,20 +79,49 @@ class TMDPDFExponential(nn.Module):
         self.evaluator = evaluator
         self.parser = ParameterLinkParser()
 
+        bounds_list = []
+        if param_bounds is not None:
+            try:
+                for idx in range(min(len(param_bounds), 2)):
+                    b = parse_bound(
+                        param_bounds[idx] if idx < len(param_bounds) else None
+                    )
+                    bounds_list.append(b)
+            except (TypeError, KeyError):
+                pass
+        while len(bounds_list) < 2:
+            bounds_list.append(None)
+
         self.param_configs = []
         self.fixed_params = []
         self.free_params_list = []
 
         for param_idx, (init_val, entry) in enumerate(zip(init_params, free_mask)):
             parsed = self.parser.parse_entry(entry, param_type, flavor)
+            bounds = bounds_list[param_idx] if param_idx < len(bounds_list) else None
             self.param_configs.append(
-                {"idx": param_idx, "init_val": init_val, "parsed": parsed}
+                {
+                    "idx": param_idx,
+                    "init_val": init_val,
+                    "parsed": parsed,
+                    "bounds": bounds,
+                }
             )
 
             if parsed["is_fixed"]:
                 self.fixed_params.append((param_idx, init_val))
             elif parsed["type"] == "boolean" and parsed["value"]:
-                param = nn.Parameter(torch.tensor([init_val], dtype=torch.float32))
+                if bounds is not None:
+                    lo, hi = bounds
+                    u = (init_val - lo) / (hi - lo)
+                    u = max(1e-6, min(1 - 1e-6, u))
+                    theta = torch.tensor(
+                        float(torch.logit(torch.tensor(u)).item()),
+                        dtype=torch.float32,
+                    )
+                    param = nn.Parameter(theta.unsqueeze(0))
+                else:
+                    param = nn.Parameter(torch.tensor([init_val], dtype=torch.float32))
                 self.free_params_list.append((param_idx, param))
                 registry.register_parameter(param_type, flavor, param_idx, param)
             elif parsed["type"] == "reference":
@@ -116,25 +152,52 @@ class TMDPDFExponential(nn.Module):
             self.register_parameter(f"free_param_{param_idx}", param)
 
     def get_params_tensor(self) -> torch.Tensor:
-        params = [0.0] * self.n_params
+        """Return param tensor with gradient flow preserved for trainable params."""
+        try:
+            dev = next(self.parameters()).device
+        except StopIteration:
+            try:
+                dev = next(self.buffers()).device
+            except StopIteration:
+                dev = torch.device("cpu")
+        param_vals = [None] * self.n_params
         for param_idx, val in self.fixed_params:
-            params[param_idx] = val
+            param_vals[param_idx] = torch.tensor(
+                [float(val)], dtype=torch.float32, device=dev
+            )
         for param_idx, param in self.free_params_list:
             config = self.param_configs[param_idx]
             parsed = config["parsed"]
             if parsed["type"] == "boolean" or parsed["type"] == "reference":
-                params[param_idx] = (
-                    param.item()
-                    if param.numel() == 1
-                    else (param[0].item() if len(param.shape) > 0 else param.item())
-                )
+                bounds = config.get("bounds")
+                if bounds is None and parsed["type"] == "reference":
+                    ref = parsed["value"]
+                    ref_type = ref["type"] if ref["type"] else self.param_type
+                    key = (ref_type, ref["flavor"], ref["param_idx"])
+                    bounds = self.param_bounds_map.get(key)
+                if bounds is not None:
+                    lo, hi = bounds
+                    raw = torch.sigmoid(param)
+                    val_t = lo + (hi - lo) * raw.flatten()[0]
+                    param_vals[param_idx] = val_t.unsqueeze(0)
+                else:
+                    p = param.flatten()[0]
+                    param_vals[param_idx] = p.unsqueeze(0)
             elif parsed["type"] == "expression":
                 expr_value = self.evaluator.evaluate(
                     parsed["expression"], self.param_type, self.flavor
                 )
-                params[param_idx] = expr_value.item()
-                param.data = expr_value
-        return torch.tensor(params, dtype=torch.float32)
+                param_vals[param_idx] = expr_value
+                param.data = expr_value.detach()
+        vals = [
+            (
+                param_vals[i]
+                if param_vals[i] is not None
+                else torch.tensor([0.0], dtype=torch.float32, device=dev)
+            )
+            for i in range(self.n_params)
+        ]
+        return torch.cat([v.flatten()[:1] for v in vals])
 
     def forward(
         self,
@@ -153,10 +216,7 @@ class TMDPDFExponential(nn.Module):
         lam_f, alpha = p[0], p[1]
         x_safe = torch.clamp(x, min=1e-10)
         exponent = (
-            -((b / 2.0) ** 2)
-            * (lam_f**2)
-            * torch.pow(x_safe, -alpha)
-            * ((1 - x) ** 2)
+            -((b / 2.0) ** 2) * (lam_f**2) * torch.pow(x_safe, alpha) * ((1 - x) ** 2)
         )
         return torch.exp(exponent) * mask_val
 
@@ -166,8 +226,9 @@ class TMDPDFExponential(nn.Module):
 ###############################################################################
 class TMDFFExponential(nn.Module):
     """
-    TMD FF: D̃_{1,NP}^q(z, b_T) = exp[-b_T²/4 · λ_D² · z^{-β} · (1-z)²]
+    TMD FF: D̃_{1,NP}^q(z, b_T) = exp[-b_T²/4 · λ_D² · z^{β} · (1-z)²]
     Parameters: [λ_D, β] (index 0, 1). Supports linking and expressions in free_mask.
+    Bounded params use sigmoid rescaling: value = lo + (hi - lo) * sigmoid(theta).
     """
 
     def __init__(
@@ -178,15 +239,20 @@ class TMDFFExponential(nn.Module):
         registry: ParameterRegistry,
         evaluator: ExpressionEvaluator,
         param_type: str = "ffs",
+        param_bounds: Optional[List[Any]] = None,
+        param_bounds_map: Optional[
+            Dict[Tuple[str, str, int], Tuple[float, float]]
+        ] = None,
     ):
         super().__init__()
+        self.param_bounds_map = param_bounds_map or {}
         if len(init_params) != 2:
             raise ValueError(
-                f"{tcolors.FAIL}[fnp_base.py] Exponential FF requires 2 params [λ_D, β], got {len(init_params)}{tcolors.ENDC}"
+                f"{tcolors.FAIL}[fnp_simple.py] Exponential FF requires 2 params [λ_D, β], got {len(init_params)}{tcolors.ENDC}"
             )
         if len(free_mask) != 2:
             raise ValueError(
-                f"{tcolors.FAIL}[fnp_base.py] free_mask length must match init_params (2){tcolors.ENDC}"
+                f"{tcolors.FAIL}[fnp_simple.py] free_mask length must match init_params (2){tcolors.ENDC}"
             )
 
         self.flavor = flavor
@@ -196,20 +262,49 @@ class TMDFFExponential(nn.Module):
         self.evaluator = evaluator
         self.parser = ParameterLinkParser()
 
+        bounds_list = []
+        if param_bounds is not None:
+            try:
+                for idx in range(min(len(param_bounds), 2)):
+                    b = parse_bound(
+                        param_bounds[idx] if idx < len(param_bounds) else None
+                    )
+                    bounds_list.append(b)
+            except (TypeError, KeyError):
+                pass
+        while len(bounds_list) < 2:
+            bounds_list.append(None)
+
         self.param_configs = []
         self.fixed_params = []
         self.free_params_list = []
 
         for param_idx, (init_val, entry) in enumerate(zip(init_params, free_mask)):
             parsed = self.parser.parse_entry(entry, param_type, flavor)
+            bounds = bounds_list[param_idx] if param_idx < len(bounds_list) else None
             self.param_configs.append(
-                {"idx": param_idx, "init_val": init_val, "parsed": parsed}
+                {
+                    "idx": param_idx,
+                    "init_val": init_val,
+                    "parsed": parsed,
+                    "bounds": bounds,
+                }
             )
 
             if parsed["is_fixed"]:
                 self.fixed_params.append((param_idx, init_val))
             elif parsed["type"] == "boolean" and parsed["value"]:
-                param = nn.Parameter(torch.tensor([init_val], dtype=torch.float32))
+                if bounds is not None:
+                    lo, hi = bounds
+                    u = (init_val - lo) / (hi - lo)
+                    u = max(1e-6, min(1 - 1e-6, u))
+                    theta = torch.tensor(
+                        float(torch.logit(torch.tensor(u)).item()),
+                        dtype=torch.float32,
+                    )
+                    param = nn.Parameter(theta.unsqueeze(0))
+                else:
+                    param = nn.Parameter(torch.tensor([init_val], dtype=torch.float32))
                 self.free_params_list.append((param_idx, param))
                 registry.register_parameter(param_type, flavor, param_idx, param)
             elif parsed["type"] == "reference":
@@ -240,25 +335,52 @@ class TMDFFExponential(nn.Module):
             self.register_parameter(f"free_param_{param_idx}", param)
 
     def get_params_tensor(self) -> torch.Tensor:
-        params = [0.0] * self.n_params
+        """Return param tensor with gradient flow preserved for trainable params."""
+        try:
+            dev = next(self.parameters()).device
+        except StopIteration:
+            try:
+                dev = next(self.buffers()).device
+            except StopIteration:
+                dev = torch.device("cpu")
+        param_vals = [None] * self.n_params
         for param_idx, val in self.fixed_params:
-            params[param_idx] = val
+            param_vals[param_idx] = torch.tensor(
+                [float(val)], dtype=torch.float32, device=dev
+            )
         for param_idx, param in self.free_params_list:
             config = self.param_configs[param_idx]
             parsed = config["parsed"]
             if parsed["type"] == "boolean" or parsed["type"] == "reference":
-                params[param_idx] = (
-                    param.item()
-                    if param.numel() == 1
-                    else (param[0].item() if len(param.shape) > 0 else param.item())
-                )
+                bounds = config.get("bounds")
+                if bounds is None and parsed["type"] == "reference":
+                    ref = parsed["value"]
+                    ref_type = ref["type"] if ref["type"] else self.param_type
+                    key = (ref_type, ref["flavor"], ref["param_idx"])
+                    bounds = self.param_bounds_map.get(key)
+                if bounds is not None:
+                    lo, hi = bounds
+                    raw = torch.sigmoid(param)
+                    val_t = lo + (hi - lo) * raw.flatten()[0]
+                    param_vals[param_idx] = val_t.unsqueeze(0)
+                else:
+                    p = param.flatten()[0]
+                    param_vals[param_idx] = p.unsqueeze(0)
             elif parsed["type"] == "expression":
                 expr_value = self.evaluator.evaluate(
                     parsed["expression"], self.param_type, self.flavor
                 )
-                params[param_idx] = expr_value.item()
-                param.data = expr_value
-        return torch.tensor(params, dtype=torch.float32)
+                param_vals[param_idx] = expr_value
+                param.data = expr_value.detach()
+        vals = [
+            (
+                param_vals[i]
+                if param_vals[i] is not None
+                else torch.tensor([0.0], dtype=torch.float32, device=dev)
+            )
+            for i in range(self.n_params)
+        ]
+        return torch.cat([v.flatten()[:1] for v in vals])
 
     def forward(
         self,
@@ -277,10 +399,7 @@ class TMDFFExponential(nn.Module):
         lam_D, beta = p[0], p[1]
         z_safe = torch.clamp(z, min=1e-10)
         exponent = (
-            -((b / 2.0) ** 2)
-            * (lam_D**2)
-            * torch.pow(z_safe, -beta)
-            * ((1 - z) ** 2)
+            -((b / 2.0) ** 2) * (lam_D**2) * torch.pow(z_safe, beta) * ((1 - z) ** 2)
         )
         return torch.exp(exponent) * mask_val
 
@@ -298,7 +417,7 @@ DEFAULT_FF_PARAMS = {"init_params": [0.5, 0.3], "free_mask": [True, True]}
 ###############################################################################
 class fNPManager(nn.Module):
     """
-    Manager for exponential fNP parametrization with parameter linking.
+    Manager for simple exponential fNP parametrization with parameter linking.
 
     Supports free_mask: true/false, u[0], pdfs.u[1], "0.5*u[0]", "2*u[1]+0.1", etc.
     """
@@ -311,18 +430,58 @@ class fNPManager(nn.Module):
         self.ff_flavor_keys = ["u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"]
 
         print(
-            f"{tcolors.BLUE}\n[fNPManager] Initializing exponential fNP parametrization (with linking)"
+            f"{tcolors.BLUE}\n[fNPManager] Initializing simple exponential fNP parametrization (with linking)"
         )
         print(f"  Hadron: {self.hadron}")
         print(
-            "  PDF: exp[-b²/4 · λ_f² · x^{-α} · (1-x)²],  FF: exp[-b²/4 · λ_D² · z^{-β} · (1-z)²]"
+            "  PDF: exp[-b²/4 · λ_f² · x^{α} · (1-x)²],  FF: exp[-b²/4 · λ_D² · z^{β} · (1-z)²]"
         )
-        print(f"  Params: PDF [λ_f, α], FF [λ_D, β]. Supports links and expressions.\n{tcolors.ENDC}")
+        print(
+            f"  Params: PDF [λ_f, α], FF [λ_D, β]. Supports links and expressions.\n{tcolors.ENDC}"
+        )
 
         evolution_config = config.get("evolution", {})
         init_g2 = evolution_config.get("init_g2", 0.12840)
         free_mask = evolution_config.get("free_mask", [True])
         self.evolution = fNP_evolution(init_g2=init_g2, free_mask=free_mask)
+
+        self.evolution_bounds: List[Tuple[float, float]] = []
+        ev_bounds = evolution_config.get("param_bounds")
+        if ev_bounds is not None:
+            try:
+                for b in ev_bounds:
+                    parsed = parse_bound(b)
+                    if parsed is not None:
+                        self.evolution_bounds.append(parsed)
+            except TypeError:
+                pass
+
+        self.param_bounds: Dict[Tuple[str, str, int], Tuple[float, float]] = {}
+        for param_type in ("pdfs", "ffs"):
+            type_config = config.get(param_type, {})
+            flavor_keys = (
+                self.pdf_flavor_keys if param_type == "pdfs" else self.ff_flavor_keys
+            )
+            for flavor in flavor_keys:
+                flavor_cfg = type_config.get(flavor, {})
+                if flavor_cfg is None:
+                    continue
+                bounds_list = (
+                    flavor_cfg.get("param_bounds")
+                    if hasattr(flavor_cfg, "get")
+                    else None
+                )
+                if bounds_list is None:
+                    continue
+                try:
+                    for idx in range(min(len(bounds_list), 2)):
+                        b = parse_bound(
+                            bounds_list[idx] if idx < len(bounds_list) else None
+                        )
+                        if b is not None:
+                            self.param_bounds[(param_type, flavor, idx)] = b
+                except (TypeError, KeyError):
+                    pass
 
         self.registry = ParameterRegistry()
         self.evaluator = ExpressionEvaluator(self.registry)
@@ -357,6 +516,8 @@ class fNPManager(nn.Module):
                 registry=self.registry,
                 evaluator=self.evaluator,
                 param_type="pdfs",
+                param_bounds=flavor_cfg.get("param_bounds"),
+                param_bounds_map=self.param_bounds,
             )
         self.pdf_modules = nn.ModuleDict(pdf_modules)
         print(
@@ -382,17 +543,83 @@ class fNPManager(nn.Module):
                 init_params=flavor_cfg.get(
                     "init_params", DEFAULT_FF_PARAMS["init_params"]
                 ),
-                free_mask=flavor_cfg.get(
-                    "free_mask", DEFAULT_FF_PARAMS["free_mask"]
-                ),
+                free_mask=flavor_cfg.get("free_mask", DEFAULT_FF_PARAMS["free_mask"]),
                 registry=self.registry,
                 evaluator=self.evaluator,
                 param_type="ffs",
+                param_bounds=flavor_cfg.get("param_bounds"),
+                param_bounds_map=self.param_bounds,
             )
         self.ff_modules = nn.ModuleDict(ff_modules)
         print(
             f"{tcolors.GREEN}[fNPManager] Initialized {len(self.ff_modules)} FF flavor modules\n{tcolors.ENDC}"
         )
+
+    def get_trainable_bounds(
+        self,
+    ) -> List[Tuple[nn.Parameter, Optional[float], Optional[float]]]:
+        """
+        Return (parameter, low, high) for each trainable parameter that has bounds.
+        For fnp_simple, only evolution params need clamping (PDF/FF use sigmoid rescaling).
+        """
+        result: List[Tuple[nn.Parameter, Optional[float], Optional[float]]] = []
+        if self.evolution_bounds and hasattr(self.evolution, "free_g2"):
+            p = self.evolution.free_g2
+            if p.requires_grad and len(self.evolution_bounds) > 0:
+                lo, hi = self.evolution_bounds[0]
+                result.append((p, lo, hi))
+        return result
+
+    def clamp_parameters_to_bounds(self) -> None:
+        """
+        Clamp evolution parameters to their allowed intervals.
+        PDF/FF params use sigmoid rescaling and need no clamping.
+        """
+        for param, low, high in self.get_trainable_bounds():
+            if low is not None and high is not None:
+                with torch.no_grad():
+                    param.data.clamp_(low, high)
+
+    def randomize_params_in_bounds(self, seed: int = 42) -> None:
+        """
+        Set bounded parameters to random values within bounds.
+        For theta (sigmoid) params: theta = logit(Uniform(0,1)).
+        For evolution: value = Uniform(lo, hi).
+        """
+        gen = torch.Generator(device=next(self.parameters()).device)
+        gen.manual_seed(seed)
+        seen: set = set()
+        for module in [*self.pdf_modules.values(), *self.ff_modules.values()]:
+            if not hasattr(module, "free_params_list"):
+                continue
+            for param_idx, param in module.free_params_list:
+                if id(param) in seen:
+                    continue
+                config = module.param_configs[param_idx]
+                parsed = config["parsed"]
+                bounds = config.get("bounds")
+                if bounds is None and parsed["type"] == "reference":
+                    ref = parsed["value"]
+                    ref_type = ref["type"] if ref["type"] else module.param_type
+                    key = (ref_type, ref["flavor"], ref["param_idx"])
+                    bounds = module.param_bounds_map.get(key)
+                if bounds is not None:
+                    seen.add(id(param))
+                    lo, hi = bounds
+                    u = torch.rand(
+                        1, generator=gen, device=param.device, dtype=param.dtype
+                    )
+                    u = u.clamp(1e-6, 1 - 1e-6)
+                    theta = torch.logit(u)
+                    with torch.no_grad():
+                        param.data.copy_(theta)
+        if self.evolution_bounds and hasattr(self.evolution, "free_g2"):
+            p = self.evolution.free_g2
+            if p.requires_grad and len(self.evolution_bounds) > 0:
+                lo, hi = self.evolution_bounds[0]
+                u = torch.rand(1, generator=gen, device=p.device, dtype=p.dtype)
+                with torch.no_grad():
+                    p.data.copy_(lo + (hi - lo) * u)
 
     def _compute_zeta(self, Q: torch.Tensor) -> torch.Tensor:
         return Q**2

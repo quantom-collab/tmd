@@ -50,3 +50,4 @@ CollinsSoperKernel
 output/
 build/
 outs/
+plots/
