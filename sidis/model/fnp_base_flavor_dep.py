@@ -592,6 +592,7 @@ class fNPManager(nn.Module):
         super().__init__()
 
         self.hadron = config.get("hadron", "proton")
+        # TODO: get the flavor keys from the config
         self.pdf_flavor_keys = ["u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"]
         self.ff_flavor_keys = ["u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"]
 
