@@ -2,10 +2,11 @@
 SIDIS TMD Cross-Section Computation with Minimization
 
 This script extends main.py to include parameter minimization capabilities.
-It can be used to fit model parameters to data using an optimizer.
+It fits model parameters to target cross sections loaded from a .pt file.
 
 Usage:
-    python3 sidis/tests/main_with_minimization.py -c fNPconfig_base_flexible.yaml --events mock_events.dat --epochs 100
+    python3 sidis/tests/main_with_minimization.py -c fNPconfig_simple.yaml --epochs 100
+    python3 sidis/tests/main_with_minimization.py -c fNPconfig_simple.yaml --random_init --epochs 50
 """
 
 import torch
@@ -17,6 +18,7 @@ from collections import defaultdict
 # This ensures the code only runs when the script is executed directly,
 # not when imported as a module.
 if __name__ == "__main__":
+
     # Add parent directory to path so sidis can be imported as a package
     parent_dir = pathlib.Path(__file__).resolve().parent.parent.parent
     if str(parent_dir) not in sys.path:
@@ -24,7 +26,7 @@ if __name__ == "__main__":
 
     from omegaconf import OmegaConf
     from sidis.model import TrainableModel
-    from sidis.model.fnp_base_flexible import ParameterLinkParser
+    from sidis.model.fnp_config import ParameterLinkParser
     from sidis.utilities.colors import tcolors
 
     # Set default tensor dtype to float64 for high precision calculations
@@ -45,9 +47,18 @@ if __name__ == "__main__":
         "--fnp_config",
         "-c",
         type=str,
-        default="fNPconfig_base_flavor_blind.yaml",
+        default="fNPconfig_simple.yaml",
         help="fNP configuration file name (looked up in cards/ directory). "
-        "Default: fNPconfig_base_flavor_blind.yaml",
+        "Default: fNPconfig_simple.yaml",
+    )
+
+    parser.add_argument(
+        "--target",
+        "-t",
+        type=str,
+        default=None,
+        help="Path to .pt file with target cross sections (keys: 'cross_section', 'events'). "
+        "Default: tests/outs/cross_section_output.pt",
     )
 
     parser.add_argument(
@@ -56,7 +67,27 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help="Path to events file (relative to sidis/ or absolute). "
-        "Default: sidis/toy_events.dat",
+        "If not given and target file has 'events', use those. Else fallback to sidis/toy_events.dat",
+    )
+
+    parser.add_argument(
+        "--random_init",
+        action="store_true",
+        default=True,
+        help="Randomize fNP parameters within bounds before minimization (combo: simple only). Default: True.",
+    )
+    parser.add_argument(
+        "--no-random_init",
+        action="store_false",
+        dest="random_init",
+        help="Use config initial values instead of random (disables --random_init).",
+    )
+
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for --random_init. Default: 42",
     )
 
     parser.add_argument(
@@ -71,14 +102,6 @@ if __name__ == "__main__":
         type=float,
         default=0.1,
         help="Learning rate for optimizer. Default: 0.1",
-    )
-
-    parser.add_argument(
-        "--target_scale",
-        type=float,
-        default=10.0,
-        help="Scale factor for target (dummy target = initial_output * scale). "
-        "Larger values (e.g. 10) make parameters move more. Default: 10.0",
     )
 
     parser.add_argument(
@@ -129,29 +152,80 @@ if __name__ == "__main__":
 
     print(f"{tcolors.GREEN}Using fNP config: {args.fnp_config}{tcolors.ENDC}\n")
 
+    # Resolve target file path
+    if args.target is None:
+        target_path = script_dir / "outs" / "cross_section_output.pt"
+    else:
+        target_path = pathlib.Path(args.target)
+        if not target_path.is_absolute():
+            target_path = script_dir.joinpath(args.target)
+
+    if not target_path.exists():
+        print(
+            f"{tcolors.FAIL}Error: Target file not found: {target_path}{tcolors.ENDC}"
+        )
+        print(
+            f"Generate it first with: python sidis/tests/run_cross_section_from_mock.py -c {args.fnp_config}{tcolors.ENDC}"
+        )
+        exit(1)
+
+    print(f"{tcolors.BOLDWHITE}Loading target from {target_path}{tcolors.ENDC}")
+    target_data = torch.load(target_path)
+    target = target_data["cross_section"]
+    if "events" in target_data and args.events is None:
+        events_tensor = target_data["events"]
+        print(f"Using events from target file: {events_tensor.shape}")
+    else:
+        if args.events is None:
+            events_file = rootdir.joinpath("toy_events.dat")
+        else:
+            events_file = pathlib.Path(args.events)
+            if not events_file.is_absolute():
+                events_file = rootdir.joinpath(args.events)
+        if not events_file.exists():
+            print(
+                f"{tcolors.FAIL}Error: Events file not found: {events_file}{tcolors.ENDC}"
+            )
+            exit(1)
+        events_tensor = torch.load(events_file)
+    if target.shape[0] != events_tensor.shape[0]:
+        print(
+            f"{tcolors.FAIL}Error: Target has {target.shape[0]} events but events has {events_tensor.shape[0]}. "
+            "Mismatch. Use events from target file or ensure --events matches target.{tcolors.ENDC}"
+        )
+        exit(1)
+    print(f"Event data shape: {events_tensor.shape}")
+    print(f"Target shape: {target.shape}")
+    print(f"Number of events: {events_tensor.shape[0]}\n")
+
     # Initialize the trainable model
     print(f"{tcolors.BOLDWHITE}Initializing model...{tcolors.ENDC}")
     model = TrainableModel(fnp_config=args.fnp_config)
     print(f"{tcolors.GREEN}Model initialized successfully!{tcolors.ENDC}")
 
-    # Load event data
-    if args.events is None:
-        events_file = rootdir.joinpath("toy_events.dat")
-    else:
-        events_file = pathlib.Path(args.events)
-        if not events_file.is_absolute():
-            events_file = rootdir.joinpath(args.events)
-
-    if not events_file.exists():
-        print(
-            f"{tcolors.FAIL}Error: Events file not found: {events_file}{tcolors.ENDC}"
-        )
-        exit(1)
-
-    print(f"{tcolors.BOLDWHITE}Loading events from {events_file}{tcolors.ENDC}")
-    events_tensor = torch.load(events_file)
-    print(f"Event data shape: {events_tensor.shape}")
-    print(f"Number of events: {events_tensor.shape[0]}\n")
+    # Optional: randomize fNP params within bounds (combo: base only)
+    if args.random_init:
+        fnp_config_dict = OmegaConf.load(config_path)
+        combo = fnp_config_dict.get("combo", "")
+        if (
+            combo == "simple"
+            and hasattr(model, "qcf0")
+            and hasattr(model.qcf0, "fnp_manager")
+        ):
+            fnp_mgr = model.qcf0.fnp_manager
+            if hasattr(fnp_mgr, "randomize_params_in_bounds"):
+                fnp_mgr.randomize_params_in_bounds(seed=args.seed)
+                print(
+                    f"{tcolors.GREEN}Randomized fNP parameters within bounds (seed={args.seed}).{tcolors.ENDC}\n"
+                )
+            else:
+                print(
+                    f"{tcolors.WARNING}--random_init ignored: fnp_manager has no randomize_params_in_bounds.{tcolors.ENDC}\n"
+                )
+        else:
+            print(
+                f"{tcolors.WARNING}--random_init ignored: requires combo: simple.{tcolors.ENDC}\n"
+            )
 
     # Run initial forward pass
     print(f"{tcolors.BOLDWHITE}Running initial forward pass...{tcolors.ENDC}")
@@ -163,8 +237,39 @@ if __name__ == "__main__":
     )
     print(f"Initial output mean: {initial_output.mean().item():.6e}\n")
 
-    # Count and display parameter summary
-    print(f"{tcolors.BOLDWHITE}Model Parameters Summary:{tcolors.ENDC}")
+    # Count and display parameter summary (initial values, after random init if used)
+    init_label = "randomly sampled within bounds" if args.random_init else "from config"
+    print(f"{tcolors.BOLDWHITE}Initial parameter values ({init_label}):{tcolors.ENDC}")
+
+    def get_param_display_value(model, name: str, tensor) -> str:
+        """Return string value for display. For fnp_simple bounded params, show physical value (in [lo,hi]) not theta."""
+        if "fnp_manager.pdf_modules." in name or "fnp_manager.ff_modules." in name:
+            short = name.split(".")[-1]
+            if short.startswith("free_param_"):
+                try:
+                    param_idx = int(short.replace("free_param_", ""))
+                    parts = name.split(".")
+                    # Navigate: qcf0.fnp_manager.pdf_modules.u.free_param_0
+                    if "pdf_modules" in name:
+                        mod_idx = parts.index("pdf_modules")
+                        flavor = parts[mod_idx + 1]
+                        mod = model.qcf0.fnp_manager.pdf_modules[flavor]
+                    else:
+                        mod_idx = parts.index("ff_modules")
+                        flavor = parts[mod_idx + 1]
+                        mod = model.qcf0.fnp_manager.ff_modules[flavor]
+                    if hasattr(mod, "get_params_tensor"):
+                        p = mod.get_params_tensor()
+                        if param_idx < p.numel():
+                            return f"{p[param_idx].item():.6f}"
+                except (AttributeError, KeyError, IndexError, ValueError):
+                    pass
+        # Default: raw tensor value
+        if tensor.numel() == 1:
+            return f"{tensor.data.item():.6f}"
+        if tensor.numel() <= 5:
+            return str(tensor.data.detach().cpu().numpy().tolist())
+        return f"min={tensor.data.min().item():.6f}, max={tensor.data.max().item():.6f}"
 
     def is_fixed_param_buffer(name: str) -> bool:
         if "fixed_param_" in name and not name.endswith("_params"):
@@ -189,7 +294,7 @@ if __name__ == "__main__":
         if module_name not in param_groups:
             param_groups[module_name] = []
         param_groups[module_name].append((name, param, True))
-    
+
     # Fixed parameters (buffers)
     for name, buffer in model.named_buffers():
         if is_fixed_param_buffer(name):
@@ -225,19 +330,17 @@ if __name__ == "__main__":
             if is_parameter:
                 # This is a trainable parameter
                 is_trainable = tensor.requires_grad
+                # For fnp_simple PDF/FF params with bounds, show physical value (in [lo,hi]) not theta
+                value_str = get_param_display_value(model, name, tensor)
             else:
                 # This is a fixed parameter buffer
                 is_trainable = False
-
-            # Format value display
-            if tensor.numel() == 1:
-                value_str = f"{tensor.data.item():.6f}"
-            elif tensor.numel() <= 5:
-                # Show full values for small tensors
-                value_str = str(tensor.data.detach().cpu().numpy().tolist())
-            else:
-                # Show summary for large tensors
-                value_str = f"min={tensor.data.min().item():.6f}, max={tensor.data.max().item():.6f}"
+                if tensor.numel() == 1:
+                    value_str = f"{tensor.data.item():.6f}"
+                elif tensor.numel() <= 5:
+                    value_str = str(tensor.data.detach().cpu().numpy().tolist())
+                else:
+                    value_str = f"min={tensor.data.min().item():.6f}, max={tensor.data.max().item():.6f}"
 
             short_name = name.split(".")[-1] if "." in name else name
             if short_name.startswith("fixed_param_"):
@@ -314,16 +417,29 @@ if __name__ == "__main__":
                         param_name
                     ].clone()
 
-    print(f"{tcolors.GREEN}Stored {len(initial_params)} trainable parameter groups.{tcolors.ENDC}\n")
+    print(
+        f"{tcolors.GREEN}Stored {len(initial_params)} trainable parameter groups.{tcolors.ENDC}\n"
+    )
 
     # Set up optimizer
     print(f"{tcolors.BOLDWHITE}Setting up optimizer...{tcolors.ENDC}")
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     print(f"Optimizer: Adam with learning rate = {args.lr}")
 
-    # Create target (dummy target for demonstration)
-    target = initial_output * args.target_scale
-    print(f"Target scale factor: {args.target_scale}\n")
+    # Resolve parameter bounds from config (flexible fNP) for use in minimization
+    clamp_bounds_after_step = False
+    if hasattr(model, "qcf0") and hasattr(model.qcf0, "fnp_manager"):
+        fnp_mgr = model.qcf0.fnp_manager
+        if hasattr(fnp_mgr, "get_trainable_bounds") and fnp_mgr.get_trainable_bounds():
+            clamp_bounds_after_step = True
+            n_bounded = len(fnp_mgr.get_trainable_bounds())
+            print(
+                f"{tcolors.GREEN}Parameter bounds from config: {n_bounded} trainable parameter(s) have allowed intervals (will clamp after each step).{tcolors.ENDC}"
+            )
+    if not clamp_bounds_after_step:
+        print(
+            f"{tcolors.OKLIGHTBLUE}No parameter bounds in config (or not flexible config); minimization is unconstrained.{tcolors.ENDC}"
+        )
 
     drive_pdfs_u_target = args.drive_pdfs_u_to
     drive_pdfs_u_weight = args.drive_pdfs_u_weight
@@ -378,6 +494,10 @@ if __name__ == "__main__":
         # Update parameters
         optimizer.step()
 
+        # Enforce allowed intervals (clamp to bounds from config)
+        if clamp_bounds_after_step:
+            model.qcf0.fnp_manager.clamp_parameters_to_bounds()
+
         # Print progress
         if (epoch + 1) % max(1, args.epochs // 10) == 0 or epoch == 0:
             print(f"  Epoch {epoch+1:4d}/{args.epochs}: Loss = {loss.item():.6e}")
@@ -419,6 +539,28 @@ if __name__ == "__main__":
     )
     print(f"  Maximum parameter change: {max_change:.6e}")
 
+    # Print final parameter values (same format as initial)
+    print(
+        f"\n{tcolors.BOLDWHITE}Final parameter values (after minimization):{tcolors.ENDC}"
+    )
+    for module_name, params in sorted(param_groups.items()):
+        trainable_in_mod = [
+            (n, t)
+            for (n, t, is_param) in params
+            if is_param and getattr(t, "requires_grad", False)
+        ]
+        if not trainable_in_mod:
+            continue
+        print(f"\n{tcolors.OKLIGHTBLUE}{'='*80}")
+        print(f"Module: {module_name}")
+        print(f"{'='*80}{tcolors.ENDC}")
+        for name, tensor in sorted(trainable_in_mod):
+            short_name = name.split(".")[-1] if "." in name else name
+            if short_name.startswith("fixed_param_"):
+                short_name = f"fixed[{short_name.replace('fixed_param_', '')}]"
+            value_str = get_param_display_value(model, name, tensor)
+            print(f"  {short_name:<45} {value_str}")
+
     # Compare outputs
     output_diff = torch.abs(final_output - initial_output).mean().item()
     relative_change = output_diff / initial_output.mean().item() * 100
@@ -433,7 +575,9 @@ if __name__ == "__main__":
         reg = getattr(fnp_mgr, "registry", None)
         evaluator = getattr(fnp_mgr, "evaluator", None)
         if linked_groups or expression_entries:
-            print(f"\n{tcolors.BOLDWHITE}Linking verification (from config):{tcolors.ENDC}")
+            print(
+                f"\n{tcolors.BOLDWHITE}Linking verification (from config):{tcolors.ENDC}"
+            )
             print("=" * 80)
         # Reference links: same tensor, same value
         for source_key, group_members in linked_groups:
@@ -449,11 +593,21 @@ if __name__ == "__main__":
             same_param = True
             for pt, fl, idx in group_members:
                 p = reg.get_parameter(pt, fl, idx) if reg else None
-                if p is not None and (id(p) != id(param) or p.data.item() != current_val):
+                if p is not None and (
+                    id(p) != id(param) or p.data.item() != current_val
+                ):
                     same_param = False
                     ref_ok = False
-            status = f"{tcolors.GREEN}OK{tcolors.ENDC}" if same_param else f"{tcolors.FAIL}MISMATCH{tcolors.ENDC}"
-            val_str = f"  {initial_val:.6f} -> {current_val:.6f}" if initial_val is not None else f"  {current_val:.6f}"
+            status = (
+                f"{tcolors.GREEN}OK{tcolors.ENDC}"
+                if same_param
+                else f"{tcolors.FAIL}MISMATCH{tcolors.ENDC}"
+            )
+            val_str = (
+                f"  {initial_val:.6f} -> {current_val:.6f}"
+                if initial_val is not None
+                else f"  {current_val:.6f}"
+            )
             print(f"  Ref {label_s}: {', '.join(members_str)}  {val_str}  {status}")
         # Expression links: effective value == evaluator.evaluate(expr)
         for param_type, flavor, idx, expr in expression_entries:
@@ -461,7 +615,11 @@ if __name__ == "__main__":
                 expr_ok = False
                 print(f"  Expr {param_type}.{flavor}[{idx}] = {expr}: no evaluator")
                 continue
-            mod = fnp_mgr.pdf_modules[flavor] if param_type == "pdfs" else fnp_mgr.ff_modules[flavor]
+            mod = (
+                fnp_mgr.pdf_modules[flavor]
+                if param_type == "pdfs"
+                else fnp_mgr.ff_modules[flavor]
+            )
             params_t = mod.get_params_tensor()
             effective = params_t[idx].item()
             try:
@@ -469,11 +627,19 @@ if __name__ == "__main__":
                 match = abs(effective - expected) < 1e-5
                 if not match:
                     expr_ok = False
-                status = f"{tcolors.GREEN}OK{tcolors.ENDC}" if match else f"{tcolors.FAIL}MISMATCH{tcolors.ENDC}"
-                print(f"  Expr {param_type}.{flavor}[{idx}] = {expr}: value {effective:.6f} (expected {expected:.6f})  {status}")
+                status = (
+                    f"{tcolors.GREEN}OK{tcolors.ENDC}"
+                    if match
+                    else f"{tcolors.FAIL}MISMATCH{tcolors.ENDC}"
+                )
+                print(
+                    f"  Expr {param_type}.{flavor}[{idx}] = {expr}: value {effective:.6f} (expected {expected:.6f})  {status}"
+                )
             except Exception as e:
                 expr_ok = False
-                print(f"  Expr {param_type}.{flavor}[{idx}] = {expr}: {tcolors.FAIL}error {e}{tcolors.ENDC}")
+                print(
+                    f"  Expr {param_type}.{flavor}[{idx}] = {expr}: {tcolors.FAIL}error {e}{tcolors.ENDC}"
+                )
         if linked_groups or expression_entries:
             if ref_ok and expr_ok:
                 print(f"{tcolors.GREEN}  All linkings verified.{tcolors.ENDC}\n")
