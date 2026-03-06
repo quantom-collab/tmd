@@ -97,3 +97,11 @@ if __name__ == "__main__":
     x = torch.tensor([0.1, 0.2, 0.3])
     bT = torch.tensor([0.1, 0.2, 0.3])
     print(ope(x, bT))
+
+class OPE_Sivers(torch.nn.module):
+    
+
+
+
+
+#sivers class in ope that returns something like qiu_sterman  = self.qfc0.forward_qiu_sterman(x, BT)

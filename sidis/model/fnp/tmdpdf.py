@@ -12,7 +12,7 @@ except ImportError:
         from sidis.utilities.colors import tcolors
 
 # Import config parsing utilities (shared across all models)
-from .fnp_config import (
+from ..fnp_config import (
     ParameterLinkParser,
     ParameterRegistry,
     ExpressionEvaluator,

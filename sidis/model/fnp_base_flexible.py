@@ -47,6 +47,11 @@ from .fnp_config import (
     parse_bound,
 )
 
+from .fnp.tmdpdf import TMDPDFFlexible
+from .fnp.tmdff import TMDFFFlexible
+from .fnp.sivers import Sivers
+from .fnp.qiu_sterman import QiuSterman
+
 
 ###############################################################################
 # 1. Flexible PDF Base Class
@@ -177,6 +182,7 @@ class TMDPDFFlexible(nn.Module):
         b: torch.Tensor,
         flavor_idx: int = 0,
     ) -> torch.Tensor:
+
         """Compute TMD PDF using MAP22 parameterization."""
         # Ensure x can broadcast with b (x: [n_events], b: [n_events, n_b])
         if b.dim() > x.dim():
@@ -223,7 +229,6 @@ class TMDPDFFlexible(nn.Module):
 
         # Compute (b/2)² term
         b_half_sq = (b / 2.0) ** 2
-
         # Numerator (exact MAP22 formula)
         numerator = (
             g1 * torch.exp(-g1 * b_half_sq)

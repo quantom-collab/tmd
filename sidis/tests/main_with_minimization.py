@@ -124,7 +124,7 @@ if __name__ == "__main__":
             print(f"  {tcolors.FAIL}cards/ directory not found!{tcolors.ENDC}")
         print(
             f"\nUsage: python3 sidis/tests/main_with_minimization.py -c <config_file>\n"
-        )
+        )F
         exit(1)
 
     print(f"{tcolors.GREEN}Using fNP config: {args.fnp_config}{tcolors.ENDC}\n")

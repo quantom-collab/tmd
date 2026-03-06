@@ -566,6 +566,23 @@ MAP22_DEFAULT_FF_PARAMS = {
     "free_mask": [True] * 9,
 }
 
+DEFAULT_SIVERS_PARAMS = {
+        "init_params": [
+        0.045,  # w
+    ],
+    "free_mask": [True] * 1,
+}
+
+DEFAULT_QIU_STERMAN_PARAMS = {
+        "init_params": [
+        0.045,  # N
+        0.031,  # a
+        0.011,  # b, I don't know what N, a, b should default values should be 
+    ],
+    "free_mask": [True] * 3,
+}
+
+
 
 ###############################################################################
 # 4. Manager Class

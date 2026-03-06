@@ -12,7 +12,7 @@
 hadron: proton
 
 # Combo selection: specifies which fNP combo implementation to use
-combo: flexible
+combo: flexible_new
 
 # Polarization selection: specifies which polarization to use
 polarization: transverse

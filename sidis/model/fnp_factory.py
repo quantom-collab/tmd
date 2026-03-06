@@ -21,7 +21,10 @@ COMBO_MODULES = {
     "flavor_dep": ".fnp_base_flavor_dep",
     "flavor_blind": ".fnp_base_flavor_blind",
     "flexible": ".fnp_base_flexible",
+    "flexible_new": ".fnp_flexible"
 }
+
+ # This is temporary name it imports classes from files within models/fnp instead of defining classes within the fnp file itself. 
 
 
 def create_fnp_manager(config_path: str = None, config_dict: Dict[str, Any] = None):
@@ -71,7 +74,7 @@ def create_fnp_manager(config_path: str = None, config_dict: Dict[str, Any] = No
     module_path = COMBO_MODULES[combo_name]
     try:
         # Use relative import from current package
-        module = importlib.import_module(module_path, package=__package__)
+        module = importlib.import_module(module_path, package=__package__) 
     except ImportError as e:
         raise ValueError(f"Failed to import combo module '{module_path}': {e}")
 

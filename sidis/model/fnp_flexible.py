@@ -36,6 +36,9 @@ from .fnp_base_flavor_dep import (
     MAP22_DEFAULT_EVOLUTION,
     MAP22_DEFAULT_PDF_PARAMS,
     MAP22_DEFAULT_FF_PARAMS,
+    DEFAULT_SIVERS_PARAMS,
+    DEFAULT_QIU_STERMAN_PARAMS
+    
 )
 
 # Import config parsing utilities (shared across all models)
@@ -51,12 +54,14 @@ from .fnp.tmdpdf import TMDPDFFlexible
 from .fnp.tmdff import TMDFFFlexible
 
 
-from fnp.sivers import Sivers
-from fnp.qiu_sterman import QiuSterman
+from .fnp.sivers import Sivers
+from .fnp.qiu_sterman import QiuSterman
 
 ###############################################################################
 # 7. Flexible Manager Class
 ###############################################################################
+
+
 class fNPManager(nn.Module):
     """
     Manager for flexible fNP system with parameter linking.
@@ -83,9 +88,12 @@ class fNPManager(nn.Module):
         free_mask = evolution_config.get("free_mask", [True])
         self.evolution = fNP_evolution(init_g2=init_g2, free_mask=free_mask)
 
+
+
+        # change this back 
         if config.get("polarization", "unpolarized") == "transverse":
-            self.sivers = Sivers(config.get("sivers", {}).get("init_params", [0.045]))
-            self.qiu_sterman = QiuSterman(config.get("qiu_sterman", {}).get("init_params", [1.0, 0.5, 0.5]))
+            self.sivers = None #Sivers(config.get("sivers", {}).get("init_params", [0.045]))
+            self.qiu_sterman = None #QiuSterman(config.get("qiu_sterman", {}).get("init_params", [1.0, 0.5, 0.5]))
         else:
             self.sivers = None
             self.qiu_sterman = None
@@ -114,6 +122,7 @@ class fNPManager(nn.Module):
         # Resolve circular dependencies
         pdf_resolved = DependencyResolver.resolve_circular_dependencies(pdf_graph)
         ff_resolved = DependencyResolver.resolve_circular_dependencies(ff_graph)
+        
         if self.sivers is not None:
             sivers_resolved = DependencyResolver.resolve_circular_dependencies(sivers_graph)
         if self.qiu_sterman is not None:
@@ -181,7 +190,66 @@ class fNPManager(nn.Module):
             f"{tcolors.GREEN}[fNPManager] Initialized {len(self.ff_modules)} FF flavor modules\n{tcolors.ENDC}"
         )
 
+
         # TODO: add the sivers and qiu_sterman modules
+
+        sivers_config = config.get("sivers", {})
+        sivers_modules = {}
+
+        for flavor in self.sivers_flavor_keys:
+            flavor_cfg = sivers_config.get(flavor, None)
+            if flavor_cfg is None:
+                print(
+                    f"{tcolors.WARNING}[fNPManager] Warning: Using defaults for Sivers flavor '{flavor}'{tcolors.ENDC}"
+                )
+                flavor_cfg = DEFAULT_SIVERS_PARAMS.copy()
+            else:
+                print(
+                    f"{tcolors.OKLIGHTBLUE}[fNPManager] Using user-defined Sivers flavor '{flavor}'{tcolors.ENDC}"
+                )
+
+            sivers_modules[flavor] = Sivers(
+                flavor = flavor, 
+                init_params = flavor_cfg.get("init_params", DEFAULT_SIVERS_PARAMS["init_params"]),
+                free_mask=flavor_cfg.get(
+                    "free_mask", 
+                    DEFAULT_SIVERS_PARAMS["free_mask"] 
+                ),
+                registry=self.registry,
+                evaluator=self.evaluator,
+                param_type="sivers",
+                )
+            
+        
+        self.sivers_modules = nn.ModuleDict(sivers_modules)
+
+        qiu_sterman_config = config.get("qiu_sterman", {})
+        qiu_sterman_modules = {}
+
+        for flavor in self.qiu_sterman_flavor_keys:
+            flavor_cfg = qiu_sterman_config.get(flavor, None)
+            if flavor_cfg is None:
+                print(
+                    f"{tcolors.WARNING}[fNPManager] Warning: Using MAP22 defaults for Sivers flavor '{flavor}'{tcolors.ENDC}"
+                )
+                flavor_cfg = DEFAULT_QIU_STERMAN_PARAMS.copy()
+            else:
+                print(
+                    f"{tcolors.OKLIGHTBLUE}[fNPManager] Using user-defined Sivers flavor '{flavor}'{tcolors.ENDC}"
+                )
+
+            qiu_sterman_modules[flavor] = QiuSterman(
+                flavor = flavor, 
+                init_params = flavor_cfg.get("init_params", DEFAULT_QIU_STERMAN_PARAMS["init_params"]),
+                free_mask=flavor_cfg.get(
+                    "free_mask", DEFAULT_QIU_STERMAN_PARAMS["free_mask"] #what should be the default?
+                ),
+                registry=self.registry,
+                evaluator=self.evaluator,
+                param_type="qiu_sterman",
+                )
+
+        self.qiu_sterman_modules = nn.ModuleDict(qiu_sterman_modules)
 
         # Build parameter bounds from config (only for source parameters; linked params inherit)
         # Support both plain dicts and OmegaConf (ListConfig/list-like for bounds)
@@ -198,7 +266,7 @@ class fNPManager(nn.Module):
                 bounds_list = flavor_cfg.get("param_bounds") if hasattr(flavor_cfg, "get") else None
                 if bounds_list is None:
                     continue
-                n_params = 11 if param_type == "pdfs" else 9
+                n_params = 11 if param_type == "pdfs" else 9 # check for sivers and qiu sturman.
                 try:
                     bound_len = len(bounds_list)
                 except TypeError:
@@ -349,7 +417,9 @@ class fNPManager(nn.Module):
 
     def forward_sivers(
         self,
+        x: torch.Tensor,
         b: torch.Tensor,
+        flavors: Optional[List[str]] = None
     ) -> torch.Tensor:
         """
         Evaluate Sivers function in bare form (without evolution factor).
@@ -370,7 +440,59 @@ class fNPManager(nn.Module):
         # if b.dim() > x.dim():
         #     x = x.unsqueeze(-1)
 
-        return self.sivers(b)
+        if flavors is None:
+            flavors = self.sivers_flavor_keys
+        
+        outputs = {}
+
+        for flavor in flavors:
+            if flavor in self.sivers_modules:
+                base_result = self.sivers_modules[flavor](x, b)
+                outputs[flavor] = base_result
+            else:
+                raise ValueError(f"Unknown Sivers flavor: {flavor}")
+
+        return outputs
+    
+    def forward_qiu_sterman(
+        self,
+        x: torch.Tensor,
+        b: torch.Tensor,
+        flavors: Optional[List[str]] = None
+    ) -> torch.Tensor:
+        """
+        Evaluate Sivers function in bare form (without evolution factor).
+
+        Note: Sivers function support is not yet implemented in the flexible model.
+        This method returns zeros with the correct shape as a placeholder.
+
+        Args:
+            x (torch.Tensor): Bjorken x values (1D: [n_events])
+            b (torch.Tensor): Impact parameter values (2D: [n_events, n_b])
+
+        Returns:
+            torch.Tensor: Bare Sivers function values (currently zeros as placeholder).
+                         Shape: [n_events, n_b] (same as b)
+                         Note: Evolution factor must be applied separately by caller.
+        """
+        # # Ensure x can broadcast with b
+        # if b.dim() > x.dim():
+        #     x = x.unsqueeze(-1)
+
+        if flavors is None:
+            flavors = self.qiu_sterman_flavor_keys
+        
+        outputs = {}
+
+        for flavor in flavors:
+            if flavor in self.qiu_sterman_modules:
+                base_result = self.qiu_sterman_modules[flavor](x, b)
+                outputs[flavor] = base_result
+            else:
+                raise ValueError(f"Unknown Qiu Sterman flavor: {flavor}")
+
+        return outputs
+
 
     def forward(
         self,

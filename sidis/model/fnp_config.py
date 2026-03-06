@@ -339,7 +339,9 @@ class DependencyResolver:
     # No 'self' argument is automatically passed; can be called as DependencyResolver.build_dependency_graph(...)
     @staticmethod
     def build_dependency_graph(
-        config: Dict[str, Any], param_type: str, flavor_keys: List[str]
+        config: Dict[str, Any], 
+        param_type: str, 
+        flavor_keys: List[str]
     ) -> Dict[Tuple[str, str, int], List[Tuple[str, str, int]]]:
         """
         Build dependency graph from configuration.

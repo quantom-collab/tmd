@@ -172,7 +172,8 @@ class FUT_SinPhihMinusPhis(torch.nn.Module):
         bT = self.ogata.get_bTs(qT)
         
         # Sivers PDF × unpolarized FF
-        sivers_dict = self.tmd.get_tmd_bT_all_flavors(x, Q2, bT, "Sivers", initial_hadron)
+        sivers_dict = self.tmd.get_tmd_bT_all_flavors(x, Q2, bT, "Sivers", initial_hadron) 
+               
         ff_dict = self.tmd.get_tmd_bT_all_flavors(z, Q2, bT, "ff", fragmented_hadron)
         
         # Stack and vectorize
