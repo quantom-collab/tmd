@@ -85,6 +85,20 @@ class TruefNP(torch.nn.Module):
         """
         return self.fnp_manager.forward_sivers(x, bT)
 
+    def forward_qiu_sterman(self, x: torch.Tensor, bT: torch.Tensor) -> torch.Tensor:
+        """Compute non-perturbative Sivers function factor.
+        
+        Note: Currently does not have flavor dependence.
+        
+        Args:
+            x: momentum fraction values, shape (n_events,)
+            bT: Fourier conjugate of transverse momentum values, shape (n_events, n_bT)
+            
+        Returns:
+            Qiu-Sterman tensor (no flavor dependence yet)
+        """
+        return self.fnp_manager.forward_qiu_sterman(x, bT)
+
 
 class TrainablefNP(TruefNP):
     """Trainable fNP manager with parameter version tracking.

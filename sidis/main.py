@@ -87,7 +87,7 @@ if __name__ == "__main__":
     model = TrainableModel(fnp_config=args.fnp_config)
 
     # Load event data from file as a tensor
-    events_file = rootdir.joinpath("toy_events.dat")
+    events_file = rootdir.joinpath("toy_polarized_events.dat")
     events_tensor = torch.load(events_file)
 
     # Print out some information about the events

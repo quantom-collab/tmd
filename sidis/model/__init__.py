@@ -7,7 +7,7 @@ import pathlib
 from omegaconf import OmegaConf
 from typing import List, Dict, Any
 
-from .ope import OPE
+from .ope import OPE, OPE_Sivers
 from .evolution import PERTURBATIVE_EVOLUTION
 from .ogata import OGATA
 from .fnp_factory import create_fnp_manager
@@ -48,7 +48,7 @@ class TruthModel(torch.nn.Module):
         self.ope["pdf"] = {} #--this is the unpolarized PDF OPE
         self.ope["ff"] = {} #--this is the unpolarized FF OPE
         # TODO: set up the proper OPE for the Sivers function, Collins function, and transversity function
-        self.ope["Sivers"] = {} #--this is the Sivers function OPE
+        # self.ope["Sivers"] = {} #--this is the Sivers function OPE #--03/09/2026: Commenting out here so that we can put it in the TrainableModel class
         # self.ope["Collins"] = {} #--this is the Collins function OPE
         # self.ope["h1"] = {} #--this is the transversity function OPE
 
@@ -58,9 +58,9 @@ class TruthModel(torch.nn.Module):
 
             self.ope["pdf"][expt_setup[0]] = {}
             self.setup_ope(rootdir=rootdir, type="pdf", hadron=expt_setup[0])
-            self.ope["Sivers"][expt_setup[0]] = {}
-            print('Setting up the Sivers function OPE for the initial hadron. WARNING: THIS IS NOT SET UP PROPERLY YET. It is just a stopgap measure. Refer to the init for future development.')
-            self.setup_ope(rootdir=rootdir, type="Sivers", hadron=expt_setup[0]) # setup_ope with type='Sivers' is not doing the right thing. 
+            # self.ope["Sivers"][expt_setup[0]] = {} #--03/09/2026: Commenting out here so that we can put it in the TrainableModel class
+            # print('Setting up the Sivers function OPE for the initial hadron. WARNING: THIS IS NOT SET UP PROPERLY YET. It is just a stopgap measure. Refer to the init for future development.')
+            # self.setup_ope(rootdir=rootdir, type="Sivers", hadron=expt_setup[0]) # setup_ope with type='Sivers' is not doing the right thing. #--03/09/2026: Commenting out here so that we can put it in the TrainableModel class
             self.ope["ff"][expt_setup[1]] = {}
             self.setup_ope(rootdir=rootdir, type="ff", hadron=expt_setup[1])
             #TODO: set up the OPE for the Collins function
@@ -177,6 +177,23 @@ class TrainableModel(TruthModel):
 
         # Replace qcf0 with trainable version
         self.qcf0 = TrainablefNP(fnp_config=self.fnpconf)
+
+        # TODO: set up the proper OPE for the Sivers function, Collins function, and transversity function
+        self.ope["Sivers"] = {} #--this is the Sivers function OPE
+        # self.ope["Collins"] = {} #--this is the Collins function OPE
+        # self.ope["h1"] = {} #--this is the transversity function OPE
+        rootdir = pathlib.Path(__file__).resolve().parent
+
+        for expt_setup in experimental_target_fragmented_hadron: #experimental target and fragmented hadron setup, e.g. ["p", "pi_plus"]
+
+            # self.ope is a dictionary that will hold the OPE objects for each type of function (pdf, ff, Sivers, etc.) and for each hadron (proton, pion, etc.). 
+
+            self.ope["Sivers"][expt_setup[0]] = {}
+
+            for flav in self.flavs:
+                self.ope["Sivers"][expt_setup[0]][flav] = OPE_Sivers(self.qcf0)
+
+
 
         # Rebuild TMDBuilder and structure functions with the trainable fNP
         self.tmd = TMDBuilder(self.ope, self.evo, self.qcf0, self.Q20, self.flavs)
