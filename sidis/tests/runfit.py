@@ -4,16 +4,23 @@ runfit.py - Fit fNP simple model parameters to target cross sections.
 Loads cross sections from outs/cross_section_output.pt (or .yaml),
 loads kinematic events from inputs/mock_events_1000.pt, randomizes fNP
 parameters within their bounds, then minimizes a log-space MSE loss using
-the PyTorch L-BFGS optimizer to recover the original parameter values.
+Rprop to recover the original parameter values.
+
+Optimizer — Rprop (Resilient Backpropagation):
+  Uses only the SIGN of each gradient, completely ignoring its magnitude.
+  Each parameter has its own adaptive step size that grows when the gradient
+  sign is consistent and shrinks when it flips.  This makes Rprop naturally
+  scale-invariant: it performs equally well regardless of whether individual
+  cross sections are O(1) or O(1e-15), even after the log transformation.
 
 Loss: mean( (log|pred| - log|target|)^2 )
 
 Usage (from repo root):
     python sidis/tests/runfit.py
-    python sidis/tests/runfit.py --seed 99 --epochs 50
+    python sidis/tests/runfit.py --seed 99 --epochs 500
     python sidis/tests/runfit.py --cross_section outs/cross_section_output.pt \\
                                  --events inputs/mock_events_1000.pt
-    python sidis/tests/runfit.py --use_embedded_events  # use events in .pt file
+    python sidis/tests/runfit.py --use_embedded_events
 
 NOTE: the default cross section output was generated from mock_events_100.dat
 (100 points), while the default events file mock_events_1000.pt has 1000 points.
@@ -47,11 +54,15 @@ if __name__ == "__main__":
     # Argument parsing
     # -------------------------------------------------------------------------
     parser = argparse.ArgumentParser(
-        description="Fit fNP simple model parameters to target cross sections (L-BFGS).",
+        description=(
+            "Fit fNP simple model parameters to target cross sections "
+            "(Rprop optimizer, log-MSE loss)."
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   python sidis/tests/runfit.py
-  python sidis/tests/runfit.py --seed 7 --epochs 100
+  python sidis/tests/runfit.py --seed 7
+  python sidis/tests/runfit.py --epochs 800
   python sidis/tests/runfit.py --use_embedded_events
   python sidis/tests/runfit.py --cross_section outs/cross_section_output.pt \\
                                --events inputs/mock_events_1000.pt""",
@@ -95,20 +106,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--epochs",
         type=int,
-        default=50,
-        help="Number of L-BFGS outer iterations. Default: 50",
+        default=500,
+        help="Number of Rprop gradient steps. Default: 500",
     )
     parser.add_argument(
         "--lr",
         type=float,
-        default=1.0,
-        help="L-BFGS learning rate. Default: 1.0",
-    )
-    parser.add_argument(
-        "--max_iter",
-        type=int,
-        default=20,
-        help="L-BFGS max inner iterations per outer step. Default: 20",
+        default=0.01,
+        help=(
+            "Rprop initial step size (per-parameter, in the internal theta space). "
+            "Default: 0.01"
+        ),
     )
     args = parser.parse_args()
 
@@ -117,7 +125,9 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     config_path = cards_dir / args.config
     if not config_path.exists():
-        print(f"{tcolors.FAIL}Error: config file not found: {config_path}{tcolors.ENDC}")
+        print(
+            f"{tcolors.FAIL}Error: config file not found: {config_path}{tcolors.ENDC}"
+        )
         exit(1)
 
     if args.cross_section is None:
@@ -128,7 +138,9 @@ if __name__ == "__main__":
             cs_path = script_dir / cs_path
 
     if not cs_path.exists():
-        print(f"{tcolors.FAIL}Error: cross section file not found: {cs_path}{tcolors.ENDC}")
+        print(
+            f"{tcolors.FAIL}Error: cross section file not found: {cs_path}{tcolors.ENDC}"
+        )
         print(
             f"{tcolors.WARNING}Generate it with:\n"
             f"  python sidis/tests/run_cross_section.py -c {args.config} "
@@ -305,7 +317,9 @@ if __name__ == "__main__":
     # For expression params (e.g. ffs.u[0] = pdfs.u[0]+pdfs.u[1]) this evaluates the
     # expression, so truth matches what was actually used to generate the cross sections.
     truth_params = get_physical_params(model)
-    print(f"\n{tcolors.OKLIGHTBLUE}Truth parameters (config init_params / expressions):{tcolors.ENDC}")
+    print(
+        f"\n{tcolors.OKLIGHTBLUE}Truth parameters (config init_params / expressions):{tcolors.ENDC}"
+    )
     for key, vals in sorted(truth_params.items()):
         vstr = ", ".join(f"{v:.6f}" for v in vals)
         print(f"  {key:<32} [{vstr}]")
@@ -327,7 +341,9 @@ if __name__ == "__main__":
         )
 
     random_params = get_physical_params(model)
-    print(f"\n{tcolors.OKLIGHTBLUE}Initial parameters after randomization:{tcolors.ENDC}")
+    print(
+        f"\n{tcolors.OKLIGHTBLUE}Initial parameters after randomization:{tcolors.ENDC}"
+    )
     for key, vals in sorted(random_params.items()):
         vstr = ", ".join(f"{v:.6f}" for v in vals)
         print(f"  {key:<32} [{vstr}]")
@@ -342,25 +358,15 @@ if __name__ == "__main__":
         f"  Prediction range: [{initial_pred.min().item():.4e}, "
         f"{initial_pred.max().item():.4e}]"
     )
-    print(
-        f"  Target range:     [{target.min().item():.4e}, {target.max().item():.4e}]"
-    )
+    print(f"  Target range:     [{target.min().item():.4e}, {target.max().item():.4e}]")
 
     # -------------------------------------------------------------------------
-    # Set up L-BFGS optimizer
+    # Optimizer and loss setup
     # -------------------------------------------------------------------------
     # Evolution g2 is the only param not handled by sigmoid reparametrization,
     # so it may need clamping to its bounds after each gradient step.
-    clamp_after_step = (
-        hasattr(fnp_mgr, "get_trainable_bounds") and bool(fnp_mgr.get_trainable_bounds())
-    )
-
-    optimizer = torch.optim.LBFGS(
-        model.parameters(),
-        lr=args.lr,
-        max_iter=args.max_iter,
-        history_size=50,
-        line_search_fn="strong_wolfe",
+    clamp_after_step = hasattr(fnp_mgr, "get_trainable_bounds") and bool(
+        fnp_mgr.get_trainable_bounds()
     )
 
     # Log-space MSE: mean( (log|pred| - log|target|)^2 )
@@ -368,17 +374,28 @@ if __name__ == "__main__":
     EPS_LOG = 1e-40
     target_log = torch.log(target.abs().clamp(min=EPS_LOG))
 
-    def closure() -> torch.Tensor:
-        optimizer.zero_grad()
+    def log_mse_loss() -> torch.Tensor:
         pred = model(events_tensor)
         pred_log = torch.log(pred.abs().clamp(min=EPS_LOG))
-        loss = torch.mean((pred_log - target_log) ** 2)
-        loss.backward()
-        return loss
+        return torch.mean((pred_log - target_log) ** 2)
 
+    # Rprop: sign-based adaptive per-parameter steps.
+    # etas=(0.5, 1.2): step shrinks by 50% on sign flip, grows by 20% on consistency.
+    # step_sizes=(1e-6, 1.0): cap max step at 1.0 to avoid overshooting in theta space
+    #   (sigmoid-reparametrized params live roughly in [-5, 5]).
+    optimizer = torch.optim.Rprop(
+        model.parameters(),
+        lr=args.lr,
+        etas=(0.5, 1.2),
+        step_sizes=(1e-6, 1.0),
+    )
+
+    # -------------------------------------------------------------------------
+    # Minimization loop
+    # -------------------------------------------------------------------------
     print(
-        f"\n{tcolors.BOLDWHITE}Minimizing log-MSE with L-BFGS "
-        f"({args.epochs} outer iters × max_iter={args.max_iter})...{tcolors.ENDC}"
+        f"\n{tcolors.BOLDWHITE}Minimizing log-MSE with Rprop "
+        f"({args.epochs} epochs, initial step size={args.lr})...{tcolors.ENDC}"
     )
     print("=" * 80)
 
@@ -386,16 +403,19 @@ if __name__ == "__main__":
     report_every = max(1, args.epochs // 10)
 
     for epoch in range(args.epochs):
-        loss_val = optimizer.step(closure)
+        optimizer.zero_grad()
+        loss = log_mse_loss()
+        loss.backward()
+        optimizer.step()
 
         if clamp_after_step:
             fnp_mgr.clamp_parameters_to_bounds()
 
-        loss_item = loss_val.item() if hasattr(loss_val, "item") else float(loss_val)
+        loss_item = loss.item()
         losses.append(loss_item)
 
         if (epoch + 1) % report_every == 0 or epoch == 0:
-            print(f"  Iter {epoch + 1:4d}/{args.epochs}:  log-MSE = {loss_item:.6e}")
+            print(f"  Epoch {epoch + 1:5d}/{args.epochs}:  log-MSE = {loss_item:.6e}")
 
     print("=" * 80)
     print(f"{tcolors.GREEN}Minimization complete.{tcolors.ENDC}")
@@ -459,7 +479,8 @@ if __name__ == "__main__":
         else:
             print(
                 f"{tcolors.FAIL}  Poor recovery (> 20% mean relative error). "
-                f"Try more epochs, a different seed, or --use_embedded_events.{tcolors.ENDC}"
+                f"Try more epochs (--epochs), a different seed, "
+                f"or --use_embedded_events.{tcolors.ENDC}"
             )
 
     print(f"\n{tcolors.BOLDWHITE}{'=' * 80}{tcolors.ENDC}")

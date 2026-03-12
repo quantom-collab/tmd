@@ -44,22 +44,22 @@ def main():
     parser = argparse.ArgumentParser(
         description=f"""{tcolors.BOLDWHITE}Produce cross-section outputs from an events file using a chosen fNP model. {tcolors.ENDC}
 
-Reads kinematic points from a PyTorch-saved events file, runs the SIDIS model
-with the specified configuration card, and writes outputs to tests/outs/:
-  - PyTorch format: events tensor + cross-section tensor
-  - YAML format: human-readable list of kinematic point + cross_section""",
+    Reads kinematic points from a PyTorch-saved events file, runs the SIDIS model
+    with the specified configuration card, and writes outputs to tests/outs/:
+    - PyTorch format: events tensor + cross-section tensor
+    - YAML format: human-readable list of kinematic point + cross_section""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Usage examples:
-  
-  From repo root:
-    python sidis/tests/run_cross_section.py
-    python sidis/tests/run_cross_section.py -c fNPconfig_base_flexible.yaml
-    python sidis/tests/run_cross_section.py -e path/to/events.dat -c fNPconfig_simple.yaml
-    python sidis/tests/run_cross_section.py -e mock_events_100.dat -o my_outs/
+    
+    From repo root:
+        python sidis/tests/run_cross_section.py
+        python sidis/tests/run_cross_section.py -c fNPconfig_base_flexible.yaml
+        python sidis/tests/run_cross_section.py -e path/to/events.dat -c fNPconfig_simple.yaml
+        python sidis/tests/run_cross_section.py -e mock_events_100.dat -o my_outs/
 
-  From sidis/tests/:
-    python run_cross_section.py
-    python run_cross_section.py -c fNPconfig_simple.yaml -e inputs/mock_events_100.dat""",
+    From sidis/tests/:
+        python run_cross_section.py
+        python run_cross_section.py -c fNPconfig_simple.yaml -e inputs/mock_events_100.dat""",
     )
     parser.add_argument(
         "-c",
@@ -73,7 +73,7 @@ with the specified configuration card, and writes outputs to tests/outs/:
         "--events",
         type=str,
         default=None,
-        help=f"Path to events file (PyTorch .pt/.dat). Default: mock_events_1000.dat in tests/{tcolors.ENDC}",
+        help=f"Path to events file (PyTorch .pt/.dat). Default: mock_events_1000.dat in tests/inputs/{tcolors.ENDC}",
     )
     parser.add_argument(
         "-o",
@@ -90,7 +90,7 @@ with the specified configuration card, and writes outputs to tests/outs/:
     script_dir = pathlib.Path(__file__).resolve().parent
     sidis_dir = script_dir.parent
 
-    # Resolve events file path
+    # Resolve events file path, in the inputs/ directory
     if args.events is None:
         events_file = script_dir / "inputs" / DEFAULT_EVENTS_FILE
     else:
@@ -99,7 +99,7 @@ with the specified configuration card, and writes outputs to tests/outs/:
             if events_file.exists():
                 events_file = events_file.resolve()
             else:
-                events_file = script_dir / events_file
+                events_file = script_dir / "inputs" / events_file
 
     # Resolve output directory path
     outs_dir = (
@@ -124,6 +124,7 @@ with the specified configuration card, and writes outputs to tests/outs/:
     n_events = events_tensor.shape[0]
     n_cols = events_tensor.shape[1]
 
+    # Print events file and shape
     print(
         f"{tcolors.GREEN}\nLoaded {n_events} kinematic points from {events_file}{tcolors.ENDC}"
     )
@@ -160,7 +161,7 @@ with the specified configuration card, and writes outputs to tests/outs/:
 
     # Create output directory if it doesn't exist
     outs_dir.mkdir(parents=True, exist_ok=True)
-    base_name = "cross_section_output"
+    base_name = f"cross_section_output"
 
     # PyTorch format: same content
     pt_path = outs_dir / f"{base_name}.pt"

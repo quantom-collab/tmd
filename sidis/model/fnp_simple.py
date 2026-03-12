@@ -70,8 +70,6 @@ class TMDPDFExponential(nn.Module):
           Per-parameter bounds (list of [lo, hi] or None).
       8. param_bounds_map: Optional[Dict[Tuple[str, str, int], Tuple[float, float]]]
           Map for parameter bounds across all types/flavors for reference/resolution.
-
-    TODO: Understand why bounded parameters use sigmoid rescaling: value = lo + (hi - lo) * sigmoid(theta).
     """
 
     def __init__(
