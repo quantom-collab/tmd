@@ -1,182 +1,210 @@
 """
-Generate synthetic unpolarized SIDIS event data.
+Produce cross-section outputs from a kinematics file using a chosen fNP model.
 
-Creates mock events with 4 columns [x, PhT, Q, z] in realistic kinematic ranges.
-PhT respects the TMD boundary PhT/(z·Q) < 0.2 per event.
+Reads kinematic points from a PyTorch-saved kinematics file,
+runs the SIDIS model with the specified configuration card, and writes:
+  - PyTorch format: events tensor + cross-section tensor
+  - YAML format: human-readable list of kinematic point + cross_section
 
-Saves both .dat and .pt files (same content, readable and PyTorch format).
-Creates inputs/ folder if it does not exist.
+Usage (from repo root):
+  python sidis/tests/generate_mock_events.py
+  python sidis/tests/generate_mock_events.py -c fNPconfig_base_flexible.yaml
+  python sidis/tests/generate_mock_events.py -e kin/mock_kinematics.dat -c fNPconfig_simple.yaml
 """
 
 import argparse
 import pathlib
+import torch
 import sys
 
-import numpy as np
-import torch
-
-# Add repo root to path so sidis can be imported when script is run directly
+# Ensure sidis can be imported from repo root
 _repo_root = pathlib.Path(__file__).resolve().parent.parent.parent
 if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
 
 from sidis.utilities.colors import tcolors
 
+# Set default dtype before importing model
+torch.set_default_dtype(torch.float64)
 
-def generate_mock_events(n_events: int = 1000, seed: int = 42) -> torch.Tensor:
-    """
-    Generate synthetic unpolarized SIDIS event data.
+from omegaconf import OmegaConf
+from sidis.model import TrainableModel
 
-    Each event has 4 columns: [x, PhT, Q, z]. Values are drawn uniformly
-    in realistic kinematic ranges (see below). PhT respects the boundary
-    PhT/(z*Q) < 0.2 for each event.
-
-    Parameters
-    ----------
-    n_events : int
-        Number of events to generate
-    seed : int
-        Random seed for reproducibility
-
-    Returns
-    -------
-    torch.Tensor
-        Event tensor of shape (n_events, 4)
-    """
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-    # Realistic kinematic ranges
-    x_min, x_max = 0.001, 0.9  # Bjorken x
-    PhT_min, PhT_max = 0.1, 5.0  # Transverse momentum (GeV)
-    Q_min, Q_max = 2.0, 1000.0  # Hard scale (GeV)
-    z_min, z_max = 0.2, 0.8  # Fragmentation fraction
-
-    # Generate x, Q, z in a naive way, uniformly in their ranges
-    # x sampled log-uniform in [x_min, x_max]
-    x = np.exp(np.random.uniform(np.log(x_min), np.log(x_max), n_events))
-    Q = np.random.uniform(Q_min, Q_max, n_events)
-    z = np.random.uniform(z_min, z_max, n_events)
-
-    # PhT must satisfy PhT/(z*Q) < 0.2 for each event, i.e. PhT < 0.2 * z * Q
-    # This is to be sure to stay in the TMD region.
-    # PhT_upper is a numpy array (shape: [n_events]), giving the upper bound on PhT for each event.
-    # For each event, PhT_upper[i] = min(PhT_max, 0.2 * z[i] * Q[i]).
-    # This ensures the sampled PhT never exceeds the physical TMD bound PhT/(z*Q)<0.2, but never above PhT_max.
-    PhT_upper = np.minimum(PhT_max, 0.2 * z * Q)
-
-    # Resample Q, z for events where upper bound is below PhT_min.
-    # For some (Q, z), the TMD bound 0.2 * z * Q is smaller than PhT_min.
-    # So those (Q, z) pairs are kinematically invalid for the chosen PhT range,
-    # and we need to resample them until we get a valid combination (Q, z)
-    # where the PhT range is not null (i.e. PhT_upper > PhT_min).
-    mask = PhT_upper < PhT_min
-    while np.any(mask):
-        # Get the number of events where the TMD bound is below PhT_min
-        n_bad = np.sum(mask)
-        # Resample Q, z for those events
-        Q[mask] = np.random.uniform(Q_min, Q_max, n_bad)
-        z[mask] = np.random.uniform(z_min, z_max, n_bad)
-        # Recalculate the upper bound on PhT for those events
-        PhT_upper[mask] = np.minimum(PhT_max, 0.2 * z[mask] * Q[mask])
-        # Check again if there are any events where the TMD bound is below PhT_min
-        mask = PhT_upper < PhT_min
-
-    # Sample PhT for all events
-    PhT = np.random.uniform(PhT_min, PhT_upper, n_events)
-
-    # Stack the events into a tensor
-    events = torch.tensor(np.column_stack([x, PhT, Q, z]), dtype=torch.float64)
-
-    # Print some information about the generated events
-    print(
-        f"{tcolors.GREEN}Generated {n_events} events: shape {events.shape}{tcolors.ENDC}"
-    )
-    print(f"{tcolors.GREEN}Columns: [x, PhT, Q, z]{tcolors.ENDC}")
-    print(f"{tcolors.GREEN}Ranges:")
-    print(f"{tcolors.GREEN}    x in [{x_min}, {x_max}]{tcolors.ENDC}")
-    print(f"{tcolors.GREEN}    Q in [{Q_min}, {Q_max}]{tcolors.ENDC}")
-    print(f"{tcolors.GREEN}    z in [{z_min}, {z_max}]{tcolors.ENDC}")
-    print(
-        f"{tcolors.GREEN}    PhT in [{PhT_min}, {PhT_max}] (respecting TMD boundary PhT/(z*Q) < 0.2){tcolors.ENDC}"
-    )
-
-    return events
+# Default values for command line arguments
+DEFAULT_KINEMATICS_FILE = "mock_kinematics_1000.dat"
+DEFAULT_CONFIG_FILE = "fNPconfig_simple.yaml"
+DEFAULT_OUTPUT_DIR = "events"
 
 
-EPILOG = """
-Examples (run from repo root):
-  # Default: 1000 events, seed 42, save to sidis/tests/inputs/
-  python sidis/tests/generate_mock_events.py
-
-  # 100 events with custom seed
-  python sidis/tests/generate_mock_events.py -n 100 -s 123
-
-  # Custom output path (creates parent dirs; saves both .dat and .pt)
-  python sidis/tests/generate_mock_events.py -n 500 -o sidis/tests/inputs/my_events.dat
-
-  # From sidis/tests/ directory
-  python generate_mock_events.py -n 1000 -o inputs/mock_events.dat
-"""
-
-
+# -----------------------------------------------------------------------------
+# Main function
+# -----------------------------------------------------------------------------
 def main():
-    script_dir = pathlib.Path(__file__).resolve().parent
-    inputs_dir = script_dir / "inputs"
-
+    # Help text
     parser = argparse.ArgumentParser(
-        description=f"{tcolors.BOLDWHITE}Generates synthetic unpolarized SIDIS event data [x, PhT, Q, z]. {tcolors.ENDC}"
-        f"{tcolors.BOLDWHITE}\nSaves both .dat and .pt (same content). \nCreates inputs/ if missing.{tcolors.ENDC}",
+        description=f"""{tcolors.BOLDGREEN}Produce cross-section outputs from a kinematics file using a chosen fNP model. {tcolors.ENDC}
+
+    Reads kinematic points from a PyTorch-saved kinematics file, runs the SIDIS model
+    with the specified configuration card, and writes outputs to tests/events/:
+    - PyTorch format: events tensor + cross-section tensor
+    - YAML format: human-readable list of kinematic point + cross_section""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=EPILOG,
+        epilog="""Usage examples:
+    
+    From repo root:
+        python sidis/tests/generate_mock_events.py
+
+    The default is equivalent to running:
+        python sidis/tests/generate_mock_events.py -e kin/mock_kinematics_1000.dat -c fNPconfig_simple.yaml -o events/cross_section_events_1000
+
+    From sidis/tests/:
+        python generate_mock_events.py -c fNPconfig_simple.yaml -e kin/mock_kinematics_10000.pt -o events/cross_section_events_10000""",
     )
     parser.add_argument(
-        "-n",
-        "--n_events",
-        type=int,
-        default=1000,
-        help="Number of events to generate (default: 1000)",
+        "-c",
+        "--config",
+        type=str,
+        default="fNPconfig_simple.yaml",
+        help="fNP configuration card (in sidis/cards/). Default: fNPconfig_simple.yaml",
     )
     parser.add_argument(
-        "-s",
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed for reproducibility (default: 42)",
+        "-e",
+        "--events",
+        type=str,
+        default=None,
+        help=f"Path to kinematics file (PyTorch .pt/.dat). Default: mock_kinematics.dat in tests/kin/{tcolors.ENDC}",
     )
     parser.add_argument(
         "-o",
         "--output",
-        type=pathlib.Path,
+        type=str,
         default=None,
-        help="Output file path without extension, or with .dat/.pt (default: inputs/mock_events_<n>)",
+        help="Output file path (without extension). Writes <path>.pt and <path>.yaml. Default: events/cross_section_events_<n_events>",
     )
+
+    # Parse arguments
     args = parser.parse_args()
 
-    # Default output: inputs/mock_events_<n> (saved as .dat and .pt)
-    if args.output is None:
-        args.output = inputs_dir / f"mock_events_{args.n_events}"
-        # args.output = inputs_dir / f"mock_events_{args.n_events}_seed_{args.seed}"
+    # Resolve paths
+    script_dir = pathlib.Path(__file__).resolve().parent
+    sidis_dir = script_dir.parent
+
+    # Resolve kinematics file path, in the kin/ directory.
+    # If no kinematics file is provided, use the default one.
+    if args.events is None:
+        events_file = script_dir / "kin" / DEFAULT_KINEMATICS_FILE
     else:
-        # Strip .dat or .pt if user provided it
-        stem = args.output.stem
-        parent = args.output.parent
-        args.output = parent / stem
+        # Get the path provided by the user.
+        events_file = pathlib.Path(args.events)
+        # If the path provided is not absolute, if it exists, make it absolute.
+        # If it doesn't exist, treat is as a path under the kin/ directory.
+        if not events_file.is_absolute():
+            if events_file.exists():
+                events_file = events_file.resolve()
+            else:
+                events_file = script_dir / "kin" / events_file
 
-    # Create inputs/ (or output parent dir) if it does not exist
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+    if not events_file.exists():
+        print(
+            f"{tcolors.FAIL}Error: kinematics file not found: {events_file}{tcolors.ENDC}"
+        )
+        print(
+            f"{tcolors.WARNING}Generate it first with: python sidis/tests/generate_mock_kinematics.py{tcolors.ENDC}"
+        )
+        sys.exit(1)
 
-    # Generate events
-    events = generate_mock_events(n_events=args.n_events, seed=args.seed)
+    # Load events tensor
+    events_tensor = torch.load(events_file)
 
-    # Save events
-    path_dat = args.output.with_suffix(".dat")
-    path_pt = args.output.with_suffix(".pt")
-    torch.save(events, path_dat)
-    torch.save(events, path_pt)
+    # Get number of events and columns
+    n_events = events_tensor.shape[0]
+    n_cols = events_tensor.shape[1]
 
-    print(f"{tcolors.BLUE}Saved to: {path_dat}{tcolors.ENDC}")
-    print(f"{tcolors.BLUE}Saved to: {path_pt}{tcolors.ENDC}")
+    # Print events file and shape
+    print(
+        f"{tcolors.GREEN}\nLoaded {n_events} kinematic points from {events_file}{tcolors.ENDC}"
+    )
+    print(
+        f"{tcolors.BOLDWHITE}Shape: {events_tensor.shape} (columns: x, PhT, Q, z"
+        + (", phih, phis" if n_cols >= 6 else "")
+        + f"){tcolors.ENDC}"
+    )
+
+    # Resolve config path (must be in sidis/cards/)
+    config_name = args.config
+    cards_dir = sidis_dir / "cards"
+    config_path = cards_dir / config_name
+    if not config_path.exists():
+        print(f"Error: config file not found: {config_path}")
+        print(f"Available configs in {cards_dir}:")
+        if cards_dir.exists():
+            for f in sorted(cards_dir.glob("*.yaml")):
+                print(f"  - {f.name}")
+        sys.exit(1)
+
+    # Load model
+    print(f"{tcolors.GREEN}Loading model with config: {config_name}{tcolors.ENDC}")
+    model = TrainableModel(fnp_config=config_name)
+    model.eval()
+
+    # Run model forward pass
+    with torch.no_grad():
+        cross_section = model(events_tensor)
+
+    # Ensure cross section and events are on the CPU
+    cross_section = cross_section.cpu()
+    events_cpu = events_tensor.cpu()
+
+    # Resolve output file path (base without extension)
+    if args.output is not None:
+        output_base = pathlib.Path(args.output).with_suffix("")
+        if not output_base.is_absolute():
+            output_base = output_base.resolve()
+    else:
+        output_base = (
+            script_dir / DEFAULT_OUTPUT_DIR / f"cross_section_events_{n_events}"
+        )
+
+    # Create output directory if it doesn't exist
+    output_base.parent.mkdir(parents=True, exist_ok=True)
+
+    # PyTorch format: same content
+    pt_path = output_base.with_suffix(".pt")
+    torch.save(
+        {
+            "events": events_cpu,
+            "cross_section": cross_section,
+        },
+        pt_path,
+    )
+    print(f"Written PyTorch: {pt_path}")
+
+    # YAML format: human-readable, same content
+    yaml_path = output_base.with_suffix(".yaml")
+    column_names = ["x", "PhT", "Q", "z"]
+    if n_cols >= 6:
+        column_names.extend(["phih", "phis"])
+
+    rows = []
+    for i in range(n_events):
+        row = {}
+        for j, name in enumerate(
+            ["x", "PhT", "Q", "z"] + (["phih", "phis"] if n_cols >= 6 else [])
+        ):
+            if j < events_cpu.shape[1]:
+                row[name] = float(events_cpu[i, j].item())
+        row["cross_section"] = float(cross_section[i].item())
+        rows.append(row)
+
+    out_data = {
+        "description": f"Cross-sections for kinematic points from {events_file.name} (config: {config_name})",
+        "n_events": n_events,
+        "kinematic_columns": column_names,
+        "data": rows,
+    }
+    with open(yaml_path, "w") as f:
+        f.write(OmegaConf.to_yaml(OmegaConf.create(out_data)))
+    print(f"Written YAML:   {yaml_path}")
 
 
 if __name__ == "__main__":
