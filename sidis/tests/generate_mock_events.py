@@ -168,12 +168,15 @@ def main():
     # Create output directory if it doesn't exist
     output_base.parent.mkdir(parents=True, exist_ok=True)
 
-    # PyTorch format: same content
+    # PyTorch format: same content + metadata
     pt_path = output_base.with_suffix(".pt")
     torch.save(
         {
             "events": events_cpu,
             "cross_section": cross_section,
+            "config": config_name,
+            "n_events": n_events,
+            "description": f"Cross-sections for kinematic points from {events_file.name}",
         },
         pt_path,
     )
@@ -197,9 +200,9 @@ def main():
         rows.append(row)
 
     out_data = {
-        "description": f"Cross-sections for kinematic points from {events_file.name} (config: {config_name})",
+        "description": f"Cross-sections for kinematic points from {events_file.name}",
+        "config": config_name,
         "n_events": n_events,
-        "kinematic_columns": column_names,
         "data": rows,
     }
     with open(yaml_path, "w") as f:

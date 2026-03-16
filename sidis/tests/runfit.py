@@ -1,8 +1,7 @@
 """
 runfit.py - Fit fNP simple model parameters to target cross sections.
 
-Loads cross sections from outs/cross_section_output.pt (or .yaml),
-loads kinematic events from inputs/mock_events_1000.pt, randomizes fNP
+Loads cross sections from files in events/*.pt (or .yaml), randomizes fNP
 parameters within their bounds, then minimizes a log-space MSE loss using
 Rprop to recover the original parameter values.
 
@@ -18,29 +17,26 @@ Loss: mean( (log|pred| - log|target|)^2 )
 Usage (from repo root):
     python sidis/tests/runfit.py
     python sidis/tests/runfit.py --seed 99 --epochs 500
-    python sidis/tests/runfit.py --cross_section outs/cross_section_output.pt \\
-                                 --events inputs/mock_events_1000.pt
-    python sidis/tests/runfit.py --use_embedded_events
+    python sidis/tests/runfit.py --cross_section events/cross_section_events_1000.pt
 
-NOTE: the default cross section output was generated from mock_events_100.dat
-(100 points), while the default events file mock_events_1000.pt has 1000 points.
-If you see a count-mismatch error, regenerate first:
-    python sidis/tests/run_cross_section.py -c fNPconfig_simple.yaml \\
-                                            -e inputs/mock_events_1000.pt
+NOTE: Events kinematics are read from the cross section file (.pt or .yaml).
 """
 
 import torch
 import argparse
 import pathlib
 import sys
+from typing import Any, Dict, List
+from omegaconf import OmegaConf
 
 if __name__ == "__main__":
 
-    parent_dir = pathlib.Path(__file__).resolve().parent.parent.parent
-    if str(parent_dir) not in sys.path:
-        sys.path.insert(0, str(parent_dir))
+    # Ensure sidis can be imported from repo root. Assumes the file being
+    # run is at sidis/tests/runfit.py (three levels below the repo root).
+    _repo_root = pathlib.Path(__file__).resolve().parent.parent.parent
+    if str(_repo_root) not in sys.path:
+        sys.path.insert(0, str(_repo_root))
 
-    from omegaconf import OmegaConf
     from sidis.model import TrainableModel
     from sidis.utilities.colors import tcolors
 
@@ -60,42 +56,18 @@ if __name__ == "__main__":
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
+  From repo root, the default 
   python sidis/tests/runfit.py
-  python sidis/tests/runfit.py --seed 7
-  python sidis/tests/runfit.py --epochs 800
-  python sidis/tests/runfit.py --use_embedded_events
-  python sidis/tests/runfit.py --cross_section outs/cross_section_output.pt \\
-                               --events inputs/mock_events_1000.pt""",
+  
+  is equivalent to running:
+  python sidis/tests/runfit.py --cross_section events/cross_section_events_1000.pt""",
     )
     parser.add_argument(
         "--cross_section",
         "-cs",
         type=str,
-        default=None,
-        help="Path to cross section file (.pt or .yaml). Default: outs/cross_section_output.pt",
-    )
-    parser.add_argument(
-        "--events",
-        "-e",
-        type=str,
-        default=None,
-        help="Path to events file (.pt). Default: inputs/mock_events_1000.pt",
-    )
-    parser.add_argument(
-        "--use_embedded_events",
-        action="store_true",
-        default=False,
-        help=(
-            "Use the events tensor stored inside the .pt cross section file "
-            "instead of a separate events file. Guarantees count consistency."
-        ),
-    )
-    parser.add_argument(
-        "--config",
-        "-c",
-        type=str,
-        default="fNPconfig_simple.yaml",
-        help="fNP config file (in sidis/cards/). Default: fNPconfig_simple.yaml",
+        default="events/cross_section_events_1000.pt",
+        help="Path to cross section file (.pt or .yaml). Default: events/cross_section_events_1000.pt",
     )
     parser.add_argument(
         "--seed",
@@ -106,8 +78,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--epochs",
         type=int,
-        default=500,
-        help="Number of Rprop gradient steps. Default: 500",
+        default=1000,
+        help="Number of Rprop gradient steps. Default: 1000",
     )
     parser.add_argument(
         "--lr",
@@ -118,56 +90,66 @@ if __name__ == "__main__":
             "Default: 0.01"
         ),
     )
+    parser.add_argument(
+        "--fitresults_dir",
+        type=str,
+        default="fitresults",
+        help="Directory where fit output YAML files are saved. Default: fitresults",
+    )
     args = parser.parse_args()
 
+    # Print all flags (including defaults) in bold green
+    _repo_root = script_dir.parent.parent
+    _script_rel = pathlib.Path(__file__).resolve().relative_to(_repo_root)
+    _flags = (
+        f"--cross_section {args.cross_section} "
+        f"--seed {args.seed} --epochs {args.epochs} --lr {args.lr} "
+        f"--fitresults_dir {args.fitresults_dir}"
+    )
+    print(
+        f"{tcolors.BOLDGREEN}running @{_script_rel} {_flags}{tcolors.ENDC}"
+    )
+
     # -------------------------------------------------------------------------
-    # Resolve file paths
+    # Resolve file paths. Relative paths should be resolved relative to the
+    # script’s directory, not the current working directory.
     # -------------------------------------------------------------------------
-    config_path = cards_dir / args.config
-    if not config_path.exists():
-        print(
-            f"{tcolors.FAIL}Error: config file not found: {config_path}{tcolors.ENDC}"
-        )
-        exit(1)
+    # Cross section file path. If the path given from command line it's not absolute,
+    # make it absolute. A relative path is given from the command line,
+    # is assumed to be relative to the script directory (sidis/tests/).
+    #  Check if the path exists. If it doesn't, exit with an error.
+    cs_path = pathlib.Path(args.cross_section)
+    if not cs_path.is_absolute():
+        cs_path = script_dir / cs_path.resolve()
 
-    if args.cross_section is None:
-        cs_path = script_dir / "outs" / "cross_section_output.pt"
-    else:
-        cs_path = pathlib.Path(args.cross_section)
-        if not cs_path.is_absolute():
-            cs_path = script_dir / cs_path
-
-    if not cs_path.exists():
-        print(
-            f"{tcolors.FAIL}Error: cross section file not found: {cs_path}{tcolors.ENDC}"
-        )
-        print(
-            f"{tcolors.WARNING}Generate it with:\n"
-            f"  python sidis/tests/run_cross_section.py -c {args.config} "
-            f"-e inputs/mock_events_1000.pt{tcolors.ENDC}"
-        )
-        exit(1)
-
-    if args.events is None:
-        events_path = script_dir / "inputs" / "mock_events_1000.pt"
-    else:
-        events_path = pathlib.Path(args.events)
-        if not events_path.is_absolute():
-            events_path = script_dir / events_path
+    # Fit results directory path. If it's not absolute, make it absolute,
+    # with the same criteria as the cross section file path
+    # (assumed to be relative to the script directory).
+    # Check if it exists. If it doesn't, create it.
+    fitresults_dir = pathlib.Path(args.fitresults_dir)
+    if not fitresults_dir.is_absolute():
+        fitresults_dir = script_dir / fitresults_dir
 
     # -------------------------------------------------------------------------
     # Load cross sections
     # -------------------------------------------------------------------------
     print(f"\n{tcolors.BOLDWHITE}Loading cross sections from: {cs_path}{tcolors.ENDC}")
+
+    # cs_path.suffix - returns the file extension, including the dot (e.g. .pt, .yaml, .yml).
+    # .lower() – converts it to lowercase, making it case-insensitive.
     suffix = cs_path.suffix.lower()
 
-    embedded_events = None
+    events_tensor = None
+    cs_data = None
+    cs_dict = None
 
+    # Suffix is needed to choose which loading function to use
+    # (if the torch one or the yaml one).
     if suffix == ".pt":
         cs_data = torch.load(cs_path)
         if isinstance(cs_data, dict) and "cross_section" in cs_data:
             target = cs_data["cross_section"]
-            embedded_events = cs_data.get("events", None)
+            events_tensor = cs_data.get("events", None)
         else:
             target = cs_data
     elif suffix in (".yaml", ".yml"):
@@ -180,7 +162,7 @@ if __name__ == "__main__":
             [row["cross_section"] for row in rows], dtype=torch.float64
         )
         cols = cs_dict.get("kinematic_columns", ["x", "PhT", "Q", "z"])
-        embedded_events = torch.tensor(
+        events_tensor = torch.tensor(
             [[row[c] for c in cols] for row in rows], dtype=torch.float64
         )
     else:
@@ -190,66 +172,55 @@ if __name__ == "__main__":
         )
         exit(1)
 
-    print(f"  Cross section points: {target.shape[0]}")
-    print(f"  Range: [{target.min().item():.4e}, {target.max().item():.4e}]")
-
-    # -------------------------------------------------------------------------
-    # Load events
-    # -------------------------------------------------------------------------
-    if args.use_embedded_events:
-        if embedded_events is None:
-            print(
-                f"{tcolors.FAIL}Error: --use_embedded_events requested but no events "
-                f"found in {cs_path}{tcolors.ENDC}"
-            )
-            exit(1)
-        events_tensor = embedded_events
+    # If the events are not found in the cross section file,
+    # exit with an error. Cross section files must contain kinematics.
+    if events_tensor is None:
         print(
-            f"\n{tcolors.BOLDWHITE}Using events embedded in cross section file "
-            f"(shape: {events_tensor.shape}).{tcolors.ENDC}"
-        )
-    else:
-        if not events_path.exists():
-            print(
-                f"{tcolors.FAIL}Error: events file not found: {events_path}\n"
-                f"Use --use_embedded_events to use events stored in the .pt file, "
-                f"or provide a matching events file via --events.{tcolors.ENDC}"
-            )
-            exit(1)
-        events_tensor = torch.load(events_path)
-        print(
-            f"\n{tcolors.BOLDWHITE}Loaded events from: {events_path} "
-            f"(shape: {events_tensor.shape}).{tcolors.ENDC}"
-        )
-
-    # -------------------------------------------------------------------------
-    # Count consistency check
-    # -------------------------------------------------------------------------
-    n_events = events_tensor.shape[0]
-    n_cs = target.shape[0]
-
-    if n_events != n_cs:
-        print(
-            f"\n{tcolors.FAIL}[ERROR] Count mismatch: events has {n_events} points, "
-            f"cross sections has {n_cs} points.{tcolors.ENDC}"
-        )
-        print(
-            f"{tcolors.WARNING}The events file and cross section file must have the "
-            f"same number of kinematic points.\n\n"
-            f"Options:\n"
-            f"  1. Use --use_embedded_events to use the {n_cs}-point events stored in "
-            f"the cross section file.\n"
-            f"  2. Regenerate cross sections for your events file:\n"
-            f"       python sidis/tests/run_cross_section.py -c {args.config} "
-            f"-e inputs/mock_events_1000.pt\n"
-            f"     then re-run this script.{tcolors.ENDC}"
+            f"{tcolors.FAIL}Error: no events found in {cs_path}. "
+            f"Cross section files must contain kinematics.{tcolors.ENDC}"
         )
         exit(1)
 
+    # Print the events file and shape.
     print(
-        f"  {tcolors.GREEN}Count check passed: {n_events} events / {n_cs} cross section "
-        f"points.{tcolors.ENDC}"
+        f"\n{tcolors.GREEN}Kinematic points read from: {cs_path} "
+        f"(shape: {events_tensor.shape}){tcolors.ENDC}"
     )
+
+    # -------------------------------------------------------------------------
+    # Load config. It's required that the cross section file contains the
+    # config name. runfit.py runs closure test within same model
+    # -------------------------------------------------------------------------
+    effective_config = None
+
+    # When the cross section file is .pt and was loaded with torch.load() into cs_data
+    if cs_data is not None and isinstance(cs_data, dict) and "config" in cs_data:
+        effective_config = cs_data["config"]
+        print(f"  Config from file: {effective_config}")
+    # When the cross section file is .yaml and was loaded with yaml.safe_load() into cs_dict
+    elif cs_dict is not None and "config" in cs_dict:
+        effective_config = cs_dict["config"]
+        print(f"  Config from file: {effective_config}")
+
+    # If the config is not found in the cross section file, exit with an error.
+    if effective_config is None:
+        print(
+            f"{tcolors.FAIL}Error: run generate_mock_events.py first, missing config key in metadata of the cross section event file.{tcolors.ENDC}"
+        )
+        exit(1)
+
+    # Once established which configuration card to call, resolve its path.
+    # It's assumed to be in the cards/ directory.
+    # Check if it exists. If it doesn't, exit with an error.
+    config_path = cards_dir / effective_config
+    if not config_path.exists():
+        print(
+            f"{tcolors.FAIL}Error: config file not found: {config_path}{tcolors.ENDC}"
+        )
+        exit(1)
+
+    print(f"  Cross section points: {target.shape[0]}")
+    print(f"  Range: [{target.min().item():.4e}, {target.max().item():.4e}]")
 
     # -------------------------------------------------------------------------
     # Helpers
@@ -258,58 +229,208 @@ if __name__ == "__main__":
         """
         Return a dict of physical parameter values evaluated by each flavor module.
 
+        It always returns the current physical parameters of the model at the time
+        it’s called. It does not specifically target "init" or "final" values;
+        it just reads the model's state.
+
+        So, in this code:
+        - The first call gives the config's init values (before randomization).
+        - The second gives the randomized starting values.
+        - The third gives the fitted values.
+        - Your understanding is correct for the first call: it captures the values the model is initialized with from the config.
+
         Keys: 'pdfs.<flavor>', 'ffs.<flavor>', 'evolution'.
         Expression-linked params (e.g. ffs.u[0] = pdfs.u[0]+pdfs.u[1]) are
         evaluated at their current values, so truth and fit are directly comparable.
         """
+        # Initialize a dictionary to hold the physical parameter values:
+        # pdfs.<flavor>, ffs.<flavor>, evolution.
         result = {}
+
+        # Get the fNP manager from the model. It holds PDF, FF, and evolution modules.
         fnp_mgr = mdl.qcf0.fnp_manager
+
+        # -------------------------------------------------------------
+        # PDF modules
+        # -------------------------------------------------------------
+        # Iterate over the PDF modules.
+        # flavor: "u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"
+        # mod: TMDPDFExponential instance
         for flavor, mod in fnp_mgr.pdf_modules.items():
+            # No gradients needed for read-only extraction.
+            # Get raw param tensor from this PDF flavor module. get_params_tensor()
+            # is a function defined in the TMDPDFExponential class.
+            # It returns a 1D tensor of physical parameter values [p0, p1, ...] for this flavor.
             with torch.no_grad():
                 p = mod.get_params_tensor()
+
+            # Set map keys for the result dictionary.
+            # p[i].item() is the i-th element of the tensor p, converted to a Python float.
+            # p.numel() is the number of elements in the tensor p.
             result[f"pdfs.{flavor}"] = [p[i].item() for i in range(p.numel())]
+
+        # -------------------------------------------------------------
+        # FF modules
+        # -------------------------------------------------------------
+        # Iterate over the FF modules.
+        # flavor: "u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"
+        # mod: TMDPDFExponential instance
         for flavor, mod in fnp_mgr.ff_modules.items():
+            # No gradients needed for read-only extraction.
+            # Get raw param tensor from this FF flavor module. get_params_tensor()
+            # is a function defined in the TMDFFExponential class.
+            # It returns a 1D tensor of physical parameter values [p0, p1, ...] for this flavor.
             with torch.no_grad():
                 p = mod.get_params_tensor()
+
+            # Set map keys for the result dictionary.
+            # p[i].item() is the i-th element of the tensor p, converted to a Python float.
+            # p.numel() is the number of elements in the tensor p.
             result[f"ffs.{flavor}"] = [p[i].item() for i in range(p.numel())]
+
+        # -------------------------------------------------------------
+        # Evolution
+        # -------------------------------------------------------------
+        # Get the evolution module from the fNP manager.
+        # It holds the g2 parameter.
         evo = fnp_mgr.evolution
-        g2_val = evo.g2.item() if hasattr(evo, "g2") else evo.free_g2.item()
-        result["evolution"] = [g2_val]
+
+        # Get the g2 parameter value.
+        # evo.g2.item() is the g2 parameter value, converted to a Python float.
+        g2_val = evo.g2.item()
+
+        # Set map keys for the result dictionary, for evolution.
+        # Single value: g2
+        result["evolution"] = [g2_val]  # Single value: strong coupling g2
+
+        # Return the result dictionary.
         return result
 
-    def print_param_table(truth: dict, current: dict, title: str) -> None:
-        col_w = 80
-        print(f"\n{tcolors.BOLDWHITE}{title}{tcolors.ENDC}")
-        header = f"  {'Parameter':<32} {'Truth':>12} {'Current':>12} {'Diff':>12} {'Rel.Diff':>10}"
-        print(header)
-        print("  " + "-" * (len(header) - 2))
+    def build_param_table_rows(truth: dict, current: dict) -> List[Dict[str, Any]]:
+        """Build list of parameter rows (truth, current, diff, rel_diff) for YAML output."""
+        rows: List[Dict[str, Any]] = []
         for key in sorted(truth.keys()):
             t_vals = truth[key]
             c_vals = current.get(key, [None] * len(t_vals))
             for idx, (tv, cv) in enumerate(zip(t_vals, c_vals)):
                 pname = f"{key}[{idx}]"
+                row: Dict[str, Any] = {"parameter": pname, "truth": tv}
                 if tv is not None and cv is not None:
                     diff = cv - tv
                     rel = diff / tv if abs(tv) > 1e-12 else float("nan")
-                    print(
-                        f"  {pname:<32} {tv:>12.6f} {cv:>12.6f} {diff:>+12.6f} {rel:>+10.4f}"
-                    )
+                    row["current"] = cv
+                    row["diff"] = diff
+                    row["rel_diff"] = rel
                 else:
-                    print(f"  {pname:<32} {tv!s:>12} {'N/A':>12}")
+                    row["current"] = cv
+                    row["diff"] = None
+                    row["rel_diff"] = None
+                rows.append(row)
+        return rows
+
+    def print_param_table(truth: dict, current: dict, title: str) -> None:
+        print(f"\n{tcolors.BOLDWHITE}{title}{tcolors.ENDC}")
+        header = f"  {'Parameter':<32} {'Truth':>12} {'Current':>12} {'Diff':>12} {'Rel.Diff':>10}"
+        print(header)
+        print("  " + "-" * (len(header) - 2))
+        for row in build_param_table_rows(truth, current):
+            pname = row["parameter"]
+            tv, cv = row["truth"], row["current"]
+            if tv is not None and cv is not None:
+                diff, rel = row["diff"], row["rel_diff"]
+                print(
+                    f"  {pname:<32} {tv:>12.6f} {cv:>12.6f} {diff:>+12.6f} {rel:>+10.4f}"
+                )
+            else:
+                print(f"  {pname:<32} {tv!s:>12} {'N/A':>12}")
+
+    def collect_parameter_records(mdl) -> List[Dict[str, Any]]:
+        """
+        Collect parameter records with fit-role metadata and physical values.
+
+        fit_role is one of:
+          - fixed
+          - trainable_direct
+          - linked_reference
+          - linked_expression
+        """
+        records: List[Dict[str, Any]] = []
+        fnp_mgr_local = mdl.qcf0.fnp_manager
+
+        # Evolution parameter g2
+        evo_param = fnp_mgr_local.evolution.free_g2
+        evo_is_trainable = bool(evo_param.requires_grad)
+        records.append(
+            {
+                "name": "evolution.g2",
+                "fit_role": "trainable_direct" if evo_is_trainable else "fixed",
+                "is_fixed": not evo_is_trainable,
+                "is_trainable_direct": evo_is_trainable,
+                "reference_or_expression": None,
+                "value": float(fnp_mgr_local.evolution.g2.item()),
+            }
+        )
+
+        def _append_module_records(distrib_key: str, module_dict) -> None:
+            for flavor, mod in module_dict.items():
+                params_tensor = mod.get_params_tensor().detach().cpu()
+                for cfg in mod.param_configs:
+                    idx = cfg["idx"]
+                    parsed = cfg["parsed"]
+                    ptype = parsed.get("type")
+                    is_fixed = bool(parsed.get("is_fixed", False))
+                    expr_or_ref = None
+
+                    if ptype == "reference":
+                        ref = parsed.get("value", {})
+                        ref_type = ref.get("type") or distrib_key
+                        expr_or_ref = (
+                            f"{ref_type}.{ref.get('flavor')}[{ref.get('param_idx')}]"
+                        )
+                    elif ptype == "expression":
+                        expr_or_ref = parsed.get("value")
+
+                    if is_fixed:
+                        fit_role = "fixed"
+                    elif ptype == "boolean":
+                        fit_role = "trainable_direct"
+                    elif ptype == "reference":
+                        fit_role = "linked_reference"
+                    elif ptype == "expression":
+                        fit_role = "linked_expression"
+                    else:
+                        fit_role = "fixed"
+
+                    records.append(
+                        {
+                            "name": f"{distrib_key}.{flavor}[{idx}]",
+                            "fit_role": fit_role,
+                            "is_fixed": fit_role == "fixed",
+                            "is_trainable_direct": fit_role == "trainable_direct",
+                            "reference_or_expression": expr_or_ref,
+                            "value": float(params_tensor[idx].item()),
+                        }
+                    )
+
+        _append_module_records("pdfs", fnp_mgr_local.pdf_modules)
+        _append_module_records("ffs", fnp_mgr_local.ff_modules)
+        return records
 
     # -------------------------------------------------------------------------
     # Initialize model and capture truth parameter values
     # -------------------------------------------------------------------------
-    print(f"\n{tcolors.BOLDWHITE}Initializing model ({args.config})...{tcolors.ENDC}")
-    model = TrainableModel(fnp_config=args.config)
+    print(
+        f"\n{tcolors.BOLDWHITE}Initializing model ({effective_config})...{tcolors.ENDC}"
+    )
+    # Initialize the model, which is a TrainableModel instance.
+    model = TrainableModel(fnp_config=effective_config)
     print(f"{tcolors.GREEN}Model initialized.{tcolors.ENDC}")
 
-    fnp_config_dict = OmegaConf.load(config_path)
-    combo = fnp_config_dict.get("combo", "")
-    if combo != "simple":
+    fnp_mgr = model.qcf0.fnp_manager
+    if not hasattr(fnp_mgr, "randomize_params_in_bounds"):
         print(
-            f"{tcolors.FAIL}Error: runfit.py requires combo=simple in the config. "
-            f"Got: combo={combo!r}{tcolors.ENDC}"
+            f"{tcolors.FAIL}Error: runfit.py requires an fNP combo that implements "
+            f"randomize_params_in_bounds. The loaded combo does not provide this method.{tcolors.ENDC}"
         )
         exit(1)
 
@@ -327,18 +448,11 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # Randomize fNP parameters within bounds
     # -------------------------------------------------------------------------
-    fnp_mgr = model.qcf0.fnp_manager
-    if hasattr(fnp_mgr, "randomize_params_in_bounds"):
-        fnp_mgr.randomize_params_in_bounds(seed=args.seed)
-        print(
-            f"\n{tcolors.GREEN}Randomized fNP parameters within bounds "
-            f"(seed={args.seed}).{tcolors.ENDC}"
-        )
-    else:
-        print(
-            f"\n{tcolors.WARNING}fnp_manager has no randomize_params_in_bounds; "
-            f"using config init values.{tcolors.ENDC}"
-        )
+    fnp_mgr.randomize_params_in_bounds(seed=args.seed)
+    print(
+        f"\n{tcolors.GREEN}Randomized fNP parameters within bounds "
+        f"(seed={args.seed}).{tcolors.ENDC}"
+    )
 
     random_params = get_physical_params(model)
     print(
@@ -480,8 +594,133 @@ if __name__ == "__main__":
             print(
                 f"{tcolors.FAIL}  Poor recovery (> 20% mean relative error). "
                 f"Try more epochs (--epochs), a different seed, "
-                f"or --use_embedded_events.{tcolors.ENDC}"
+                f"or a different seed.{tcolors.ENDC}"
             )
+
+    # -------------------------------------------------------------------------
+    # Save fit outputs
+    # -------------------------------------------------------------------------
+    fitresults_dir.mkdir(parents=True, exist_ok=True)
+
+    kinematic_cols = ["x", "PhT", "Q", "z"]
+    if events_tensor.shape[1] >= 6:
+        kinematic_cols.extend(["phih", "phis"])
+    else:
+        # Generic names if there are additional columns beyond [x, PhT, Q, z]
+        for i in range(4, events_tensor.shape[1]):
+            kinematic_cols.append(f"col_{i}")
+
+    events_cpu = events_tensor.detach().cpu()
+    target_cpu = target.detach().cpu()
+    final_pred_cpu = final_pred.detach().cpu()
+
+    fit_rows: List[Dict[str, float]] = []
+    for i in range(events_cpu.shape[0]):
+        row: Dict[str, float] = {}
+        for j, cname in enumerate(kinematic_cols):
+            row[cname] = float(events_cpu[i, j].item())
+        row["cross_section_original"] = float(target_cpu[i].item())
+        row["cross_section_reconstructed"] = float(final_pred_cpu[i].item())
+        fit_rows.append(row)
+
+    fitresults_out = {
+        "description": "Fit results: kinematics with original and reconstructed cross sections",
+        "config": effective_config,
+        "cross_section_source": str(cs_path),
+        "events_source": str(cs_path),
+        "n_points": int(events_cpu.shape[0]),
+        "kinematic_columns": kinematic_cols,
+        "loss": {
+            "type": "log_mse",
+            "initial": float(losses[0]),
+            "final": float(losses[-1]),
+            "reduction_percent": float(
+                (losses[0] - losses[-1]) / losses[0] * 100 if losses[0] > 0 else 0.0
+            ),
+        },
+        "data": fit_rows,
+    }
+
+    # Rebuild with truth and fitted values side-by-side.
+    # Truth is taken from earlier captured values in truth_params.
+    truth_map: Dict[str, float] = {}
+    for key, vals in truth_params.items():
+        if key == "evolution":
+            truth_map["evolution.g2"] = float(vals[0])
+        else:
+            for idx, v in enumerate(vals):
+                truth_map[f"{key}[{idx}]"] = float(v)
+
+    params_fitted = collect_parameter_records(model)
+    params_out_rows: List[Dict[str, Any]] = []
+    for rec in params_fitted:
+        name = rec["name"]
+        params_out_rows.append(
+            {
+                "parameter": name,
+                "fit_role": rec["fit_role"],
+                "is_fixed": bool(rec["is_fixed"]),
+                "is_trainable_direct": bool(rec["is_trainable_direct"]),
+                "reference_or_expression": rec["reference_or_expression"],
+                "original_value": truth_map.get(name),
+                "fitted_value": float(rec["value"]),
+                "difference": (
+                    float(rec["value"] - truth_map[name])
+                    if name in truth_map and truth_map[name] is not None
+                    else None
+                ),
+            }
+        )
+
+    params_out = {
+        "description": "Final fitted parameter values with fit role metadata",
+        "config": effective_config,
+        "notes": {
+            "fit_role.fixed": "Parameter fixed by configuration (not fitted).",
+            "fit_role.trainable_direct": "Independent parameter optimized directly.",
+            "fit_role.linked_reference": "Linked to another parameter by reference.",
+            "fit_role.linked_expression": "Computed from an expression of other parameters.",
+        },
+        "parameters": params_out_rows,
+    }
+
+    # Parameter comparison tables (same as printed to terminal)
+    truth_vs_initial_rows = build_param_table_rows(truth_params, random_params)
+    truth_vs_fitted_rows = build_param_table_rows(truth_params, final_params)
+
+    # Make YAML-serializable (replace nan with None)
+    def _sanitize_for_yaml(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        out = []
+        for r in rows:
+            o = dict(r)
+            if isinstance(o.get("rel_diff"), float) and (
+                o["rel_diff"] != o["rel_diff"]
+            ):  # nan
+                o["rel_diff"] = None
+            out.append(o)
+        return out
+
+    parameters_out = {
+        "description": "Parameter comparison tables (Truth vs Initial, Truth vs Fitted)",
+        "config": effective_config,
+        "truth_vs_initial": _sanitize_for_yaml(truth_vs_initial_rows),
+        "truth_vs_fitted": _sanitize_for_yaml(truth_vs_fitted_rows),
+    }
+
+    fitresults_yaml = fitresults_dir / "fitresults.yaml"
+    fitparams_yaml = fitresults_dir / "fit_parameters.yaml"
+    parameters_yaml = fitresults_dir / "parameters.yaml"
+    with open(fitresults_yaml, "w") as f:
+        f.write(OmegaConf.to_yaml(OmegaConf.create(fitresults_out)))
+    with open(fitparams_yaml, "w") as f:
+        f.write(OmegaConf.to_yaml(OmegaConf.create(params_out)))
+    with open(parameters_yaml, "w") as f:
+        f.write(OmegaConf.to_yaml(OmegaConf.create(parameters_out)))
+
+    print(f"\n{tcolors.GREEN}Saved fit outputs to:{tcolors.ENDC}")
+    print(f"  {fitresults_yaml}")
+    print(f"  {fitparams_yaml}")
+    print(f"  {parameters_yaml}")
 
     print(f"\n{tcolors.BOLDWHITE}{'=' * 80}{tcolors.ENDC}")
     print(f"{tcolors.GREEN}runfit.py done.{tcolors.ENDC}")
