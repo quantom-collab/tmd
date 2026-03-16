@@ -72,8 +72,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--seed",
         type=int,
-        default=42,
-        help="Random seed for parameter randomization. Default: 42",
+        default=7,
+        help="Random seed for parameter randomization. Default: 7",
     )
     parser.add_argument(
         "--epochs",
@@ -106,9 +106,7 @@ if __name__ == "__main__":
         f"--seed {args.seed} --epochs {args.epochs} --lr {args.lr} "
         f"--fitresults_dir {args.fitresults_dir}"
     )
-    print(
-        f"{tcolors.BOLDGREEN}running @{_script_rel} {_flags}{tcolors.ENDC}"
-    )
+    print(f"{tcolors.BOLDGREEN}running @{_script_rel} {_flags}{tcolors.ENDC}")
 
     # -------------------------------------------------------------------------
     # Resolve file paths. Relative paths should be resolved relative to the
