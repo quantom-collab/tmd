@@ -21,21 +21,23 @@ class tcolors:
     """
 
     # Basic colors
-    BLUE = "\033[94m"  # Bright blue
-    CYAN = "\033[96m"  # Cyan
+    FAIL = "\033[91m"  # Red
     GREEN = "\033[92m"  # Green
     WARNING = "\033[93m"  # Yellow
-    FAIL = "\033[91m"  # Red
-    GIULIA = "\033[35m"  # Purple
-    OKLIGHTBLUE = "\033[34m"  # Light blue (darker blue)
+    BLUE = "\033[94m"  # Bright blue
+
+    CYAN = "\033[96m"  # Cyan
     WHITE = "\033[97m"  # White
+
+    OKLIGHTBLUE = "\033[34m"  # Light blue
+    GIULIA = "\033[35m"  # Purple
 
     # Text styles
     ENDC = "\033[0m"  # Reset/end color
     BOLD = "\033[1m"  # Bold text
     UNDERLINE = "\033[4m"  # Underlined text
 
-    # Combined styles (bold + color)
+    # Bold styles (bold + color)
     BOLDBLUE = BOLD + BLUE
     BOLDCYAN = BOLD + CYAN
     BOLDGREEN = BOLD + GREEN

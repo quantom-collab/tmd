@@ -96,15 +96,30 @@ if __name__ == "__main__":
         default="fitresults",
         help="Directory where fit output YAML files are saved. Default: fitresults",
     )
+
+    def _parse_bool(s: str) -> bool:
+        if s.lower() in ("true", "yes", "1"):
+            return True
+        if s.lower() in ("false", "no", "0"):
+            return False
+        raise argparse.ArgumentTypeError(f"Expected true/false, got {s!r}")
+
+    parser.add_argument(
+        "--save_loss",
+        type=_parse_bool,
+        default=True,
+        help="Save loss.yaml with loss values every 10 epochs. Use true or false. Default: true",
+    )
     args = parser.parse_args()
 
     # Print all flags (including defaults) in bold green
     _repo_root = script_dir.parent.parent
     _script_rel = pathlib.Path(__file__).resolve().relative_to(_repo_root)
+    _save_loss = f"--save_loss {'true' if args.save_loss else 'false'}"
     _flags = (
         f"--cross_section {args.cross_section} "
         f"--seed {args.seed} --epochs {args.epochs} --lr {args.lr} "
-        f"--fitresults_dir {args.fitresults_dir}"
+        f"--fitresults_dir {args.fitresults_dir} {_save_loss}"
     )
     print(f"{tcolors.BOLDGREEN}running @{_script_rel} {_flags}{tcolors.ENDC}")
 
@@ -140,6 +155,7 @@ if __name__ == "__main__":
     events_tensor = None
     cs_data = None
     cs_dict = None
+    kinematic_cols = None
 
     # Suffix is needed to choose which loading function to use
     # (if the torch one or the yaml one).
@@ -148,6 +164,7 @@ if __name__ == "__main__":
         if isinstance(cs_data, dict) and "cross_section" in cs_data:
             target = cs_data["cross_section"]
             events_tensor = cs_data.get("events", None)
+            kinematic_cols = cs_data.get("kinematic_columns")
         else:
             target = cs_data
     elif suffix in (".yaml", ".yml"):
@@ -159,9 +176,9 @@ if __name__ == "__main__":
         target = torch.tensor(
             [row["cross_section"] for row in rows], dtype=torch.float64
         )
-        cols = cs_dict.get("kinematic_columns", ["x", "PhT", "Q", "z"])
+        kinematic_cols = cs_dict.get("kinematic_columns", ["x", "PhT", "Q", "z"])
         events_tensor = torch.tensor(
-            [[row[c] for c in cols] for row in rows], dtype=torch.float64
+            [[row[c] for c in kinematic_cols] for row in rows], dtype=torch.float64
         )
     else:
         print(
@@ -179,9 +196,18 @@ if __name__ == "__main__":
         )
         exit(1)
 
+    # If kinematic_columns were not in the file, infer from events shape.
+    if kinematic_cols is None:
+        kinematic_cols = ["x", "PhT", "Q", "z"]
+        if events_tensor.shape[1] >= 6:
+            kinematic_cols.extend(["phih", "phis"])
+        else:
+            for i in range(4, events_tensor.shape[1]):
+                kinematic_cols.append(f"col_{i}")
+
     # Print the events file and shape.
     print(
-        f"\n{tcolors.GREEN}Kinematic points read from: {cs_path} "
+        f"{tcolors.WHITE}Kinematic points read from: {cs_path} "
         f"(shape: {events_tensor.shape}){tcolors.ENDC}"
     )
 
@@ -194,11 +220,11 @@ if __name__ == "__main__":
     # When the cross section file is .pt and was loaded with torch.load() into cs_data
     if cs_data is not None and isinstance(cs_data, dict) and "config" in cs_data:
         effective_config = cs_data["config"]
-        print(f"  Config from file: {effective_config}")
+        print(f"  {tcolors.GREEN}Config from file: {effective_config}{tcolors.ENDC}")
     # When the cross section file is .yaml and was loaded with yaml.safe_load() into cs_dict
     elif cs_dict is not None and "config" in cs_dict:
         effective_config = cs_dict["config"]
-        print(f"  Config from file: {effective_config}")
+        print(f"  {tcolors.GREEN}Config from file: {effective_config}{tcolors.ENDC}")
 
     # If the config is not found in the cross section file, exit with an error.
     if effective_config is None:
@@ -217,8 +243,10 @@ if __name__ == "__main__":
         )
         exit(1)
 
-    print(f"  Cross section points: {target.shape[0]}")
-    print(f"  Range: [{target.min().item():.4e}, {target.max().item():.4e}]")
+    print(f"  {tcolors.GREEN}Cross section points: {target.shape[0]}{tcolors.ENDC}")
+    print(
+        f"  {tcolors.GREEN}Range: [{target.min().item():.4e}, {target.max().item():.4e}]{tcolors.ENDC}"
+    )
 
     # -------------------------------------------------------------------------
     # Helpers
@@ -420,11 +448,17 @@ if __name__ == "__main__":
     print(
         f"\n{tcolors.BOLDWHITE}Initializing model ({effective_config})...{tcolors.ENDC}"
     )
+
     # Initialize the model, which is a TrainableModel instance.
     model = TrainableModel(fnp_config=effective_config)
-    print(f"{tcolors.GREEN}Model initialized.{tcolors.ENDC}")
+    print(f"{tcolors.BOLDGREEN}[runfit.py] Model initialized.{tcolors.ENDC}")
 
+    # Get the fNP manager from the model.
     fnp_mgr = model.qcf0.fnp_manager
+
+    # Check if the fNP manager has the randomize_params_in_bounds method.
+    # runfit.py requires an fNP combo that implements randomize_params_in_bounds.
+    # if it does not, exit with an error.
     if not hasattr(fnp_mgr, "randomize_params_in_bounds"):
         print(
             f"{tcolors.FAIL}Error: runfit.py requires an fNP combo that implements "
@@ -437,8 +471,13 @@ if __name__ == "__main__":
     # expression, so truth matches what was actually used to generate the cross sections.
     truth_params = get_physical_params(model)
     print(
-        f"\n{tcolors.OKLIGHTBLUE}Truth parameters (config init_params / expressions):{tcolors.ENDC}"
+        f"\n{tcolors.BOLDLIGHTBLUE}Truth parameters \n(from {config_path}){tcolors.ENDC}"
     )
+
+    # Print the truth parameters. Those are the physical parameter values at
+    # the config's init_params (before randomization). It assumes that the config.yaml file
+    # was not changes between the config used to generate the cross sections and the
+    # config used to run the fit.
     for key, vals in sorted(truth_params.items()):
         vstr = ", ".join(f"{v:.6f}" for v in vals)
         print(f"  {key:<32} [{vstr}]")
@@ -447,21 +486,24 @@ if __name__ == "__main__":
     # Randomize fNP parameters within bounds
     # -------------------------------------------------------------------------
     fnp_mgr.randomize_params_in_bounds(seed=args.seed)
+
     print(
-        f"\n{tcolors.GREEN}Randomized fNP parameters within bounds "
+        f"\n{tcolors.BOLDGREEN}[runfit.py] Randomized fNP parameters within bounds "
         f"(seed={args.seed}).{tcolors.ENDC}"
     )
 
     random_params = get_physical_params(model)
+
+    # Print the randomized parameters.
     print(
-        f"\n{tcolors.OKLIGHTBLUE}Initial parameters after randomization:{tcolors.ENDC}"
+        f"\n{tcolors.BOLDLIGHTBLUE}Initial parameters after randomization \n(from {config_path}){tcolors.ENDC}"
     )
     for key, vals in sorted(random_params.items()):
         vstr = ", ".join(f"{v:.6f}" for v in vals)
         print(f"  {key:<32} [{vstr}]")
 
     # -------------------------------------------------------------------------
-    # Initial forward pass (informational)
+    # Initial forward pass (just for informational purposes)
     # -------------------------------------------------------------------------
     print(f"\n{tcolors.BOLDWHITE}Initial forward pass...{tcolors.ENDC}")
     with torch.no_grad():
@@ -475,26 +517,48 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # Optimizer and loss setup
     # -------------------------------------------------------------------------
-    # Evolution g2 is the only param not handled by sigmoid reparametrization,
+    # If the fNP manager has the get_trainable_bounds method and it returns True,
+    # then clamp the parameters to their bounds after each gradient step.
+    # For fnp_simple, evolution g2 is the only param not handled by sigmoid reparametrization,
     # so it may need clamping to its bounds after each gradient step.
+    # Other combos may have more than one param that needs clamping.
+    # clamp_after_step is set to either True or False, and used in the minimization loop.
     clamp_after_step = hasattr(fnp_mgr, "get_trainable_bounds") and bool(
         fnp_mgr.get_trainable_bounds()
     )
 
     # Log-space MSE: mean( (log|pred| - log|target|)^2 )
     # Floor applied before log to guard against zeros / near-zero values.
+    # Only absolute values enter the loss function.
     EPS_LOG = 1e-40
     target_log = torch.log(target.abs().clamp(min=EPS_LOG))
 
     def log_mse_loss() -> torch.Tensor:
+        """
+        log_mse_loss() is the objective that gets minimized. For
+        that to work, PyTorch needs gradients from loss back to the model parameters.
+        That requires:
+        - A forward pass that builds the computation graph.
+        - A backward pass that computes the gradients.
+        """
+        # Get predictions from the model. Predictions change with the model parameters.
+        # This time we need to compute the gradients.
         pred = model(events_tensor)
+
+        # Compute the log of the absolute values of the predictions.
         pred_log = torch.log(pred.abs().clamp(min=EPS_LOG))
+
+        # Compute the log-space MSE loss.
         return torch.mean((pred_log - target_log) ** 2)
 
     # Rprop: sign-based adaptive per-parameter steps.
-    # etas=(0.5, 1.2): step shrinks by 50% on sign flip, grows by 20% on consistency.
-    # step_sizes=(1e-6, 1.0): cap max step at 1.0 to avoid overshooting in theta space
-    #   (sigmoid-reparametrized params live roughly in [-5, 5]).
+    # - model.parameters(): the parameters to optimize.
+    # - lr=args.lr: the initial step size.
+    # - etas=(0.5, 1.2): the step shrink and grow factors. They shrink by 50% on sign flip,
+    #   grow by 20% on consistent sign.
+    # - step_sizes=(1e-6, 1.0): the maximum step size. cap max step at 1.0 to avoid
+    #   overshooting in theta space (sigmoid-reparametrized params live roughly in [-5, 5],
+    #   so the size cap is chosen because theta is on that scale).
     optimizer = torch.optim.Rprop(
         model.parameters(),
         lr=args.lr,
@@ -506,25 +570,45 @@ if __name__ == "__main__":
     # Minimization loop
     # -------------------------------------------------------------------------
     print(
-        f"\n{tcolors.BOLDWHITE}Minimizing log-MSE with Rprop "
+        f"\n{tcolors.BOLDGREEN}Minimizing log-MSE with Rprop "
         f"({args.epochs} epochs, initial step size={args.lr})...{tcolors.ENDC}"
     )
     print("=" * 80)
 
     losses = []
+    loss_yaml_entries = []  # (epoch, loss) every 10 epochs for loss.yaml
     report_every = max(1, args.epochs // 10)
 
+    # Run the number of epochs specified by the --epochs flag.
     for epoch in range(args.epochs):
+
+        # Clears the gradient buffers so they can be reused.
+        # Put to zero the gradients from previous iteration (PyTorch accumulates by default).
         optimizer.zero_grad()
+
+        # Compute the log-space MSE loss.
+        # Forward pass: compute loss and build computational graph.
         loss = log_mse_loss()
+
+        # Compute the gradients of the loss with respect to the model parameters.
+        # Backward pass: compute gradients of loss w.r.t. parameters (populates param.grad).
         loss.backward()
+
+        # Update the model parameters using the computed gradients.
         optimizer.step()
 
+        # Clamp the physical parameters to their bounds to stay within the
+        # allowed intervals after each gradient step.
         if clamp_after_step:
             fnp_mgr.clamp_parameters_to_bounds()
 
+        # Extract scalar for logging. Append the loss to the list of losses.
         loss_item = loss.item()
         losses.append(loss_item)
+
+        # Record (epoch, loss) every 10 epochs for loss.yaml (epoch 1-based).
+        if args.save_loss and ((epoch + 1) % 10 == 0 or epoch == 0):
+            loss_yaml_entries.append({"epoch": epoch + 1, "loss": float(loss_item)})
 
         if (epoch + 1) % report_every == 0 or epoch == 0:
             print(f"  Epoch {epoch + 1:5d}/{args.epochs}:  log-MSE = {loss_item:.6e}")
@@ -552,73 +636,132 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     final_params = get_physical_params(model)
 
-    print_param_table(
-        truth_params,
-        random_params,
-        "Parameter comparison: Truth vs Initial (randomized)",
-    )
-    print_param_table(
-        truth_params,
-        final_params,
-        "Parameter comparison: Truth vs Fitted",
-    )
+    # # Uncomment below to have a full table of parameters truth vs final,
+    # # including the fixed params, printed out on terminal.
+    # print_param_table(
+    #     truth_params,
+    #     final_params,
+    #     "Parameter comparison: Truth vs Fitted",
+    # )
 
     # -------------------------------------------------------------------------
-    # Recovery score
+    # Recovery score (trainable parameters only)
     # -------------------------------------------------------------------------
-    print(f"\n{tcolors.BOLDWHITE}Recovery summary:{tcolors.ENDC}")
-    all_rel_errors = []
-    for key, t_vals in truth_params.items():
-        f_vals = final_params.get(key, [])
-        for tv, fv in zip(t_vals, f_vals):
-            if abs(tv) > 1e-12:
-                all_rel_errors.append(abs(fv - tv) / abs(tv))
+    print(f"\n{tcolors.BOLDWHITE}Recovery per trainable parameter:{tcolors.ENDC}")
 
-    if all_rel_errors:
-        mean_rel = sum(all_rel_errors) / len(all_rel_errors)
-        max_rel = max(all_rel_errors)
-        print(f"  Mean relative error: {mean_rel:.4f}  ({mean_rel * 100:.2f}%)")
-        print(f"  Max  relative error: {max_rel:.4f}  ({max_rel * 100:.2f}%)")
-        if mean_rel < 0.05:
-            print(
-                f"{tcolors.GREEN}  Excellent recovery (< 5% mean relative error).{tcolors.ENDC}"
+    # Collect records and keep only those optimized directly by the fit.
+    records = collect_parameter_records(model)
+    trainable_records = [r for r in records if r["is_trainable_direct"]]
+
+    def _param_key_and_idx(rec_name: str) -> tuple:
+        """Map record name to (key, idx) for truth/random/final_params lookup."""
+        if rec_name == "evolution.g2":
+            return ("evolution", 0)
+        # e.g. "pdfs.u[0]" -> ("pdfs.u", 0)
+        bracket = rec_name.rfind("[")
+        if bracket >= 0:
+            key = rec_name[:bracket]
+            idx = int(rec_name[bracket + 1 : -1])
+            return (key, idx)
+        return (rec_name, 0)
+
+    if trainable_records:
+        # Table header: Parameter, Truth, Initial, Final, Abs.Diff, Rel.Diff (%), Recovery.
+        header = (
+            f"  {'Parameter':<20} {'Truth':>10} {'Initial':>10} {'Final':>10} "
+            f"{'Abs.Diff':>10} {'Rel.Diff%':>10}  Recovery"
+        )
+        print(header)
+        print("  " + "-" * (len(header) - 2))
+        for rec in trainable_records:
+            pname = rec["name"]
+            # Map record name to (key, idx) for param dict lookup.
+            key, idx = _param_key_and_idx(pname)
+            # Extract truth, initial (randomized), and final (fitted) values.
+            truth_val = (
+                truth_params.get(key, [None])[idx]
+                if idx < len(truth_params.get(key, []))
+                else None
             )
-        elif mean_rel < 0.20:
-            print(
-                f"{tcolors.WARNING}  Partial recovery (5–20% mean relative error). "
-                f"Try more epochs or a different seed.{tcolors.ENDC}"
+            init_val = (
+                random_params.get(key, [None])[idx]
+                if idx < len(random_params.get(key, []))
+                else None
             )
-        else:
-            print(
-                f"{tcolors.FAIL}  Poor recovery (> 20% mean relative error). "
-                f"Try more epochs (--epochs), a different seed, "
-                f"or a different seed.{tcolors.ENDC}"
+            final_val = (
+                final_params.get(key, [None])[idx]
+                if idx < len(final_params.get(key, []))
+                else None
             )
+            if truth_val is None or init_val is None or final_val is None:
+                print(
+                    f"{tcolors.FAIL}No value found for parameter: {pname}{tcolors.ENDC}"
+                )
+                continue
+
+            # Absolute difference: final - truth.
+            abs_diff = final_val - truth_val
+
+            # Relative difference: (final - truth) / |truth|, expressed in %.
+            if abs(truth_val) > 1e-12:
+                rel_diff = (final_val - truth_val) / abs(truth_val)
+            else:
+                rel_diff = float("nan")
+            abs_rel = abs(rel_diff)
+
+            # Recovery status based on |rel_diff|: <5% Excellent, 5–20% Partial, >20% Poor.
+            if abs_rel < 0.05:
+                recovery = f"{tcolors.GREEN}Excellent{tcolors.ENDC}"
+            elif abs_rel < 0.20:
+                recovery = f"{tcolors.WARNING}Partial{tcolors.ENDC}"
+            else:
+                recovery = f"{tcolors.FAIL}Poor{tcolors.ENDC}"
+
+            # Format rel_diff as percentage; use N/A for NaN.
+            rel_str = f"{rel_diff * 100:+.2f}%" if rel_diff == rel_diff else "N/A"
+            print(
+                f"  {pname:<20} {truth_val:>10.6f} {init_val:>10.6f} {final_val:>10.6f} "
+                f"{abs_diff:>+10.6f} {rel_str:>10}  {recovery}"
+            )
+    else:
+        print("  No trainable parameters.")
 
     # -------------------------------------------------------------------------
     # Save fit outputs
     # -------------------------------------------------------------------------
+    # If the output folder doesn't exist, create it.
     fitresults_dir.mkdir(parents=True, exist_ok=True)
 
-    kinematic_cols = ["x", "PhT", "Q", "z"]
-    if events_tensor.shape[1] >= 6:
-        kinematic_cols.extend(["phih", "phis"])
-    else:
-        # Generic names if there are additional columns beyond [x, PhT, Q, z]
-        for i in range(4, events_tensor.shape[1]):
-            kinematic_cols.append(f"col_{i}")
-
+    # kinematic_cols was read from the cross section file at load time (or inferred).
     events_cpu = events_tensor.detach().cpu()
     target_cpu = target.detach().cpu()
     final_pred_cpu = final_pred.detach().cpu()
 
+    # Build the fit results rows.
     fit_rows: List[Dict[str, float]] = []
+
+    # Sanity check: kinematic_cols must match the number of event columns.
+    # This ensures row[cname] = events_cpu[i, j] maps the correct column to each name.
+    assert len(kinematic_cols) == events_tensor.shape[1], (
+        f"kinematic_cols length ({len(kinematic_cols)}) must match events columns "
+        f"({events_tensor.shape[1]}). Check kinematic_columns in the cross section file."
+    )
+
+    # Iterate over the events.
     for i in range(events_cpu.shape[0]):
+        # Create a row for the fit results.
         row: Dict[str, float] = {}
+
+        # Fill the row with kinematic values. kinematic_cols was read from the cross
+        # section file at load time (or inferred). Column j corresponds to kinematic_cols[j].
         for j, cname in enumerate(kinematic_cols):
             row[cname] = float(events_cpu[i, j].item())
+
+        # Fill the row with the cross section values.
         row["cross_section_original"] = float(target_cpu[i].item())
         row["cross_section_reconstructed"] = float(final_pred_cpu[i].item())
+
+        # Add the row to the fit results.
         fit_rows.append(row)
 
     fitresults_out = {
@@ -627,7 +770,6 @@ if __name__ == "__main__":
         "cross_section_source": str(cs_path),
         "events_source": str(cs_path),
         "n_points": int(events_cpu.shape[0]),
-        "kinematic_columns": kinematic_cols,
         "loss": {
             "type": "log_mse",
             "initial": float(losses[0]),
@@ -639,39 +781,48 @@ if __name__ == "__main__":
         "data": fit_rows,
     }
 
-    # Rebuild with truth and fitted values side-by-side.
-    # Truth is taken from earlier captured values in truth_params.
-    truth_map: Dict[str, float] = {}
-    for key, vals in truth_params.items():
-        if key == "evolution":
-            truth_map["evolution.g2"] = float(vals[0])
-        else:
-            for idx, v in enumerate(vals):
-                truth_map[f"{key}[{idx}]"] = float(v)
-
+    # Build unified parameters output: one entry per parameter with truth, initial, final, diff, rel_diff.
     params_fitted = collect_parameter_records(model)
-    params_out_rows: List[Dict[str, Any]] = []
+    parameters_out_rows: List[Dict[str, Any]] = []
     for rec in params_fitted:
         name = rec["name"]
-        params_out_rows.append(
+        key, idx = _param_key_and_idx(name)
+        truth_val = (
+            truth_params.get(key, [None])[idx]
+            if idx < len(truth_params.get(key, []))
+            else None
+        )
+        init_val = (
+            random_params.get(key, [None])[idx]
+            if idx < len(random_params.get(key, []))
+            else None
+        )
+        final_val = float(rec["value"])
+        if truth_val is not None:
+            diff = final_val - truth_val
+            rel_diff = diff / abs(truth_val) if abs(truth_val) > 1e-12 else None
+            if rel_diff is not None and rel_diff != rel_diff:
+                rel_diff = None
+        else:
+            diff = None
+            rel_diff = None
+        parameters_out_rows.append(
             {
                 "parameter": name,
                 "fit_role": rec["fit_role"],
                 "is_fixed": bool(rec["is_fixed"]),
                 "is_trainable_direct": bool(rec["is_trainable_direct"]),
                 "reference_or_expression": rec["reference_or_expression"],
-                "original_value": truth_map.get(name),
-                "fitted_value": float(rec["value"]),
-                "difference": (
-                    float(rec["value"] - truth_map[name])
-                    if name in truth_map and truth_map[name] is not None
-                    else None
-                ),
+                "truth": float(truth_val) if truth_val is not None else None,
+                "initial": float(init_val) if init_val is not None else None,
+                "final": final_val,
+                "diff": float(diff) if diff is not None else None,
+                "rel_diff": float(rel_diff) if rel_diff is not None else None,
             }
         )
 
-    params_out = {
-        "description": "Final fitted parameter values with fit role metadata",
+    parameters_out = {
+        "description": "Parameter information.",
         "config": effective_config,
         "notes": {
             "fit_role.fixed": "Parameter fixed by configuration (not fitted).",
@@ -679,46 +830,33 @@ if __name__ == "__main__":
             "fit_role.linked_reference": "Linked to another parameter by reference.",
             "fit_role.linked_expression": "Computed from an expression of other parameters.",
         },
-        "parameters": params_out_rows,
-    }
-
-    # Parameter comparison tables (same as printed to terminal)
-    truth_vs_initial_rows = build_param_table_rows(truth_params, random_params)
-    truth_vs_fitted_rows = build_param_table_rows(truth_params, final_params)
-
-    # Make YAML-serializable (replace nan with None)
-    def _sanitize_for_yaml(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        out = []
-        for r in rows:
-            o = dict(r)
-            if isinstance(o.get("rel_diff"), float) and (
-                o["rel_diff"] != o["rel_diff"]
-            ):  # nan
-                o["rel_diff"] = None
-            out.append(o)
-        return out
-
-    parameters_out = {
-        "description": "Parameter comparison tables (Truth vs Initial, Truth vs Fitted)",
-        "config": effective_config,
-        "truth_vs_initial": _sanitize_for_yaml(truth_vs_initial_rows),
-        "truth_vs_fitted": _sanitize_for_yaml(truth_vs_fitted_rows),
+        "parameters": parameters_out_rows,
     }
 
     fitresults_yaml = fitresults_dir / "fitresults.yaml"
-    fitparams_yaml = fitresults_dir / "fit_parameters.yaml"
     parameters_yaml = fitresults_dir / "parameters.yaml"
     with open(fitresults_yaml, "w") as f:
         f.write(OmegaConf.to_yaml(OmegaConf.create(fitresults_out)))
-    with open(fitparams_yaml, "w") as f:
-        f.write(OmegaConf.to_yaml(OmegaConf.create(params_out)))
     with open(parameters_yaml, "w") as f:
         f.write(OmegaConf.to_yaml(OmegaConf.create(parameters_out)))
 
+    # Save loss at every 10 epochs for plotting (if enabled).
+    loss_yaml = fitresults_dir / "loss.yaml"
+    if args.save_loss:
+        loss_out = {
+            "description": "Loss values every 10 epochs for plotting.",
+            "config": effective_config,
+            "epochs": args.epochs,
+            "data": loss_yaml_entries,
+        }
+        with open(loss_yaml, "w") as f:
+            f.write(OmegaConf.to_yaml(OmegaConf.create(loss_out)))
+
     print(f"\n{tcolors.GREEN}Saved fit outputs to:{tcolors.ENDC}")
     print(f"  {fitresults_yaml}")
-    print(f"  {fitparams_yaml}")
     print(f"  {parameters_yaml}")
+    if args.save_loss:
+        print(f"  {loss_yaml}")
 
     print(f"\n{tcolors.BOLDWHITE}{'=' * 80}{tcolors.ENDC}")
     print(f"{tcolors.GREEN}runfit.py done.{tcolors.ENDC}")

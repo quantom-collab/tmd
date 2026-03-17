@@ -812,7 +812,9 @@ class fNPManager(nn.Module):
         For fnp_simple, only evolution params need clamping (PDF/FF use sigmoid rescaling).
         """
         result: List[Tuple[nn.Parameter, Optional[float], Optional[float]]] = []
+
         # Evolution g2 is the only param that may need clamping (not sigmoid-rescaled).
+        # PDF/FF params use sigmoid rescaling and need no clamping.
         if self.evolution_bounds and hasattr(self.evolution, "free_g2"):
             p = self.evolution.free_g2
             if p.requires_grad and len(self.evolution_bounds) > 0:

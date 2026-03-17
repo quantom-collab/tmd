@@ -168,7 +168,11 @@ def main():
     # Create output directory if it doesn't exist
     output_base.parent.mkdir(parents=True, exist_ok=True)
 
-    # PyTorch format: same content + metadata
+    # PyTorch format: same content + metadata.
+    # kinematic_columns documents the column order of events (used by runfit.py).
+    kinematic_columns = ["x", "PhT", "Q", "z"]
+    if n_cols >= 6:
+        kinematic_columns.extend(["phih", "phis"])
     pt_path = output_base.with_suffix(".pt")
     torch.save(
         {
@@ -176,24 +180,19 @@ def main():
             "cross_section": cross_section,
             "config": config_name,
             "n_events": n_events,
+            "kinematic_columns": kinematic_columns,
             "description": f"Cross-sections for kinematic points from {events_file.name}",
         },
         pt_path,
     )
     print(f"Written PyTorch: {pt_path}")
 
-    # YAML format: human-readable, same content
+    # YAML format: human-readable, same content.
     yaml_path = output_base.with_suffix(".yaml")
-    column_names = ["x", "PhT", "Q", "z"]
-    if n_cols >= 6:
-        column_names.extend(["phih", "phis"])
-
     rows = []
     for i in range(n_events):
         row = {}
-        for j, name in enumerate(
-            ["x", "PhT", "Q", "z"] + (["phih", "phis"] if n_cols >= 6 else [])
-        ):
+        for j, name in enumerate(kinematic_columns):
             if j < events_cpu.shape[1]:
                 row[name] = float(events_cpu[i, j].item())
         row["cross_section"] = float(cross_section[i].item())

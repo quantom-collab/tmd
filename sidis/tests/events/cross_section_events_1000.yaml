@@ -1,4 +1,4 @@
-description: Cross-sections for kinematic points from mock_kinematics_1000.pt
+description: Cross-sections for kinematic points from mock_kinematics_1000.dat
 config: fNPconfig_simple.yaml
 n_events: 1000
 data:

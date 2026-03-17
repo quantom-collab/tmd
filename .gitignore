@@ -51,3 +51,4 @@ output/
 build/
 outs/
 plots/
+_results/
