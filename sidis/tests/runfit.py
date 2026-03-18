@@ -577,7 +577,12 @@ if __name__ == "__main__":
 
     losses = []
     loss_yaml_entries = []  # (epoch, loss) every 10 epochs for loss.yaml
-    report_every = max(1, args.epochs // 10)
+
+    # Determine how often to report the loss on terminal.
+    if args.epochs > 1000:
+        report_every = max(1, args.epochs // 100)
+    else:
+        report_every = max(1, args.epochs // 10)
 
     # Run the number of epochs specified by the --epochs flag.
     for epoch in range(args.epochs):
@@ -769,9 +774,12 @@ if __name__ == "__main__":
         "config": effective_config,
         "cross_section_source": str(cs_path),
         "events_source": str(cs_path),
-        "n_points": int(events_cpu.shape[0]),
+        "n_events": int(events_cpu.shape[0]),
+        "n_epochs": args.epochs,
+        "seed": args.seed,
         "loss": {
             "type": "log_mse",
+            "lr": args.lr,
             "initial": float(losses[0]),
             "final": float(losses[-1]),
             "reduction_percent": float(
@@ -846,8 +854,20 @@ if __name__ == "__main__":
         loss_out = {
             "description": "Loss values every 10 epochs for plotting.",
             "config": effective_config,
-            "epochs": args.epochs,
-            "data": loss_yaml_entries,
+            "trainable_parameters": len(trainable_records),
+            "n_events": int(events_cpu.shape[0]),
+            "n_epochs": args.epochs,
+            "seed": args.seed,
+            "loss_info": {
+                "type": "log_mse",
+                "lr": args.lr,
+                "initial": float(losses[0]),
+                "final": float(losses[-1]),
+                "reduction_percent": float(
+                    (losses[0] - losses[-1]) / losses[0] * 100 if losses[0] > 0 else 0.0
+                ),
+            },
+            "loss": loss_yaml_entries,
         }
         with open(loss_yaml, "w") as f:
             f.write(OmegaConf.to_yaml(OmegaConf.create(loss_out)))
