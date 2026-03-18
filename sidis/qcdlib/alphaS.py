@@ -84,7 +84,15 @@ class ALPHAS:
         """
         This calls the evolution for particular Q2, which also determines the number of flavors.
         """
-        if Q2 not in self.storage:
+        # Do not cache tensor inputs: using tensors as dict keys creates
+        # one cache entry per forward pass and causes unbounded memory growth.
+        if hasattr(Q2, "device"):
+            Q20, a0, Nf = cfg.Q20, self.a0, 4
+            return self.evolve_a(Q20, a0, Q2, Nf)
+
+        # Keep cache only for scalar-like inputs.
+        cache_key = float(Q2)
+        if cache_key not in self.storage:
             Q20, a0, Nf = cfg.Q20, self.a0, 4
             # if par.mb2<=Q2:
             #     Q20,a0,Nf=par.mb2,self.ab,4
@@ -92,8 +100,8 @@ class ALPHAS:
             #     Q20,a0,Nf=par.mc2,self.ac,4
             # elif Q2<par.mc2:
             #     Q20,a0,Nf=cfg.Q20,self.a0,4
-            self.storage[Q2] = self.evolve_a(Q20, a0, Q2, Nf)
-        return self.storage[Q2]
+            self.storage[cache_key] = self.evolve_a(Q20, a0, Q2, Nf)
+        return self.storage[cache_key]
 
     def get_alphaS(self, Q2):
         """
