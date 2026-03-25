@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from . import params as par
 from . import config_loader as cfg
 
@@ -60,9 +61,7 @@ class ALPHAS:
     def evolve_a(self, Q20, a, Q2, Nf):
         # Runge-Kutta implemented in pegasus
         # Handle both numpy arrays and torch tensors
-        if hasattr(Q2, "device"):  # Check if it's a torch tensor
-            import torch
-
+        if hasattr(Q2, "device") and torch.is_tensor(Q2) :  # Check if it's a torch tensor
             LR = torch.log(Q2 / Q20) / 20.0
             for k in range(20):
                 XK0 = LR * self.beta_func(a, Nf)

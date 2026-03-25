@@ -102,8 +102,9 @@ class TMDBuilder(torch.nn.Module):
 
         # Compute TMD for each flavor: OPE × fNP × evolution × non_perturbative_evolution
         tmd_dict = {}
-        for flav in self.flavs:
+        for flav in (self.flavs):
             # Get OPE value for this flavor
+
             ope_tmd = self.ope[type][hadron][flav](xi, bT) # this calls for the OPE forward method which calclulates the OPE at given kinematics.
 
             # Handle flavor name conversion for fNP dict lookup
@@ -116,8 +117,15 @@ class TMDBuilder(torch.nn.Module):
             # Get fNP value for this flavor (use converted name)
             fNP = fNP_dict[npflav]
 
+
+            if type == 'Sivers':
+                ope_tmd = ope_tmd[flav]
+
+
             # Compute TMD: OPE × fNP × evolution × non-perturbative evolution
+
             tmd_dict[flav] = ope_tmd * fNP * evolution * non_perturbative_evolution
+
 
         return tmd_dict
 

@@ -74,7 +74,7 @@ class fNPManager(nn.Module):
         self.pdf_flavor_keys = ["u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"]
         self.ff_flavor_keys = ["u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"]
         self.sivers_flavor_keys = ["u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"]
-        self.qiu_sterman_flavor_keys = ["u", "ubar", "d", "dbar", "s", "sbar", "c", "cbar"]
+        self.qiu_sterman_flavor_keys =  ['u', 'd', 's', 'c', 'cb', 'sb', 'db', 'ub']
 
         print(
             f"{tcolors.BLUE}\n[fNPManager] Initializing flexible fNP manager with parameter linking"
@@ -88,19 +88,35 @@ class fNPManager(nn.Module):
         free_mask = evolution_config.get("free_mask", [True])
         self.evolution = fNP_evolution(init_g2=init_g2, free_mask=free_mask)
 
+        # Initialize parameter registry and evaluator
+        self.registry = ParameterRegistry()
+        self.evaluator = ExpressionEvaluator(self.registry)
 
-
-        # change this back 
+ 
+        # TODO - How to pass flavors properly to the Sivers and QiuSterman classes.  
         if config.get("polarization", "unpolarized") == "transverse":
-            self.sivers = None #Sivers(config.get("sivers", {}).get("init_params", [0.045]))
-            self.qiu_sterman = None #QiuSterman(config.get("qiu_sterman", {}).get("init_params", [1.0, 0.5, 0.5]))
+            
+            self.sivers = Sivers(flavor=None, 
+            init_params=config.get("sivers", {}).get("init_params", [0.045]),
+            free_mask=config.get("sivers", {}).get("free_mask", [True]),
+            registry = self.registry,
+            evaluator = self.evaluator,
+            param_type = "sivers",
+            )
+
+            self.qiu_sterman = QiuSterman(flavor=None,
+            init_params = config.get("qiu_sterman", {}).get("init_params", [1.0, 0.5, 0.5]),
+            free_mask = config.get("qiu_sterman", {}).get("free_mask", [True, True, True]),
+            registry = self.registry,
+            evaluator = self.evaluator,
+            param_type = "qiu_sterman",
+        )
+
         else:
             self.sivers = None
             self.qiu_sterman = None
 
-        # Initialize parameter registry and evaluator
-        self.registry = ParameterRegistry()
-        self.evaluator = ExpressionEvaluator(self.registry)
+ 
 
         # Build dependency graphs
         pdf_graph = DependencyResolver.build_dependency_graph(
