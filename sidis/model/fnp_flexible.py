@@ -96,25 +96,13 @@ class fNPManager(nn.Module):
         # TODO - How to pass flavors properly to the Sivers and QiuSterman classes.  
         if config.get("polarization", "unpolarized") == "transverse":
             
-            self.sivers = Sivers(flavor=None, 
-            init_params=config.get("sivers", {}).get("init_params", [0.045]),
-            free_mask=config.get("sivers", {}).get("free_mask", [True]),
-            registry = self.registry,
-            evaluator = self.evaluator,
-            param_type = "sivers",
-            )
+            self.sivers_flag = True # flag to indicate that sivers is present
 
-            self.qiu_sterman = QiuSterman(flavor=None,
-            init_params = config.get("qiu_sterman", {}).get("init_params", [1.0, 0.5, 0.5]),
-            free_mask = config.get("qiu_sterman", {}).get("free_mask", [True, True, True]),
-            registry = self.registry,
-            evaluator = self.evaluator,
-            param_type = "qiu_sterman",
-        )
+            self.qiu_sterman_flag = True # flag to indicate that qiu_sterman is present
 
         else:
-            self.sivers = None
-            self.qiu_sterman = None
+            self.sivers_flag = False
+            self.qiu_sterman_flag = False
 
  
 
@@ -126,11 +114,11 @@ class fNPManager(nn.Module):
             config, "ffs", self.ff_flavor_keys
         )
         #TODO: check the evaluator for the sivers and qiu_sterman functions
-        if self.sivers is not None:
+        if self.sivers_flag:
             sivers_graph = DependencyResolver.build_dependency_graph(
                 config, "sivers", self.sivers_flavor_keys
             )
-        if self.qiu_sterman is not None:
+        if self.qiu_sterman_flag:
             qiu_sterman_graph = DependencyResolver.build_dependency_graph(
                 config, "qiu_sterman", self.qiu_sterman_flavor_keys
             )
@@ -139,9 +127,9 @@ class fNPManager(nn.Module):
         pdf_resolved = DependencyResolver.resolve_circular_dependencies(pdf_graph)
         ff_resolved = DependencyResolver.resolve_circular_dependencies(ff_graph)
         
-        if self.sivers is not None:
+        if self.sivers_flag:
             sivers_resolved = DependencyResolver.resolve_circular_dependencies(sivers_graph)
-        if self.qiu_sterman is not None:
+        if self.qiu_sterman_flag:
             qiu_sterman_resolved = DependencyResolver.resolve_circular_dependencies(qiu_sterman_graph)
 
         # Setup PDF modules
@@ -208,69 +196,57 @@ class fNPManager(nn.Module):
 
 
         # TODO: add the sivers and qiu_sterman modules
+        if self.sivers_flag:
+            sivers_config = config.get("sivers", {})
+            sivers_modules = {}
 
-        sivers_config = config.get("sivers", {})
-        sivers_modules = {}
-
-        for flavor in self.sivers_flavor_keys:
-            flavor_cfg = sivers_config.get(flavor, None)
-            if flavor_cfg is None:
-                print(
-                    f"{tcolors.WARNING}[fNPManager] Warning: Using defaults for Sivers flavor '{flavor}'{tcolors.ENDC}"
-                )
-                flavor_cfg = DEFAULT_SIVERS_PARAMS.copy()
-            else:
-                print(
-                    f"{tcolors.OKLIGHTBLUE}[fNPManager] Using user-defined Sivers flavor '{flavor}'{tcolors.ENDC}"
-                )
-
-            sivers_modules[flavor] = Sivers(
-                flavor = flavor, 
-                init_params = flavor_cfg.get("init_params", DEFAULT_SIVERS_PARAMS["init_params"]),
-                free_mask=flavor_cfg.get(
-                    "free_mask", 
-                    DEFAULT_SIVERS_PARAMS["free_mask"] 
-                ),
-                registry=self.registry,
-                evaluator=self.evaluator,
-                param_type="sivers",
-                )
+            for flavor in self.sivers_flavor_keys:
+                flavor_cfg = sivers_config.get(flavor, None)
+                if flavor_cfg is None:
+                    print(
+                        f"{tcolors.WARNING}[fNPManager] Warning: Using defaults for Sivers flavor '{flavor}'{tcolors.ENDC}"
+                    )
+                    flavor_cfg = DEFAULT_SIVERS_PARAMS.copy()
+                else:
+                    print(
+                        f"{tcolors.OKLIGHTBLUE}[fNPManager] Using user-defined Sivers flavor '{flavor}'{tcolors.ENDC}"
+                    )
             
-        
-        self.sivers_modules = nn.ModuleDict(sivers_modules)
+            self.sivers_modules = nn.ModuleDict(sivers_modules)
+            print(
+                f"{tcolors.GREEN}[fNPManager] Initialized {len(self.sivers_modules)} Sivers flavor modules\n{tcolors.ENDC}"
+            )
 
-        qiu_sterman_config = config.get("qiu_sterman", {})
-        qiu_sterman_modules = {}
+        if self.qiu_sterman_flag:
+            qiu_sterman_config = config.get("qiu_sterman", {})
+            qiu_sterman_modules = {}
 
-        for flavor in self.qiu_sterman_flavor_keys:
-            flavor_cfg = qiu_sterman_config.get(flavor, None)
-            if flavor_cfg is None:
-                print(
-                    f"{tcolors.WARNING}[fNPManager] Warning: Using MAP22 defaults for Sivers flavor '{flavor}'{tcolors.ENDC}"
-                )
-                flavor_cfg = DEFAULT_QIU_STERMAN_PARAMS.copy()
-            else:
-                print(
-                    f"{tcolors.OKLIGHTBLUE}[fNPManager] Using user-defined Sivers flavor '{flavor}'{tcolors.ENDC}"
-                )
+            for flavor in self.qiu_sterman_flavor_keys:
+                flavor_cfg = qiu_sterman_config.get(flavor, None)
+                if flavor_cfg is None:
+                    print(
+                        f"{tcolors.WARNING}[fNPManager] Warning: Using defaults for Qiu Sterman flavor '{flavor}'{tcolors.ENDC}"
+                    )
+                    flavor_cfg = DEFAULT_QIU_STERMAN_PARAMS.copy()
+                else:
+                    print(
+                        f"{tcolors.OKLIGHTBLUE}[fNPManager] Using user-defined Qiu Sterman flavor '{flavor}'{tcolors.ENDC}"
+                    )
 
-            qiu_sterman_modules[flavor] = QiuSterman(
-                flavor = flavor, 
-                init_params = flavor_cfg.get("init_params", DEFAULT_QIU_STERMAN_PARAMS["init_params"]),
-                free_mask=flavor_cfg.get(
-                    "free_mask", DEFAULT_QIU_STERMAN_PARAMS["free_mask"] #what should be the default?
-                ),
-                registry=self.registry,
-                evaluator=self.evaluator,
-                param_type="qiu_sterman",
-                )
-
-        self.qiu_sterman_modules = nn.ModuleDict(qiu_sterman_modules)
+            self.qiu_sterman_modules = nn.ModuleDict(qiu_sterman_modules)
+            print(
+                f"{tcolors.GREEN}[fNPManager] Initialized {len(self.qiu_sterman_modules)} Qiu Sterman flavor modules\n{tcolors.ENDC}"
+            )
 
         # Build parameter bounds from config (only for source parameters; linked params inherit)
         # Support both plain dicts and OmegaConf (ListConfig/list-like for bounds)
         self.param_bounds: Dict[Tuple[str, str, int], Tuple[float, float]] = {}
-        for param_type in ("pdfs", "ffs"):
+        available_param_types = ("pdfs", "ffs")
+        if self.sivers is not None:
+            available_param_types.append("sivers")
+        if self.qiu_sterman is not None:
+            available_param_types.append("qiu_sterman")
+        for param_type in available_param_types:
             type_config = config.get(param_type, {})
             flavor_keys = (
                 self.pdf_flavor_keys if param_type == "pdfs" else self.ff_flavor_keys
@@ -282,7 +258,7 @@ class fNPManager(nn.Module):
                 bounds_list = flavor_cfg.get("param_bounds") if hasattr(flavor_cfg, "get") else None
                 if bounds_list is None:
                     continue
-                n_params = 11 if param_type == "pdfs" else 9 # check for sivers and qiu sturman.
+                n_params = len(flavor_cfg.get("init_params", []))
                 try:
                     bound_len = len(bounds_list)
                 except TypeError:
@@ -544,8 +520,19 @@ class fNPManager(nn.Module):
         # Compute evolution once
         evolution = self.get_evolution(b, Q)
 
+        if self.sivers_flag:
+            sivers = self.forward_sivers(x, b, sivers_flavors)
+        else: 
+            sivers = None
+        if self.qiu_sterman_flag:
+            qiu_sterman = self.forward_qiu_sterman(x, b, qiu_sterman_flavors)
+        else:
+            qiu_sterman = None
+
         return {
             "pdfs": self.forward_pdf(x, b, pdf_flavors),
             "ffs": self.forward_ff(z, b, ff_flavors),
+            "sivers": sivers,
+            "qiu_sterman": qiu_sterman,
             "evolution": evolution,
         }
