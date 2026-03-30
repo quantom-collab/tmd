@@ -36,11 +36,11 @@ class Sivers(nn.Module):
                 
         if len(init_params) != 1:
             raise ValueError(
-                f"{tcolors.FAIL}[fnp_base_flexible.py] MAP22 Sivers requires 1 parameter, got {len(init_params)}{tcolors.ENDC}"
+                f"{tcolors.FAIL}[fnp/sivers.py] MAP22 Sivers requires 1 parameter, got {len(init_params)}{tcolors.ENDC}"
             )
         if len(free_mask) != len(init_params):
             raise ValueError(
-                f"{tcolors.FAIL}[fnp_base_flexible.py] free_mask length ({len(free_mask)}) must match init_params length ({len(init_params)}){tcolors.ENDC}"
+                f"{tcolors.FAIL}[fnp/sivers.py] free_mask length ({len(free_mask)}) must match init_params length ({len(init_params)}){tcolors.ENDC}"
             )
 
         self.flavor = flavor

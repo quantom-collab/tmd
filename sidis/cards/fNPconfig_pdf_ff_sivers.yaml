@@ -49,17 +49,17 @@ pdfs:
     init_params: [0.20000, 2.5000, 0.15000, 0.30000, 0.20000, 0.20000, 0.30000, 2.5000, 2.5000, 0.15000, 0.15000]
     free_mask: ["u[0]", "2*u[0]", false, true, false, false, false, true, true, false, false]
     
-  ubar:
+  ub:
     # Up antiquark - simplified (fewer free parameters)
     init_params: [0.15000, 2.0000, 0.12000, 0.25000, 0.15000, 0.15000, 0.25000, 2.0000, 2.0000, 0.12000, 0.12000]
     free_mask: [true, true, false, true, false, false, false, false, false, false, false]
     
-  dbar:
+  db:
     # Down antiquark - simplified (fewer free parameters)
     init_params: [0.15000, 2.0000, 0.12000, 0.25000, 0.15000, 0.15000, 0.25000, 2.0000, 2.0000, 0.12000, 0.12000]
     free_mask: [true, true, false, true, false, false, false, false, false, false, false]
     
-  sbar:
+  sb:
     # Strange antiquark - minimal parameterization
     init_params: [0.10000, 2.0000, 0.10000, 0.20000, 0.10000, 0.10000, 0.20000, 2.0000, 2.0000, 0.10000, 0.10000]
     free_mask: [true, false, false, false, false, false, false, false, false, false, false]
@@ -69,7 +69,7 @@ pdfs:
     init_params: [0.05000, 1.5000, 0.08000, 0.15000, 0.05000, 0.05000, 0.15000, 1.5000, 1.5000, 0.08000, 0.08000]
     free_mask: [true, false, false, false, false, false, false, false, false, false, false]
     
-  cbar:
+  cb:
     # Charm antiquark - minimal parameterization (mostly fixed)
     init_params: [0.05000, 1.5000, 0.08000, 0.15000, 0.05000, 0.05000, 0.15000, 1.5000, 1.5000, 0.08000, 0.08000]
     free_mask: [true, false, false, false, false, false, false, false, false, false, false]
@@ -94,17 +94,17 @@ ffs:
     init_params: [0.15000, 1.80000, 0.080000, 0.22000, 4.5000, 0.025000, 1.8000, 0.080000, 0.22000]
     free_mask: ["pdfs.u[0]", "pdfs.u[1]", false, true, true, false, true, false, true]
     
-  ubar:
+  ub:
     # Up antiquark fragmentation - simplified
     init_params: [0.12000, 1.50000, 0.070000, 0.20000, 4.0000, 0.020000, 1.5000, 0.070000, 0.20000]
     free_mask: [true, true, false, false, true, false, false, false, false]
     
-  dbar:
+  db:
     # Down antiquark fragmentation - simplified
     init_params: [0.12000, 1.50000, 0.070000, 0.20000, 4.0000, 0.020000, 1.5000, 0.070000, 0.20000]
     free_mask: [true, true, false, false, true, false, false, false, false]
     
-  sbar:
+  sb:
     # Strange antiquark fragmentation - minimal
     init_params: [0.08000, 1.20000, 0.060000, 0.18000, 3.5000, 0.015000, 1.2000, 0.060000, 0.18000]
     free_mask: [true, false, false, false, false, false, false, false, false]
@@ -114,7 +114,7 @@ ffs:
     init_params: [0.05000, 1.00000, 0.050000, 0.15000, 3.0000, 0.010000, 1.0000, 0.050000, 0.15000]
     free_mask: [true, false, false, false, false, false, false, false, false]
     
-  cbar:
+  cb:
     # Charm antiquark fragmentation - minimal (mostly fixed)
     init_params: [0.05000, 1.00000, 0.050000, 0.15000, 3.0000, 0.010000, 1.0000, 0.050000, 0.15000]
     free_mask: [true, false, false, false, false, false, false, false, false]
@@ -140,18 +140,18 @@ sivers:
     init_params: [0.045]
     free_mask: ["u[0]"]
     
-  ubar:
-    # Up antiquark - link: ubar[0]=u[0]
+  ub:
+    # Up antiquark - link: ub[0]=u[0]
     init_params: [0.045]
     free_mask: ["u[0]"]
     
-  dbar:
-    # Down antiquark - link: dbar[0]=u[0]
+  db:
+    # Down antiquark - link: db[0]=u[0]
     init_params: [0.045]
     free_mask: ["u[0]"]
     
-  sbar:
-    # Strange antiquark - link: sbar[0]=u[0]
+  sb:
+    # Strange antiquark - link: sb[0]=u[0]
     init_params: [0.045]
     free_mask: ["u[0]"]
     
@@ -160,8 +160,8 @@ sivers:
     init_params: [0.045]
     free_mask: ["u[0]"]
     
-  cbar:
-    # Charm antiquark - link: cbar[0]=u[0]
+  cb:
+    # Charm antiquark - link: cb[0]=u[0]
     init_params: [0.045]
     free_mask: ["u[0]"]
 
@@ -185,12 +185,12 @@ qiu_sterman:
     init_params: [1.0, 0.5, 0.5]
     free_mask: [true, true, true]
     
-  ubar:
+  ub:
     # Up antiquark - link to strange quark
     init_params: [1.0, 0.5, 0.5]
     free_mask: ["s[0]", "s[1]", "s[2]"]
     
-  dbar:
+  db:
     # Down antiquark - link to strange quark
     init_params: [1.0, 0.5, 0.5]
     free_mask: ["s[0]", "s[1]", "s[2]"]
@@ -200,7 +200,7 @@ qiu_sterman:
     init_params: [1.0, 0.5, 0.5]
     free_mask: ["s[0]", "s[1]", "s[2]"]
     
-  cbar:
+  cb:
     # Charm antiquark - link to strange quark
     init_params: [1.0, 0.5, 0.5]
     free_mask: ["s[0]", "s[1]", "s[2]"]

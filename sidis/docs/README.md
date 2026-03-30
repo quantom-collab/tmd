@@ -86,9 +86,9 @@ sidis/
 │   ├── ope.py              # Operator Product Expansion
 │   ├── evolution.py         # Perturbative evolution
 │   ├── ogata.py            # Hankel transforms
-│   ├── fnp_factory.py      # fNP manager factory
-│   ├── fnp_base_flavor_blind.py  # Flavor-blind combo
-│   └── fnp_base_flavor_dep.py    # Flavor-dependent combo
+│   ├── fnp_manager.py      # Unified fNP manager
+│   ├── fnp_config.py       # Linking/parser utilities
+│   └── fnp/                # Ingredient classes (pdf/ff/sivers/qiu_sterman)
 ├── utilities/              # Utility modules
 │   ├── colors.py           # Terminal color codes
 │   └── __init__.py
@@ -180,11 +180,11 @@ If you see an error about a missing config file:
 
 ## Contributing
 
-When adding new fNP combos:
+When adding new fNP behavior:
 
-1. Create a new combo file following the structure in `fnp_base_flavor_blind.py` or `fnp_base_flavor_dep.py`
-2. Register it in `fnp_factory.py` in the `COMBO_MODULES` dictionary
-3. Create a configuration file in `cards/`
+1. Add/extend ingredient classes in `sidis/model/fnp/`
+2. Wire selection logic in `sidis/model/fnp_manager.py` (`SUPPORTED_COMBOS`, class maps, defaults)
+3. Create/update a configuration file in `cards/`
 4. Update documentation
 
 ## Authors

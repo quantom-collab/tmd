@@ -44,7 +44,7 @@ class TMDBuilder(torch.nn.Module):
     Args:
         ope_dict: Nested dict of OPE interpolators [type][hadron][flav]
         evo: PERTURBATIVE_EVOLUTION instance
-        fnp: fNP manager (TruefNP or TrainablefNP); this includes the non-perturbative evolution factor (CS kernel)
+        fnp: fNP wrapper/manager with trainable flag; includes non-perturbative evolution (CS kernel)
         Q20: Initial scale squared
         flavs: List of flavor strings ['u', 'd', 's', 'c', 'cb', 'sb', 'db', 'ub']
     """
@@ -107,15 +107,8 @@ class TMDBuilder(torch.nn.Module):
 
             ope_tmd = self.ope[type][hadron][flav](xi, bT) # this calls for the OPE forward method which calclulates the OPE at given kinematics.
 
-            # Handle flavor name conversion for fNP dict lookup
-            # Convert 'ub', 'db', etc. to 'ubar', 'dbar', etc.
-            if "b" in flav and len(flav) > 1:
-                npflav = flav[0] + "bar"
-            else:
-                npflav = flav
-
-            # Get fNP value for this flavor (use converted name)
-            fNP = fNP_dict[npflav]
+            # Flavor keys are standardized across OPE and fNP modules.
+            fNP = fNP_dict[flav]
 
 
             if type == 'Sivers':

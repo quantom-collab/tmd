@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
     from omegaconf import OmegaConf
     from sidis.model import TrainableModel
-    from sidis.model.fnp_base_flexible import ParameterLinkParser
+    from sidis.model.fnp_config import ParameterLinkParser
     from sidis.utilities.colors import tcolors
 
     # Set default tensor dtype to float64 for high precision calculations
@@ -124,7 +124,7 @@ if __name__ == "__main__":
             print(f"  {tcolors.FAIL}cards/ directory not found!{tcolors.ENDC}")
         print(
             f"\nUsage: python3 sidis/tests/main_with_minimization.py -c <config_file>\n"
-        )F
+        )
         exit(1)
 
     print(f"{tcolors.GREEN}Using fNP config: {args.fnp_config}{tcolors.ENDC}\n")

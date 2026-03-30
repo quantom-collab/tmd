@@ -44,7 +44,27 @@ except ImportError:
 
 
 ###############################################################################
-# 1. Bound parsing
+# 1. Canonical flavors
+###############################################################################
+# Canonical flavor ordering used across manager, OPE, TMD builder, and structure
+# functions.
+FLAVORS: Tuple[str, ...] = ("u", "d", "s", "c", "cb", "sb", "db", "ub")
+
+# Electric charge squared for each canonical flavor.
+QUARK_CHARGES_SQUARED: Dict[str, float] = {
+    "u": 4 / 9,
+    "d": 1 / 9,
+    "s": 1 / 9,
+    "c": 4 / 9,
+    "cb": 4 / 9,
+    "sb": 1 / 9,
+    "db": 1 / 9,
+    "ub": 4 / 9,
+}
+
+
+###############################################################################
+# 2. Bound parsing
 ###############################################################################
 def parse_bound(b: Any) -> Optional[Tuple[float, float]]:
     """
@@ -80,7 +100,7 @@ def parse_bound(b: Any) -> Optional[Tuple[float, float]]:
 
 
 ###############################################################################
-# 2. Parameter Link Parser
+# 3. Parameter Link Parser
 ###############################################################################
 class ParameterLinkParser:
     """
@@ -220,7 +240,7 @@ class ParameterLinkParser:
 
 
 ###############################################################################
-# 3. Parameter Registry
+# 4. Parameter Registry
 ###############################################################################
 class ParameterRegistry:
     """
@@ -323,7 +343,7 @@ class ParameterRegistry:
 
 
 ###############################################################################
-# 4. Dependency Resolver
+# 5. Dependency Resolver
 ###############################################################################
 class DependencyResolver:
     """
@@ -472,7 +492,7 @@ class DependencyResolver:
 
 
 ###############################################################################
-# 5. Expression Evaluator
+# 6. Expression Evaluator
 ###############################################################################
 class ExpressionEvaluator:
     """

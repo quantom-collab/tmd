@@ -34,11 +34,11 @@ class QiuSterman(nn.Module):
 
         if len(init_params) != 3:
             raise ValueError(
-        f"{tcolors.FAIL}[fnp_base_flexible.py] MAP22 TMD PDF requires 11 parameters, got {len(init_params)}{tcolors.ENDC}"
+        f"{tcolors.FAIL}[fnp/qiu_sterman.py] Qiu-Sterman requires 3 parameters, got {len(init_params)}{tcolors.ENDC}"
     )
         if len(free_mask) != len(init_params):
             raise ValueError(
-        f"{tcolors.FAIL}[fnp_base_flexible.py] free_mask length ({len(free_mask)}) must match init_params length ({len(init_params)}){tcolors.ENDC}"
+        f"{tcolors.FAIL}[fnp/qiu_sterman.py] free_mask length ({len(free_mask)}) must match init_params length ({len(init_params)}){tcolors.ENDC}"
     )
 
 

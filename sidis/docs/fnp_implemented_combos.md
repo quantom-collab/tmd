@@ -155,18 +155,11 @@ Both combos provide default parameter sets based on MAP22:
 
 To create a new combo:
 
-1. **Create new python module**: Create a new Python module, for example following the structure of `fnp_base_flavor_dep.py` or `fnp_base_flavor_blind.py`.
-
-2. **Implement required classes**:
-   - `fNP_evolution`: Evolution factor class
-   - `TMDPDF<name>`: PDF parameterization class
-   - `TMDFF<name>`: FF parameterization class
-   - Default parameter dictionaries (e.g. `MAP22_DEFAULT_EVOLUTION`, `MAP22_DEFAULT_PDF_PARAMS`, `MAP22_DEFAULT_FF_PARAMS`)
-   - `fNPManager<name>` class: Manager class that orchestrates the combo components
-
-3. **Update factory**: Add your new combo to the factory mapping in `fnp_factory.py`.
-
-4. **Create config file in `cards/` directory**:
+1. **Implement ingredient classes** in `sidis/model/fnp/` (`TMDPDF<name>`, `TMDFF<name>`, etc.).
+2. **Update `sidis/model/fnp_manager.py`**:
+   - class maps and defaults
+   - `SUPPORTED_COMBOS`
+3. **Create config file in `cards/` directory**:
    - File name: `fNPconfig_<name>.yaml` (e.g. `fNPconfig_custom.yaml`)
    - Content: See example in `cards/fNPconfig_base_flavor_dep.yaml` or `cards/fNPconfig_base_flavor_blind.yaml`
    - Users can now select your combo via `combo: <name>` in config.
