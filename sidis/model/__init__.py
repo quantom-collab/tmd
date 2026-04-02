@@ -149,11 +149,23 @@ class TruthModel(torch.nn.Module):
         # Simplified cache update
         self.cached_grad_mode = torch.is_grad_enabled()
 
-    def get_FUT_sin_phih_minus_phis(self, x: torch.Tensor, Q2: torch.Tensor, z: torch.Tensor, qT: torch.Tensor, initial_hadron: str, fragmented_hadron: str) -> torch.Tensor:
+    def get_FUT_sin_phih_minus_phis(self, events_tensor: torch.Tensor, expt_setup: List[str] = ["p", "pi_plus"]) -> torch.Tensor:
         """
         Get the Sivers structure function FUT_sin(φ_h-φ_S).
         Used for testing the Sivers structure function.
         """
+        x = events_tensor[:, 0]
+        PhT = events_tensor[:, 1]
+        Q = events_tensor[:, 2]
+        z = events_tensor[:, 3]
+
+        # Compute qT. This is the qT for which the Fourier transform is defined.
+        qT = PhT / z
+        Q2 = Q**2
+
+        initial_hadron = expt_setup[0]
+        fragmented_hadron = expt_setup[1]
+
         return self.stf['FUTS'](x, Q2, z, qT, initial_hadron, fragmented_hadron)
 
     def forward(self, events_tensor: torch.Tensor, expt_setup: List[str] = ["p", "pi_plus"], rs: float = 140.0) -> torch.Tensor:
