@@ -32,9 +32,9 @@ from .fnp_config import (
 )
 from .fnp.tmdpdf import TMDPDFFlexible, TMDPDFSimple
 from .fnp.tmdff import TMDFFFlexible, TMDFFSimple
-from .fnp.sivers import Sivers
-from .fnp.qiu_sterman import QiuSterman
-SUPPORTED_COMBOS = {"simple", "flavor_dep", "flavor_blind", "flexible", "flexible_new"}
+from .fnp.sivers import Sivers, Sivers_AV
+from .fnp.qiu_sterman import QiuSterman, QiuSterman_AV
+SUPPORTED_COMBOS = {"simple", "flavor_dep", "flavor_blind", "flexible", "flexible_new", "flexible AV"}
 
 
 class fNP_evolution(nn.Module):
@@ -157,8 +157,12 @@ class fNPManager(nn.Module):
             )
             DependencyResolver.resolve_circular_dependencies(qiu_graph)
 
-        pdf_param_classes = {"flexible": TMDPDFFlexible, "simple": TMDPDFSimple}
-        ff_param_classes = {"flexible": TMDFFFlexible, "simple": TMDFFSimple}
+        pdf_param_classes = {"flexible": TMDPDFFlexible, "simple": TMDPDFSimple, "flexible_new": TMDPDFFlexible, "flexible AV": TMDPDFFlexible}
+        ff_param_classes = {"flexible": TMDFFFlexible, "simple": TMDFFSimple, "flexible_new": TMDFFFlexible, "flexible AV": TMDFFFlexible}
+        if self.sivers_flag:
+            sivers_param_classes = {"flexible_new": Sivers, "flexible AV": Sivers}
+        if self.qiu_sterman_flag:
+            qiu_sterman_param_classes = {"flexible_new": QiuSterman, "flexible AV": QiuSterman}
         default_parametrization = "simple" if self.combo == "simple" else "flexible"
 
         # Build modules first.
@@ -185,7 +189,7 @@ class fNPManager(nn.Module):
                 np_type="sivers",
                 config=config,
                 flavor_keys=self.sivers_flavor_keys,
-                class_map={"flexible": Sivers},
+                class_map=sivers_param_classes,
                 default_cfg=DEFAULT_SIVERS_PARAMS,
                 default_parametrization="flexible",
                 include_bounds=False,
@@ -198,7 +202,7 @@ class fNPManager(nn.Module):
                 np_type="qiu_sterman",
                 config=config,
                 flavor_keys=self.qiu_sterman_flavor_keys,
-                class_map={"flexible": QiuSterman},
+                class_map=qiu_sterman_param_classes,
                 default_cfg=DEFAULT_QIU_STERMAN_PARAMS,
                 default_parametrization="flexible",
                 include_bounds=False,
