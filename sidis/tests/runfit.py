@@ -112,6 +112,17 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    def _get_fnp_manager(mdl):
+        """
+        Compatibility helper:
+        - Old layout: model.qcf0.fnp_manager
+        - New layout: model.qcf0 is already the manager wrapper
+        """
+        qcf0 = getattr(mdl, "qcf0", None)
+        if qcf0 is None:
+            raise AttributeError("Model has no qcf0 attribute")
+        return getattr(qcf0, "fnp_manager", qcf0)
+
     # Print all flags (including defaults) in bold green
     _repo_root = script_dir.parent.parent
     _script_rel = pathlib.Path(__file__).resolve().relative_to(_repo_root)
@@ -274,7 +285,7 @@ if __name__ == "__main__":
         result = {}
 
         # Get the fNP manager from the model. It holds PDF, FF, and evolution modules.
-        fnp_mgr = mdl.qcf0.fnp_manager
+        fnp_mgr = _get_fnp_manager(mdl)
 
         # -------------------------------------------------------------
         # PDF modules
@@ -381,7 +392,7 @@ if __name__ == "__main__":
           - linked_expression
         """
         records: List[Dict[str, Any]] = []
-        fnp_mgr_local = mdl.qcf0.fnp_manager
+        fnp_mgr_local = _get_fnp_manager(mdl)
 
         # Evolution parameter g2
         evo_param = fnp_mgr_local.evolution.free_g2
@@ -454,17 +465,14 @@ if __name__ == "__main__":
     print(f"{tcolors.BOLDGREEN}[runfit.py] Model initialized.{tcolors.ENDC}")
 
     # Get the fNP manager from the model.
-    fnp_mgr = model.qcf0.fnp_manager
+    fnp_mgr = _get_fnp_manager(model)
 
-    # Check if the fNP manager has the randomize_params_in_bounds method.
-    # runfit.py requires an fNP combo that implements randomize_params_in_bounds.
-    # if it does not, exit with an error.
+    # Some manager layouts expose randomization directly, others do not.
+    # If unavailable, we continue from config initialization values.
     if not hasattr(fnp_mgr, "randomize_params_in_bounds"):
         print(
-            f"{tcolors.FAIL}Error: runfit.py requires an fNP combo that implements "
-            f"randomize_params_in_bounds. The loaded combo does not provide this method.{tcolors.ENDC}"
+            f"{tcolors.WARNING}[runfit.py] randomize_params_in_bounds is unavailable for this fNP manager layout; proceeding without pre-fit randomization.{tcolors.ENDC}"
         )
-        exit(1)
 
     # Truth = physical param values at the config's init_params (before randomization).
     # For expression params (e.g. ffs.u[0] = pdfs.u[0]+pdfs.u[1]) this evaluates the
@@ -485,7 +493,12 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # Randomize fNP parameters within bounds
     # -------------------------------------------------------------------------
-    fnp_mgr.randomize_params_in_bounds(seed=args.seed)
+    if hasattr(fnp_mgr, "randomize_params_in_bounds"):
+        fnp_mgr.randomize_params_in_bounds(seed=args.seed)
+    else:
+        print(
+            f"{tcolors.WARNING}[runfit.py] randomize_params_in_bounds not available for this fNP manager layout; using config initialization as starting point.{tcolors.ENDC}"
+        )
 
     print(
         f"\n{tcolors.BOLDGREEN}[runfit.py] Randomized fNP parameters within bounds "

@@ -85,6 +85,14 @@ class OPE(torch.nn.Module):
 
         # return self.model(x)
 
+class OPE_Sivers(torch.nn.Module):
+    def __init__(self, qcf0):
+        super().__init__()
+        self.qcf0 = qcf0
+    
+    def forward(self, x: torch.Tensor, bT: torch.Tensor) -> torch.Tensor:
+        return self.qcf0.forward_qiu_sterman(x, bT)
+
 
 if __name__ == "__main__":
     import pathlib

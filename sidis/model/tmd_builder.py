@@ -44,7 +44,7 @@ class TMDBuilder(torch.nn.Module):
     Args:
         ope_dict: Nested dict of OPE interpolators [type][hadron][flav]
         evo: PERTURBATIVE_EVOLUTION instance
-        fnp: fNP manager (TruefNP or TrainablefNP); this includes the non-perturbative evolution factor (CS kernel)
+        fnp: fNP wrapper/manager with trainable flag; includes non-perturbative evolution (CS kernel)
         Q20: Initial scale squared
         flavs: List of flavor strings ['u', 'd', 's', 'c', 'cb', 'sb', 'db', 'ub']
     """
@@ -88,43 +88,37 @@ class TMDBuilder(torch.nn.Module):
         """
         # Compute evolution factor (no caching - see class docstring)
         evolution = self.evo(bT, self.Q20, Q2)
-        non_perturbative_evolution = self.fnp.forward_evolution(bT, Q2**0.5)
+        non_perturbative_evolution = self.fnp.forward_evolution(bT, Q2**0.5) #should be found in get_evolution in something flavor-specific in the fnp_x_flavor_x.py files.
 
         # Compute fNP once for all flavors (this is the key optimization!)
         if type == "pdf":
-            fNP_dict = self.fnp.forward_pdf(xi, bT)  # Returns dict
+            fNP_dict = self.fnp.forward_pdf(xi, bT)  # Returns dict of per flavor TMD in bare form. 
         elif type == "ff":
             fNP_dict = self.fnp.forward_ff(xi, bT)  # Returns dict
         elif type == "Sivers":
-            # Sivers doesn't have flavor dependence yet
-            fNP_sivers = self.fnp.forward_sivers(xi, bT)
-            # Create dict with same value for all flavors
-            fNP_dict = {flav: fNP_sivers for flav in self.flavs}
+            fNP_dict = self.fnp.forward_sivers(xi, bT)
         else:
             raise ValueError(f"Unknown type: {type}")
 
         # Compute TMD for each flavor: OPE × fNP × evolution × non_perturbative_evolution
         tmd_dict = {}
-        for flav in self.flavs:
+        for flav in (self.flavs):
             # Get OPE value for this flavor
-            ope_tmd = self.ope[type][hadron][flav](xi, bT)
 
-            # Handle flavor name conversion for fNP dict lookup
-            # Convert 'ub', 'db', etc. to 'ubar', 'dbar', etc.
-            if "b" in flav and len(flav) > 1:
-                npflav = flav[0] + "bar"
-            else:
-                npflav = flav
+            ope_tmd = self.ope[type][hadron][flav](xi, bT) # this calls for the OPE forward method which calclulates the OPE at given kinematics.
 
-            # Get fNP value for this flavor (use converted name)
-            if type == "Sivers":
-                # Sivers uses the same value for all flavors
-                fNP = fNP_dict[flav]
-            else:
-                fNP = fNP_dict[npflav]
+            # Flavor keys are standardized across OPE and fNP modules.
+            fNP = fNP_dict[flav]
+
+
+            if type == 'Sivers':
+                ope_tmd = ope_tmd[flav]
+
 
             # Compute TMD: OPE × fNP × evolution × non-perturbative evolution
+
             tmd_dict[flav] = ope_tmd * fNP * evolution * non_perturbative_evolution
+
 
         return tmd_dict
 

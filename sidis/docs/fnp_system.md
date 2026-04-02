@@ -65,16 +65,16 @@ ff:
 
 See the configuration files in `cards/` for examples.
 
-### 3. Factory (`fnp_factory.py`)
+### 3. Unified Manager (`fnp_manager.py`)
 
-The factory creates fNP manager instances:
+The unified manager creates and wires all nonperturbative modules:
 
 - **Entry point**: `create_fnp_manager(config_path)` or `create_fnp_manager(config_dict=...)`
 - **Functionality**:
   - Reads configuration file (e.g. `fNPconfig_base_flavor_dep.yaml`)
-  - Selects combo module based on `combo` field
-  - Imports `fNPManager` class from the combo module
-  - Instantiates and returns the manager from that combo module (e.g. `fNPManager` from `fnp_base_flavor_dep.py`)
+  - Uses `combo` as a mode selector
+  - Selects ingredient classes (PDF/FF/Sivers/Qiu-Sterman) from `sidis/model/fnp/`
+  - Instantiates and returns one `fNPManager`
 
 ## Usage
 
@@ -98,7 +98,7 @@ The config file is automatically looked up in the `cards/` directory. If the fil
 ### Programmatic Usage
 
 ```python
-from sidis.model.fnp_factory import create_fnp_manager
+from sidis.model.fnp_manager import create_fnp_manager
 
 # Create manager from config file
 manager = create_fnp_manager("fNPconfig_base_flavor_blind.yaml")
@@ -122,18 +122,12 @@ ffs = result["ffs"]    # Dict[str, torch.Tensor]
 
 To create a new combo implementation:
 
-1. **Create new python module**: Create a new Python module, for example following the structure of `fnp_base_flavor_dep.py` or `fnp_base_flavor_blind.py`.
-
-2. **Implement required classes**:
-   - `fNP_evolution`: Evolution factor class
-   - `TMDPDFBase` (or custom name): PDF parameterization class
-   - `TMDFFBase` (or custom name): FF parameterization class
-   - Default parameter dictionaries (e.g. `MAP22_DEFAULT_EVOLUTION`, `MAP22_DEFAULT_PDF_PARAMS`, `MAP22_DEFAULT_FF_PARAMS`)
-   - `fNPManager` class: Manager class that orchestrates the combo components
-
-3. **Update factory**: Add your new combo to the factory mapping in `fnp_factory.py`.
-
-4. **Create config file in `cards/` directory**:
+1. **Implement ingredient classes** in `sidis/model/fnp/` (PDF/FF/Sivers/Qiu-Sterman).
+2. **Update manager wiring** in `sidis/model/fnp_manager.py`:
+   - class maps (e.g. `{"flexible": ..., "simple": ...}`)
+   - defaults
+   - `SUPPORTED_COMBOS`
+3. **Create config file in `cards/` directory**:
    - File name: `fNPconfig_<name>.yaml` (e.g. `fNPconfig_custom.yaml`)
    - Content: See example in `cards/fNPconfig_base_flavor_dep.yaml` or `cards/fNPconfig_base_flavor_blind.yaml`
    - Users can now select your combo via `combo: <name>` in config.

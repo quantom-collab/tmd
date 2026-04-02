@@ -7,13 +7,13 @@ import pathlib
 from omegaconf import OmegaConf
 from typing import List, Dict, Any
 
-from .ope import OPE
+from .ope import OPE, OPE_Sivers
 from .evolution import PERTURBATIVE_EVOLUTION
 from .ogata import OGATA
-from .fnp_factory import create_fnp_manager
-from .qcf0_tmd import TruefNP, TrainablefNP
+from .qcf0_tmd import TrainablefNP
 from .tmd_builder import TMDBuilder
 from .structure_functions import FUUT, FUT_SinPhihMinusPhis
+from .fnp_config import FLAVORS, QUARK_CHARGES_SQUARED
 from qcdlib.eweak import EWEAK
 from qcdlib import params
 
@@ -23,11 +23,12 @@ class TruthModel(torch.nn.Module):
         self,
         fnp_config: str = None,
         experimental_target_fragmented_hadron: List[List[str]] = [["p", "pi_plus"]],
+        trainable_fnp: bool = False,
     ):
         super().__init__()
 
         rootdir = pathlib.Path(__file__).resolve().parent
-        self.conf = OmegaConf.load(rootdir.joinpath("../config.yaml"))
+        self.conf = OmegaConf.load(rootdir.joinpath("../config.yaml")) 
         
         # Set PyTorch default dtype from config
         dtype_str = self.conf.get('default_dtype', 'float64')
@@ -39,25 +40,28 @@ class TruthModel(torch.nn.Module):
         fnp_config_path = rootdir.joinpath("../cards", fnp_config)
         if not fnp_config_path.exists():
             raise FileNotFoundError(f"fNP configuration file not found: {fnp_config_path}")
-        self.fnpconf = OmegaConf.load(fnp_config_path)
+        self.fnpconf = OmegaConf.load(fnp_config_path) # loads in the fNP configuration from the specified YAML file in cards/ directory
 
-        self.flavs = ['u', 'd', 's', 'c', 'cb', 'sb', 'db', 'ub']
-        self.quark_charges_squared = {'u': 4/9, 'd': 1/9, 's': 1/9, 'c': 4/9, 'cb': 4/9, 'sb': 1/9, 'db': 1/9, 'ub': 4/9}
+        self.flavs = list(FLAVORS)
+        self.quark_charges_squared = dict(QUARK_CHARGES_SQUARED)
 
         self.ope = {}
         self.ope["pdf"] = {} #--this is the unpolarized PDF OPE
         self.ope["ff"] = {} #--this is the unpolarized FF OPE
         # TODO: set up the proper OPE for the Sivers function, Collins function, and transversity function
-        self.ope["Sivers"] = {} #--this is the Sivers function OPE
+        # self.ope["Sivers"] = {} #--this is the Sivers function OPE #--03/09/2026: Commenting out here so that we can put it in the TrainableModel class
         # self.ope["Collins"] = {} #--this is the Collins function OPE
         # self.ope["h1"] = {} #--this is the transversity function OPE
 
-        for expt_setup in experimental_target_fragmented_hadron:
+        for expt_setup in experimental_target_fragmented_hadron: #experimental target and fragmented hadron setup, e.g. ["p", "pi_plus"]
+
+            # self.ope is a dictionary that will hold the OPE objects for each type of function (pdf, ff, Sivers, etc.) and for each hadron (proton, pion, etc.). 
+
             self.ope["pdf"][expt_setup[0]] = {}
             self.setup_ope(rootdir=rootdir, type="pdf", hadron=expt_setup[0])
-            self.ope["Sivers"][expt_setup[0]] = {}
-            print('Setting up the Sivers function OPE for the initial hadron. WARNING: THIS IS NOT SET UP PROPERLY YET. It is just a stopgap measure. Refer to the init for future development.')
-            self.setup_ope(rootdir=rootdir, type="Sivers", hadron=expt_setup[0])
+            # self.ope["Sivers"][expt_setup[0]] = {} #--03/09/2026: Commenting out here so that we can put it in the TrainableModel class
+            # print('Setting up the Sivers function OPE for the initial hadron. WARNING: THIS IS NOT SET UP PROPERLY YET. It is just a stopgap measure. Refer to the init for future development.')
+            # self.setup_ope(rootdir=rootdir, type="Sivers", hadron=expt_setup[0]) # setup_ope with type='Sivers' is not doing the right thing. #--03/09/2026: Commenting out here so that we can put it in the TrainableModel class
             self.ope["ff"][expt_setup[1]] = {}
             self.setup_ope(rootdir=rootdir, type="ff", hadron=expt_setup[1])
             #TODO: set up the OPE for the Collins function
@@ -68,14 +72,30 @@ class TruthModel(torch.nn.Module):
         self.Q20 = self.conf.Q20
 
         self.evo = PERTURBATIVE_EVOLUTION(order=self.conf.tmd_resummation_order)
-        self.qcf0 = TruefNP(fnp_config=self.fnpconf)
+
+
+        # Unified fNP wrapper: trainable mode is controlled by a bool flag.
+        self.qcf0 = TrainablefNP(fnp_config=self.fnpconf, trainable=trainable_fnp)
+
+        # Build Sivers OPE only when polarized fNP ingredients are enabled.
+        if getattr(self.qcf0, "sivers_flag", False):
+            self._setup_sivers_ope(
+                rootdir=rootdir,
+                experimental_target_fragmented_hadron=experimental_target_fragmented_hadron,
+            )
+
+        # self.tmd is a class that takes in OPE, evolution, and fNP to compute TMDs.
         self.tmd = TMDBuilder(self.ope, self.evo, self.qcf0, self.Q20, self.flavs)
 
         self.ogata_J0 = OGATA(nu=0)
         self.ogata_J1 = OGATA(nu=1)
         self.stf = {
-            'FUUT': FUUT(self.tmd, self.ogata_J0, self.quark_charges_squared, self.flavs),
-            'FUTS': FUT_SinPhihMinusPhis(self.tmd, self.ogata_J1, self.quark_charges_squared, self.flavs)
+            "FUUT": FUUT(
+                self.tmd, self.ogata_J0, self.quark_charges_squared, self.flavs
+            ),
+            "FUTS": FUT_SinPhihMinusPhis(
+                self.tmd, self.ogata_J1, self.quark_charges_squared, self.flavs
+            ),
         }
 
         self.alpha_em = EWEAK()
@@ -85,7 +105,14 @@ class TruthModel(torch.nn.Module):
     def setup_ope(self, rootdir: pathlib.Path, type: str = "pdf", hadron: str = "p"):
         if type == "Sivers":
             for flav in self.flavs:
+
+                # OPE is a class that takes in the path to the OPE grid file and sets up the interpolation over the OPE grids. The OPE grid files are generated from perturbative QCD calculations and contain the values of the OPE at different points in x and bT space for each flavor and hadron.
+
+                # OPE has access to several methods, including interp_ope, which takes in x and bT values and interpolates the OPE over the saved grids to return the OPE value at those points. The forward method of the OPE class calls interp_ope to get the OPE value for given x and bT inputs.
+
                 self.ope[type][hadron][flav] = OPE(rootdir.joinpath(self.conf.ope.grid_files["pdf"][hadron][flav]))
+
+                # will need something like OPE_SIVERS class
         else:
             for flav in self.flavs:
                 self.ope[type][hadron][flav] = OPE(rootdir.joinpath(self.conf.ope.grid_files[type][hadron][flav]))
@@ -105,9 +132,29 @@ class TruthModel(torch.nn.Module):
             ope_copy["db"] = self.ope[type][hadron]["ub"]
             self.ope[type][hadron] = ope_copy
 
+    def _setup_sivers_ope(
+        self,
+        rootdir: pathlib.Path,
+        experimental_target_fragmented_hadron: List[List[str]],
+    ) -> None:
+        """Initialize OPE wrappers used by the polarized Sivers path."""
+        self.ope["Sivers"] = {}
+        for expt_setup in experimental_target_fragmented_hadron:
+            initial_hadron = expt_setup[0]
+            self.ope["Sivers"][initial_hadron] = {}
+            for flav in self.flavs:
+                self.ope["Sivers"][initial_hadron][flav] = OPE_Sivers(self.qcf0)
+
     def _update_cache(self):
         # Simplified cache update
         self.cached_grad_mode = torch.is_grad_enabled()
+
+    def get_FUT_sin_phih_minus_phis(self, x: torch.Tensor, Q2: torch.Tensor, z: torch.Tensor, qT: torch.Tensor, initial_hadron: str, fragmented_hadron: str) -> torch.Tensor:
+        """
+        Get the Sivers structure function FUT_sin(φ_h-φ_S).
+        Used for testing the Sivers structure function.
+        """
+        return self.stf['FUTS'](x, Q2, z, qT, initial_hadron, fragmented_hadron)
 
     def forward(self, events_tensor: torch.Tensor, expt_setup: List[str] = ["p", "pi_plus"], rs: float = 140.0) -> torch.Tensor:
         x = events_tensor[:, 0]
@@ -123,6 +170,8 @@ class TruthModel(torch.nn.Module):
         fragmented_hadron = expt_setup[1]
 
         # Always compute unpolarized structure function
+        # self.stf is a dictionary that holds the structure function objects for each type of structure function (FUUT, FUTS, etc.). Each structure function object has a forward method that takes in the kinematic variables and returns the value of the structure function at those kinematics.
+        
         FUUT = self.stf['FUUT'](x, Q2, z, qT, initial_hadron, fragmented_hadron)
 
         # Compute kinematic factors
@@ -132,8 +181,9 @@ class TruthModel(torch.nn.Module):
         epsilon = (1 - y - 1/4 * gamma**2 * y**2) / (1 - y + 1/2 * y**2 + 1/4 * gamma**2 * y**2)
         sigma0 = 8 * torch.pi**2 * alpha_em**2 * z**2 * qT / x / Q**3 * y**2 / 2 / (1 - epsilon) * (1 + gamma**2 / 2 / x)
 
-        # Only compute Sivers if angles are provided
-        if events_tensor.shape[1] >= 6:
+        # Only compute Sivers if angles are provided and polarized modules are enabled.
+        # This keeps unpolarized cards working even when event tensors include angles.
+        if events_tensor.shape[1] >= 6 and getattr(self.qcf0, "sivers_flag", False):
             phih = events_tensor[:, 4]
             phis = events_tensor[:, 5]
             FUT_sin_phih_minus_phis = self.stf['FUTS'](x, Q2, z, qT, initial_hadron, fragmented_hadron)
@@ -151,20 +201,14 @@ class TrainableModel(TruthModel):
         fnp_config: str = None,
         experimental_target_fragmented_hadron: List[List[str]] = [["p", "pi_plus"]],
     ):
-        # Initialize TruthModel components
-        super().__init__(fnp_config, experimental_target_fragmented_hadron)
+        # Initialize components in trainable mode directly (single construction path).
+        super().__init__(
+            fnp_config,
+            experimental_target_fragmented_hadron,
+            trainable_fnp=True,
+        )
 
         self.train()
-
-        # Replace qcf0 with trainable version
-        self.qcf0 = TrainablefNP(fnp_config=self.fnpconf)
-
-        # Rebuild TMDBuilder and structure functions with the trainable fNP
-        self.tmd = TMDBuilder(self.ope, self.evo, self.qcf0, self.Q20, self.flavs)
-        self.stf = {
-            'FUUT': FUUT(self.tmd, self.ogata_J0, self.quark_charges_squared, self.flavs),
-            'FUTS': FUT_SinPhihMinusPhis(self.tmd, self.ogata_J1, self.quark_charges_squared, self.flavs)
-        }
 
         self.versions: List[int] = self.qcf0.version()
         self._update_cache()

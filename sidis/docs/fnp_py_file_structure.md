@@ -263,25 +263,20 @@ pdf_ud = TMDPDFBase(n_flavors=2, init_params=..., free_mask=...)
 pdf_s = TMDPDFBase(n_flavors=1, init_params=..., free_mask=...)
 ```
 
-## Creating New Combo Files
+## Extending the Unified Manager
 
-To create a new combo file:
+To add a new combo/parametrization:
 
-1. **Copy structure** from existing combo file (`fnp_base.py` or `fnp_base_flavor_blind.py`)
-2. **Implement required classes**:
-   - `fNP_evolution`: Evolution factor (can reuse from existing combos)
-   - PDF class: Your PDF parameterization
-   - FF class: Your FF parameterization
-   - `fNPManager`: Manager that orchestrates your combo
-3. **Add default parameters**: Create default dictionaries for initialization
-4. **Register in factory**: Add to `COMBO_MODULES` in `fnp_factory.py`
-5. **Create config file**: Add configuration file in `cards/` folder
+1. **Implement ingredient classes** in `sidis/model/fnp/` (PDF/FF/Sivers/Qiu-Sterman)
+2. **Add defaults and class-map entries** in `sidis/model/fnp_manager.py`
+3. **Register combo name** in `SUPPORTED_COMBOS` in `sidis/model/fnp_manager.py`
+4. **Create config file** in `cards/`
 
 ## File Naming Convention
 
-- `fnp_base.py`: Standard flavor-dependent combo
-- `fnp_base_flavor_blind.py`: Flavor-blind combo
-- `fnp_combo_<name>.py`: Custom combo implementations
+- `fnp_manager.py`: Unified manager and combo wiring
+- `fnp/*.py`: Ingredient implementations
+- `fnp_config.py`: Linking/parser utilities
 
 ## Configuration Files
 

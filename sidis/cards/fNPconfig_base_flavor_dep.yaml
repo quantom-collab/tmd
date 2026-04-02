@@ -33,17 +33,17 @@ pdfs:
     init_params: [0.20000, 2.5000, 0.15000, 0.30000, 0.20000, 0.20000, 0.30000, 2.5000, 2.5000, 0.15000, 0.15000]
     free_mask: [true, true, false, true, false, false, false, true, true, false, false]
     
-  ubar:
+  ub:
     # Up antiquark - simplified (fewer free parameters)
     init_params: [0.15000, 2.0000, 0.12000, 0.25000, 0.15000, 0.15000, 0.25000, 2.0000, 2.0000, 0.12000, 0.12000]
     free_mask: [true, true, false, true, false, false, false, false, false, false, false]
     
-  dbar:
+  db:
     # Down antiquark - simplified (fewer free parameters)
     init_params: [0.15000, 2.0000, 0.12000, 0.25000, 0.15000, 0.15000, 0.25000, 2.0000, 2.0000, 0.12000, 0.12000]
     free_mask: [true, true, false, true, false, false, false, false, false, false, false]
     
-  sbar:
+  sb:
     # Strange antiquark - minimal parameterization
     init_params: [0.10000, 2.0000, 0.10000, 0.20000, 0.10000, 0.10000, 0.20000, 2.0000, 2.0000, 0.10000, 0.10000]
     free_mask: [true, false, false, false, false, false, false, false, false, false, false]
@@ -53,7 +53,7 @@ pdfs:
     init_params: [0.05000, 1.5000, 0.08000, 0.15000, 0.05000, 0.05000, 0.15000, 1.5000, 1.5000, 0.08000, 0.08000]
     free_mask: [true, false, false, false, false, false, false, false, false, false, false]
     
-  cbar:
+  cb:
     # Charm antiquark - minimal parameterization (mostly fixed)
     init_params: [0.05000, 1.5000, 0.08000, 0.15000, 0.05000, 0.05000, 0.15000, 1.5000, 1.5000, 0.08000, 0.08000]
     free_mask: [true, false, false, false, false, false, false, false, false, false, false]
@@ -76,17 +76,17 @@ ffs:
     init_params: [0.15000, 1.80000, 0.080000, 0.22000, 4.5000, 0.025000, 1.8000, 0.080000, 0.22000]
     free_mask: [true, true, false, true, true, false, true, false, true]
     
-  ubar:
+  ub:
     # Up antiquark fragmentation - simplified
     init_params: [0.12000, 1.50000, 0.070000, 0.20000, 4.0000, 0.020000, 1.5000, 0.070000, 0.20000]
     free_mask: [true, true, false, false, true, false, false, false, false]
     
-  dbar:
+  db:
     # Down antiquark fragmentation - simplified
     init_params: [0.12000, 1.50000, 0.070000, 0.20000, 4.0000, 0.020000, 1.5000, 0.070000, 0.20000]
     free_mask: [true, true, false, false, true, false, false, false, false]
     
-  sbar:
+  sb:
     # Strange antiquark fragmentation - minimal
     init_params: [0.08000, 1.20000, 0.060000, 0.18000, 3.5000, 0.015000, 1.2000, 0.060000, 0.18000]
     free_mask: [true, false, false, false, false, false, false, false, false]
@@ -96,7 +96,7 @@ ffs:
     init_params: [0.05000, 1.00000, 0.050000, 0.15000, 3.0000, 0.010000, 1.0000, 0.050000, 0.15000]
     free_mask: [true, false, false, false, false, false, false, false, false]
     
-  cbar:
+  cb:
     # Charm antiquark fragmentation - minimal (mostly fixed)
     init_params: [0.05000, 1.00000, 0.050000, 0.15000, 3.0000, 0.010000, 1.0000, 0.050000, 0.15000]
     free_mask: [true, false, false, false, false, false, false, false, false]
@@ -111,7 +111,7 @@ ffs:
 #
 # Trainable parameters (based on masks above):
 # Evolution: 1 trainable
-# PDFs: u(11) + d(11) + s(7) + ubar(4) + dbar(4) + sbar(1) + c(1) + cbar(1) = 40 trainable
-# FFs: u(9) + d(9) + s(5) + ubar(3) + dbar(3) + sbar(1) + c(1) + cbar(1) = 32 trainable
+# PDFs: u(11) + d(11) + s(7) + ub(4) + db(4) + sb(1) + c(1) + cb(1) = 40 trainable
+# FFs: u(9) + d(9) + s(5) + ub(3) + db(3) + sb(1) + c(1) + cb(1) = 32 trainable
 # Total trainable: 73 parameters
 

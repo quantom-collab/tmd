@@ -172,7 +172,8 @@ class FUT_SinPhihMinusPhis(torch.nn.Module):
         bT = self.ogata.get_bTs(qT)
         
         # Sivers PDF × unpolarized FF
-        sivers_dict = self.tmd.get_tmd_bT_all_flavors(x, Q2, bT, "Sivers", initial_hadron)
+        sivers_dict = self.tmd.get_tmd_bT_all_flavors(x, Q2, bT, "Sivers", initial_hadron) 
+               
         ff_dict = self.tmd.get_tmd_bT_all_flavors(z, Q2, bT, "ff", fragmented_hadron)
         
         # Stack and vectorize
@@ -187,6 +188,8 @@ class FUT_SinPhihMinusPhis(torch.nn.Module):
         # Integrand with bT^2/2 factor
         integrand_per_flavor = charges_expanded * (bT_expanded**2 / 2) * sivers_stack * ff_stack
         integrand = torch.sum(integrand_per_flavor, dim=0)
+
+        # print('checking within the FUT_SinPhihMinusPhis class:','bT=',bT,'integrand = ',integrand)
         
         # Hankel transform J1: (n_events, n_bT) -> (n_events,)
         return self.ogata.eval_ogata_func_var_h(integrand, bT, qT)

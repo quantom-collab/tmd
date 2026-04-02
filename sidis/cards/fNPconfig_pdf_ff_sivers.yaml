@@ -12,7 +12,14 @@
 hadron: proton
 
 # Combo selection: specifies which fNP combo implementation to use
-combo: flexible
+combo: flexible_new
+
+# Polarization selection: specifies which polarization to use
+polarization: transverse
+# Available polarizations: "transverse", "longitudinal", "unpolarized"
+# Note: the polarization is only used for the Sivers function fNP.
+# The Qiu-Sterman function fNP is a collinear function.
+# The Sivers function fNP is a TMD function.
 
 # Shared evolution factor (applies to both PDFs and FFs)
 # Evolution parameter remains independent (no linking supported)
@@ -111,6 +118,92 @@ ffs:
     # Charm antiquark fragmentation - minimal (mostly fixed)
     init_params: [0.05000, 1.00000, 0.050000, 0.15000, 3.0000, 0.010000, 1.0000, 0.050000, 0.15000]
     free_mask: [true, false, false, false, false, false, false, false, false]
+
+
+# Sivers function parameterizations: exp(-w * b**2)
+# Parameters: [w] (1 param)
+sivers:
+  u:
+    # Up quark
+    init_params: [0.045]
+    free_mask: [true]
+    # Allowed intervals for minimizer: one [low, high] per parameter; use null for no bound
+    param_bounds: [[0.01, 0.5]]
+    
+  d:
+    # Down quark - link: d[0]=u[0]
+    init_params: [0.045]
+    free_mask: ["u[0]"]
+    
+  s:
+    # Strange quark - link: s[0]=u[0]
+    init_params: [0.045]
+    free_mask: ["u[0]"]
+    
+  ub:
+    # Up antiquark - link: ub[0]=u[0]
+    init_params: [0.045]
+    free_mask: ["u[0]"]
+    
+  db:
+    # Down antiquark - link: db[0]=u[0]
+    init_params: [0.045]
+    free_mask: ["u[0]"]
+    
+  sb:
+    # Strange antiquark - link: sb[0]=u[0]
+    init_params: [0.045]
+    free_mask: ["u[0]"]
+    
+  c:
+    # Charm quark - link: c[0]=u[0]
+    init_params: [0.045]
+    free_mask: ["u[0]"]
+    
+  cb:
+    # Charm antiquark - link: cb[0]=u[0]
+    init_params: [0.045]
+    free_mask: ["u[0]"]
+
+# Qiu-Sterman function parameterizations: N * x**a * (1-x)**b
+# Parameters: [w] (1 param)
+qiu_sterman:
+  u:
+    # Up quark
+    init_params: [1.0, 0.5, 0.5]
+    free_mask: [true, true, true]
+    # Allowed intervals for minimizer: one [low, high] per parameter; use null for no bound
+    param_bounds: [[0.01, 2], [0.1, 10], [0.1, 10]]
+    
+  d:
+    # Down quark
+    init_params: [1.0, 0.5, 0.5]
+    free_mask: [true, true, true]
+    
+  s:
+    # Strange quark (this is for all sea quarks)
+    init_params: [1.0, 0.5, 0.5]
+    free_mask: [true, true, true]
+    
+  ub:
+    # Up antiquark - link to strange quark
+    init_params: [1.0, 0.5, 0.5]
+    free_mask: ["s[0]", "s[1]", "s[2]"]
+    
+  db:
+    # Down antiquark - link to strange quark
+    init_params: [1.0, 0.5, 0.5]
+    free_mask: ["s[0]", "s[1]", "s[2]"]
+    
+  c:
+    # Charm quark - link to strange quark
+    init_params: [1.0, 0.5, 0.5]
+    free_mask: ["s[0]", "s[1]", "s[2]"]
+    
+  cb:
+    # Charm antiquark - link to strange quark
+    init_params: [1.0, 0.5, 0.5]
+    free_mask: ["s[0]", "s[1]", "s[2]"]
 
 # =================
 # Parameter Summary:
