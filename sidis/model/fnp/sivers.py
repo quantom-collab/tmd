@@ -36,7 +36,7 @@ class Sivers(nn.Module):
                 
         if len(init_params) != 1:
             raise ValueError(
-                f"{tcolors.FAIL}[fnp/sivers.py] MAP22 Sivers requires 1 parameter, got {len(init_params)}{tcolors.ENDC}"
+                f"{tcolors.FAIL}[fnp/sivers.py] MAP22 Sivers requires 1 parameter, got {len(init_params)}{tcolors.ENDC}. This is the Sivers Class (non AV)."
             )
         if len(free_mask) != len(init_params):
             raise ValueError(
@@ -171,9 +171,9 @@ class SiversAV(nn.Module):
 
         super().__init__()
                 
-        if len(init_params) != 1:
+        if len(init_params) != 2:
             raise ValueError(
-                f"{tcolors.FAIL}[fnp/sivers.py] MAP22 Sivers requires 1 parameter, got {len(init_params)}{tcolors.ENDC}"
+                f"{tcolors.FAIL}[fnp/sivers.py] MAP22 Sivers requires 1 parameter, got {len(init_params)}{tcolors.ENDC}. This is the Sivers AV Class."
             )
         if len(free_mask) != len(init_params):
             raise ValueError(

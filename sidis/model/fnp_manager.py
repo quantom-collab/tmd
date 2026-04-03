@@ -32,8 +32,8 @@ from .fnp_config import (
 )
 from .fnp.tmdpdf import TMDPDFFlexible, TMDPDFSimple
 from .fnp.tmdff import TMDFFFlexible, TMDFFSimple
-from .fnp.sivers import Sivers, Sivers_AV
-from .fnp.qiu_sterman import QiuSterman, QiuSterman_AV
+from .fnp.sivers import Sivers, SiversAV
+from .fnp.qiu_sterman import QiuSterman, QiuStermanAV
 SUPPORTED_COMBOS = {"simple", "flavor_dep", "flavor_blind", "flexible", "flexible_new", "flexible AV"}
 
 
@@ -157,14 +157,14 @@ class fNPManager(nn.Module):
             )
             DependencyResolver.resolve_circular_dependencies(qiu_graph)
 
-        pdf_param_classes = {"flexible": TMDPDFFlexible, "simple": TMDPDFSimple, "flexible_new": TMDPDFFlexible, "flexible AV": TMDPDFFlexible}
-        ff_param_classes = {"flexible": TMDFFFlexible, "simple": TMDFFSimple, "flexible_new": TMDFFFlexible, "flexible AV": TMDFFFlexible}
+        pdf_param_classes = {"flexible": TMDPDFFlexible, "simple": TMDPDFSimple, "flexible AV": TMDPDFFlexible}
+        ff_param_classes = {"flexible": TMDFFFlexible, "simple": TMDFFSimple, "flexible AV": TMDFFFlexible}
         if self.sivers_flag:
-            sivers_param_classes = {"flexible_new": Sivers, "flexible AV": Sivers}
+            sivers_param_classes = {"flexible": Sivers, "flexible AV": SiversAV}
         if self.qiu_sterman_flag:
-            qiu_sterman_param_classes = {"flexible_new": QiuSterman, "flexible AV": QiuSterman}
-        default_parametrization = "simple" if self.combo == "simple" else "flexible"
-
+            qiu_sterman_param_classes = {"flexible": QiuSterman, "flexible AV": QiuStermanAV}
+        default_parametrization = self.combo if "flavor" not in self.combo else "flexible"
+ 
         # Build modules first.
         self.pdf_modules = self._build_module(
             np_type="pdfs",
@@ -191,7 +191,7 @@ class fNPManager(nn.Module):
                 flavor_keys=self.sivers_flavor_keys,
                 class_map=sivers_param_classes,
                 default_cfg=DEFAULT_SIVERS_PARAMS,
-                default_parametrization="flexible",
+                default_parametrization=default_parametrization,
                 include_bounds=False,
             )
         else:
@@ -204,7 +204,7 @@ class fNPManager(nn.Module):
                 flavor_keys=self.qiu_sterman_flavor_keys,
                 class_map=qiu_sterman_param_classes,
                 default_cfg=DEFAULT_QIU_STERMAN_PARAMS,
-                default_parametrization="flexible",
+                default_parametrization=default_parametrization,
                 include_bounds=False,
             )
         else:
