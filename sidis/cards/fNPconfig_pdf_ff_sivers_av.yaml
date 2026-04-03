@@ -12,7 +12,7 @@
 hadron: proton
 
 # Combo selection: specifies which fNP combo implementation to use
-combo: flexible_new
+combo: flexible_AV
 
 # Polarization selection: specifies which polarization to use
 polarization: transverse
@@ -120,96 +120,97 @@ ffs:
     free_mask: [true, false, false, false, false, false, false, false, false]
 
 
-# Sivers function parameterizations: exp(-w * b**2)
-# Parameters: [w] (1 param)
+# Sivers function parameterizations: exp(-(r0 + x*r1) / (torch.sqrt(1 + r2 * x**2 * b**2)) * b**2) = exp-(r0/(x*sqrt(r2)) + r1/(sqrt(r2))) * b
+# Parameters: [r0/sqrt(r2), r1/sqrt(r2)] (2 params)
+
 sivers:
   u:
     # Up quark
-    init_params: [0.180]
-    free_mask: [true]
+    init_params: [0.068, 0.0064]
+    free_mask: [true, true]
     # Allowed intervals for minimizer: one [low, high] per parameter; use null for no bound
-    param_bounds: [[0.01, 0.5]]
+    
     
   d:
     # Down quark - link: d[0]=u[0]
-    init_params: [0.180]
-    free_mask: ["u[0]"]
+    init_params: [0.063, 0.068]
+    free_mask: ["u[0]", "u[1]"]
     
   s:
     # Strange quark - link: s[0]=u[0]
-    init_params: [0.180]
-    free_mask: ["u[0]"]
+    init_params: [0.063, 0.068]
+    free_mask: ["u[0]", "u[1]"]
     
   ub:
     # Up antiquark - link: ub[0]=u[0]
-    init_params: [0.180]
-    free_mask: ["u[0]"]
+    init_params: [0.063, 0.068]
+    free_mask: ["u[0]", "u[1]"]
     
   db:
     # Down antiquark - link: db[0]=u[0]
-    init_params: [0.180]
-    free_mask: ["u[0]"]
+    init_params: [0.063, 0.068]
+    free_mask: ["u[0]", "u[1]"]
     
   sb:
     # Strange antiquark - link: sb[0]=u[0]
-    init_params: [0.180]
-    free_mask: ["u[0]"]
+    init_params: [0.063, 0.068]
+    free_mask: ["u[0]", "u[1]"]
     
   c:
     # Charm quark - link: c[0]=u[0]
-    init_params: [0.180]
-    free_mask: ["u[0]"]
+    init_params: [0.063, 0.068]
+    free_mask: ["u[0]", "u[1]"]
     
   cb:
     # Charm antiquark - link: cb[0]=u[0]
-    init_params: [0.180]
-    free_mask: ["u[0]"]
+    init_params: [0.063, 0.068]
+    free_mask: ["u[0]", "u[1]"]
 
-# Qiu-Sterman function parameterizations: N * x**a * (1-x)**b
-# Parameters: [w] (1 param)
+# Qiu-Sterman function parameterizations: N * (1-x) * x**beta * (1+epsilon*x)**beta
+# Parameters: [N, beta, epsilon] (3 param)
 qiu_sterman:
   u:
     # Up quark
-    init_params: [0.077, 0.967, 5.129]
+    init_params: [-0.013, -0.35 , -3.9]
     free_mask: [true, true, true]
     # Allowed intervals for minimizer: one [low, high] per parameter; use null for no bound
-    param_bounds: [[0.01, 2], [0.1, 10], [0.1, 10]] #Should we change the bounds?
     
   d:
     # Down quark
-    init_params: [-0.152, 1.188, 5.129]
-    free_mask: [true, true, "u[2]"]
+    init_params: [0.34, -0.77, 1.8]
+    free_mask: [true, true, true]
     
   s:
-    # Strange quark (this is for all sea quarks)
-    init_params: [0.167, 0.936, 5.129]
-    free_mask: [true, true, 'u[2]']
-    
+    # Strange quark (All sea quarks share the same beta and epsilon=0. There is an N for sea and N for strange.)
+
+    init_params: [0.43, 2.3, 0.0]
+    free_mask: [true, true, false]
     
   ub:
-    # Up antiquark - link to strange quark
-    init_params: [-0.033, 0.967, 5.129]
-    free_mask: [true, "s[1]", "u[2]"]
+    
+    init_params: [-0.23, 0.967, 5.129]
+    free_mask: [true, "s[1]", "s[2]"]
     
   db:
-    # Down antiquark - link to strange quark
+    
     init_params: [-0.069, 1.188, 5.129]
-    free_mask: [true, "s[1]", "u[2]"]
+    free_mask: ["ub[0]", "s[1]", "s[2]"]
 
   sb:
-    # Strange quark (this is for all sea quarks)
     init_params: [-0.002, 0.936, 5.129]
-    free_mask: [true, "s[1]", 'u[2]']
-    
+    free_mask: ["ub[0]", "s[1]", "s[2]"]
+  
+  # TODO: the paper says, 'We nullify the Sivers function for b and c flavors.' Does this mean we should not inlcude charm?
+
   c:
     # Charm quark - link to strange quark
-    init_params: [0.167, 0.936, 5.129]
-    free_mask: ["s[0]", "s[1]", "u[2]"]
+    init_params: [0.0, 1.0, 5.129]
+    free_mask: [False, False, False]
     
   cb:
     # Charm antiquark - link to strange quark
-    init_params: [-0.002, 0.936, 5.129]
-    free_mask: ["s[0]", "s[1]", "u[2]"]
+    init_params: [0.0, 0.936, 5.129]
+    free_mask: ["c[0]", "c[1]", "c[2]"]
 
 # =================
 # Parameter Summary:
