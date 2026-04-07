@@ -28,6 +28,7 @@ pdfs:
   d:
     init_params: [0.25, 0.15]
     free_mask: [true, true]
+    param_bounds: [[0.1, 1], [0.1, 1]]
     # free_mask: ["0.5*u[0]", "0.5*u[1]"]
   s:
     init_params: [0.5, 0.3]
