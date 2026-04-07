@@ -140,7 +140,12 @@ def main() -> torch.Tensor:
     print("Parameter names (trainable order):")
     print(wrapper.parameter_names)
 
-    xsec = wrapper.predict(events)
+    # flat numeric values (for scalar params)
+    values = [p.detach().cpu().item() for _, p in wrapper.model.named_parameters() if p.numel() == 1]
+    print('values:')
+    print(values)
+
+    xsec = wrapper.predict(events, parameters=values)
     print("\nPredicted differential cross sections:")
     print(xsec)
     print(f"\nOutput shape: {tuple(xsec.shape)}")
