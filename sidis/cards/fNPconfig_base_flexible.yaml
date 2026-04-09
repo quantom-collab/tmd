@@ -26,6 +26,7 @@ evolution:
 # Parameters: [N₁, α₁, σ₁, λ, N₁ᵦ, N₁ᶜ, λ₂, α₂, α₃, σ₂, σ₃] (11 params)
 pdfs:
   u:
+    # param_bounds: [[0.01, 2], [0.5, 10], [0.01, 1], [0.01, 2], [0.01, 2], [0.01, 2], [0.01, 2], [0.5, 10], [0.5, 10], [0.01, 1], [0.01, 1]]
     # Up quark - fully parameterized with MAP22
     init_params: [0.28516, 2.9755, 0.17293, 0.39432, 0.28516, 0.28516, 0.39432, 2.9755, 2.9755, 0.17293, 0.17293]
     free_mask: [true, true, true, true, true, true, true, true, true, true, true]
@@ -36,36 +37,43 @@ pdfs:
     # Down quark - links and expressions: d[0]=u[0], d[1]=u[1], d[2]=2*u[1], d[3]=u[0]+u[1], d[4]=u[5]
     init_params: [0.25000, 2.8000, 0.16000, 0.35000, 0.25000, 0.25000, 0.35000, 2.8000, 2.8000, 0.16000, 0.16000]
     free_mask: ["u[0]", "u[1]", "2*u[1]", "u[0]+u[1]", "u[5]", true, true, true, false, true, true]
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 1], [0.01, 2], [0.01, 2], [0.01, 2], [0.01, 2], [0.5, 10], [0.5, 10], [0.01, 1], [0.01, 1]]
     
   s:
     # Strange quark - links and expressions: s[0]=u[0], s[1]=2*u[0], s[2] fixed
     init_params: [0.20000, 2.5000, 0.15000, 0.30000, 0.20000, 0.20000, 0.30000, 2.5000, 2.5000, 0.15000, 0.15000]
     free_mask: ["u[0]", "2*u[0]", false, true, false, false, false, true, true, false, false]
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 1], [0.01, 2], [0.01, 2], [0.01, 2], [0.01, 2], [0.5, 10], [0.5, 10], [0.01, 1], [0.01, 1]]
     
   ub:
     # Up antiquark - simplified (fewer free parameters)
     init_params: [0.15000, 2.0000, 0.12000, 0.25000, 0.15000, 0.15000, 0.25000, 2.0000, 2.0000, 0.12000, 0.12000]
     free_mask: [true, true, false, true, false, false, false, false, false, false, false]
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 1], [0.01, 2], [0.01, 2], [0.01, 2], [0.01, 2], [0.5, 10], [0.5, 10], [0.01, 1], [0.01, 1]]
     
   db:
     # Down antiquark - simplified (fewer free parameters)
     init_params: [0.15000, 2.0000, 0.12000, 0.25000, 0.15000, 0.15000, 0.25000, 2.0000, 2.0000, 0.12000, 0.12000]
     free_mask: [true, true, false, true, false, false, false, false, false, false, false]
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 1], [0.01, 2], [0.01, 2], [0.01, 2], [0.01, 2], [0.5, 10], [0.5, 10], [0.01, 1], [0.01, 1]]
     
   sb:
     # Strange antiquark - minimal parameterization
     init_params: [0.10000, 2.0000, 0.10000, 0.20000, 0.10000, 0.10000, 0.20000, 2.0000, 2.0000, 0.10000, 0.10000]
     free_mask: [true, false, false, false, false, false, false, false, false, false, false]
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 1], [0.01, 2], [0.01, 2], [0.01, 2], [0.01, 2], [0.5, 10], [0.5, 10], [0.01, 1], [0.01, 1]]
     
   c:
     # Charm quark - minimal parameterization (mostly fixed)
     init_params: [0.05000, 1.5000, 0.08000, 0.15000, 0.05000, 0.05000, 0.15000, 1.5000, 1.5000, 0.08000, 0.08000]
     free_mask: [true, false, false, false, false, false, false, false, false, false, false]
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 1], [0.01, 2], [0.01, 2], [0.01, 2], [0.01, 2], [0.5, 10], [0.5, 10], [0.01, 1], [0.01, 1]]
     
   cb:
     # Charm antiquark - minimal parameterization (mostly fixed)
     init_params: [0.05000, 1.5000, 0.08000, 0.15000, 0.05000, 0.05000, 0.15000, 1.5000, 1.5000, 0.08000, 0.08000]
     free_mask: [true, false, false, false, false, false, false, false, false, false, false]
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 1], [0.01, 2], [0.01, 2], [0.01, 2], [0.01, 2], [0.5, 10], [0.5, 10], [0.01, 1], [0.01, 1]]
 
 # TMD FF parameterizations (MAP22 implementation)
 # Parameters: [N₃, β₁, δ₁, γ₁, λ_F, N₃ᵦ, β₂, δ₂, γ₂] (9 params)
@@ -81,36 +89,42 @@ ffs:
     # Down quark fragmentation - cross-type: ffs.d[0]=pdfs.u[0], ffs.d[1]=2*pdfs.u[0]
     init_params: [0.19000, 2.00000, 0.090000, 0.24000, 5.0000, 0.030000, 2.0000, 0.090000, 0.24000]
     free_mask: ["pdfs.u[0]", "2*pdfs.u[0]", true, true, true, true, true, true, true]
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 0.5], [0.01, 2], [0.5, 20], [0.001, 0.5], [0.5, 10], [0.01, 0.5], [0.01, 2]]
     
   s:
     # Strange quark fragmentation - link to pdfs: s[0]=pdfs.u[0], s[1]=pdfs.u[1]
     init_params: [0.15000, 1.80000, 0.080000, 0.22000, 4.5000, 0.025000, 1.8000, 0.080000, 0.22000]
     free_mask: ["pdfs.u[0]", "pdfs.u[1]", false, true, true, false, true, false, true]
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 0.5], [0.01, 2], [0.5, 20], [0.001, 0.5], [0.5, 10], [0.01, 0.5], [0.01, 2]]
     
   ub:
     # Up antiquark fragmentation - simplified
     init_params: [0.12000, 1.50000, 0.070000, 0.20000, 4.0000, 0.020000, 1.5000, 0.070000, 0.20000]
     free_mask: [true, true, false, false, true, false, false, false, false]
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 0.5], [0.01, 2], [0.5, 20], [0.001, 0.5], [0.5, 10], [0.01, 0.5], [0.01, 2]]
     
   db:
     # Down antiquark fragmentation - simplified
     init_params: [0.12000, 1.50000, 0.070000, 0.20000, 4.0000, 0.020000, 1.5000, 0.070000, 0.20000]
     free_mask: [true, true, false, false, true, false, false, false, false]
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 0.5], [0.01, 2], [0.5, 20], [0.001, 0.5], [0.5, 10], [0.01, 0.5], [0.01, 2]]
     
   sb:
     # Strange antiquark fragmentation - minimal
     init_params: [0.08000, 1.20000, 0.060000, 0.18000, 3.5000, 0.015000, 1.2000, 0.060000, 0.18000]
     free_mask: [true, false, false, false, false, false, false, false, false]
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 0.5], [0.01, 2], [0.5, 20], [0.001, 0.5], [0.5, 10], [0.01, 0.5], [0.01, 2]]
     
   c:
     # Charm quark fragmentation - minimal (mostly fixed)
     init_params: [0.05000, 1.00000, 0.050000, 0.15000, 3.0000, 0.010000, 1.0000, 0.050000, 0.15000]
     free_mask: [true, false, false, false, false, false, false, false, false]
-    
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 0.5], [0.01, 2], [0.5, 20], [0.001, 0.5], [0.5, 10], [0.01, 0.5], [0.01, 2]]
   cb:
     # Charm antiquark fragmentation - minimal (mostly fixed)
     init_params: [0.05000, 1.00000, 0.050000, 0.15000, 3.0000, 0.010000, 1.0000, 0.050000, 0.15000]
     free_mask: [true, false, false, false, false, false, false, false, false]
+    param_bounds: [[0.01, 2], [0.5, 10], [0.01, 0.5], [0.01, 2], [0.5, 20], [0.001, 0.5], [0.5, 10], [0.01, 0.5], [0.01, 2]]
 
 # =================
 # Parameter Summary:

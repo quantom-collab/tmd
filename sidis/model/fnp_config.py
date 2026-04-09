@@ -260,6 +260,9 @@ class ParameterRegistry:
         # linked to another (e.g. d[0] = "0.5*u[0]").
         # Example: ("pdfs", "u", 0) → ("pdfs", "u", 0) means “d’s param 0 uses u’s param 0”.
         self.shared_groups: Dict[Tuple[str, str, int], Tuple[str, str, int]] = {}
+        # Optional bounds metadata for parameters represented internally in theta-space.
+        # Maps (param_type, flavor, param_idx) -> (lo, hi).
+        self.param_bounds: Dict[Tuple[str, str, int], Tuple[float, float]] = {}
 
     def register_parameter(
         self,
@@ -268,6 +271,7 @@ class ParameterRegistry:
         param_idx: int,
         param: nn.Parameter,
         source: Optional[Tuple[str, str, int]] = None,
+        bounds: Optional[Tuple[float, float]] = None,
     ):
         """
         Register a parameter in the registry.
@@ -284,6 +288,8 @@ class ParameterRegistry:
 
         if source:
             self.shared_groups[key] = source
+        if bounds is not None:
+            self.param_bounds[key] = bounds
 
     def get_parameter(
         self, param_type: str, flavor: str, param_idx: int
@@ -312,6 +318,28 @@ class ParameterRegistry:
             return self.registry.get(source_key)
 
         return self.registry.get(key)
+
+    def get_parameter_value(
+        self, param_type: str, flavor: str, param_idx: int
+    ) -> Optional[float]:
+        """
+        Return the current PHYSICAL value for a parameter.
+
+        If bounds metadata exists for the resolved key, the stored internal theta
+        value is mapped through sigmoid to [lo, hi].
+        """
+        key = (param_type, flavor, param_idx)
+        resolved_key = self.shared_groups.get(key, key)
+        param = self.registry.get(resolved_key)
+        if param is None:
+            return None
+
+        p = param.flatten()[0]
+        bounds = self.param_bounds.get(resolved_key)
+        if bounds is not None:
+            lo, hi = bounds
+            return float((lo + (hi - lo) * torch.sigmoid(p)).item())
+        return float(p.item())
 
     def create_shared_parameter(
         self, source_type: str, source_flavor: str, source_idx: int, init_value: float
@@ -551,15 +579,10 @@ class ExpressionEvaluator:
         replacements = {}
         for ref in refs:
             ref_type = ref["type"] if ref["type"] else current_type
-            param = self.registry.get_parameter(
+            value = self.registry.get_parameter_value(
                 ref_type, ref["flavor"], ref["param_idx"]
             )
-            if param is not None:
-                # Get current value - handle both scalar and tensor parameters
-                if param.numel() == 1:
-                    value = param.item()
-                else:
-                    value = param[0].item() if len(param.shape) > 0 else param.item()
+            if value is not None:
                 # Use parentheses to ensure proper evaluation order
                 replacements[ref["full_match"]] = f"({value})"
             else:

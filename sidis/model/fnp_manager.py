@@ -213,6 +213,7 @@ class fNPManager(nn.Module):
         # Then compute bounds.
         self.param_bounds = self._collect_param_bounds(config)
         self.evolution_bounds = self._collect_evolution_bounds(config)
+        self._propagate_param_bounds_map()
 
     def _build_module(
         self,
@@ -308,6 +309,17 @@ class fNPManager(nn.Module):
         except TypeError:
             pass
         return out
+
+    def _propagate_param_bounds_map(self) -> None:
+        """Attach global bounds map to all modules that can use linked bounds."""
+        module_groups: List[nn.Module] = [*self.pdf_modules.values(), *self.ff_modules.values()]
+        if self.sivers_modules is not None:
+            module_groups.extend(self.sivers_modules.values())
+        if self.qiu_sterman_modules is not None:
+            module_groups.extend(self.qiu_sterman_modules.values())
+        for module in module_groups:
+            if hasattr(module, "param_bounds_map"):
+                module.param_bounds_map = self.param_bounds
 
     def get_trainable_bounds(
         self,

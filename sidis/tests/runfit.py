@@ -110,6 +110,15 @@ if __name__ == "__main__":
         default=True,
         help="Save loss.yaml with loss values every 10 epochs. Use true or false. Default: true",
     )
+    parser.add_argument(
+        "--allow_negative_cs",
+        type=_parse_bool,
+        default=False,
+        help=(
+            "Allow negative target cross sections. If false, runfit exits when negatives "
+            "are found. Use true or false. Default: false"
+        ),
+    )
     args = parser.parse_args()
 
     def _get_fnp_manager(mdl):
@@ -127,10 +136,13 @@ if __name__ == "__main__":
     _repo_root = script_dir.parent.parent
     _script_rel = pathlib.Path(__file__).resolve().relative_to(_repo_root)
     _save_loss = f"--save_loss {'true' if args.save_loss else 'false'}"
+    _allow_negative_cs = (
+        f"--allow_negative_cs {'true' if args.allow_negative_cs else 'false'}"
+    )
     _flags = (
         f"--cross_section {args.cross_section} "
         f"--seed {args.seed} --epochs {args.epochs} --lr {args.lr} "
-        f"--fitresults_dir {args.fitresults_dir} {_save_loss}"
+        f"--fitresults_dir {args.fitresults_dir} {_save_loss} {_allow_negative_cs}"
     )
     print(f"{tcolors.BOLDGREEN}running @{_script_rel} {_flags}{tcolors.ENDC}")
 
@@ -258,6 +270,32 @@ if __name__ == "__main__":
     print(
         f"  {tcolors.GREEN}Range: [{target.min().item():.4e}, {target.max().item():.4e}]{tcolors.ENDC}"
     )
+
+    # -------------------------------------------------------------------------
+    # Target sanity checks
+    # -------------------------------------------------------------------------
+    # Negative cross sections are unphysical for this closure-test workflow.
+    # Fail fast to avoid fitting in log(|sigma|)-space where sign information is lost.
+    neg_mask = target < 0
+    n_neg = int(neg_mask.sum().item())
+    if n_neg > 0:
+        min_val = target.min().item()
+        if args.allow_negative_cs:
+            print(
+                f"{tcolors.WARNING}Warning: found {n_neg} negative cross section values "
+                f"(minimum={min_val:.6e}) in {cs_path}. "
+                "Continuing because --allow_negative_cs true was set."
+                f"{tcolors.ENDC}"
+            )
+        else:
+            print(
+                f"{tcolors.FAIL}Error: found {n_neg} negative cross section values "
+                f"(minimum={min_val:.6e}) in {cs_path}. "
+                "Please regenerate or filter events before running runfit.py, "
+                "or rerun with --allow_negative_cs true."
+                f"{tcolors.ENDC}"
+            )
+            exit(1)
 
     # -------------------------------------------------------------------------
     # Helpers

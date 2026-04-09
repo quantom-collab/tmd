@@ -38,6 +38,7 @@ class TMDPDFFlexible(nn.Module):
         param_bounds_map: Optional[Dict[Tuple[str, str, int], Tuple[float, float]]] = None,
     ):
         super().__init__()
+        self.param_bounds_map = param_bounds_map or {}
 
         if len(init_params) != 11:
             raise ValueError(
@@ -63,10 +64,28 @@ class TMDPDFFlexible(nn.Module):
         self.fixed_params = []
         self.free_params_list = []
 
+        bounds_list = []
+        if param_bounds is not None:
+            try:
+                if len(param_bounds) != self.n_params:
+                    print(
+                        f"{tcolors.WARNING}[fnp/tmdpdf.py] {self.param_type}.{self.flavor}: "
+                        f"param_bounds has {len(param_bounds)} entries for {self.n_params} parameters. "
+                        f"Missing entries are treated as unbounded; extra entries are ignored.{tcolors.ENDC}"
+                    )
+                for idx in range(min(len(param_bounds), self.n_params)):
+                    b = parse_bound(param_bounds[idx] if idx < len(param_bounds) else None)
+                    bounds_list.append(b)
+            except (TypeError, KeyError):
+                pass
+        while len(bounds_list) < self.n_params:
+            bounds_list.append(None)
+
         for param_idx, (init_val, entry) in enumerate(zip(init_params, free_mask)):
             parsed = self.parser.parse_entry(entry, param_type, flavor)
+            bounds = bounds_list[param_idx] if param_idx < len(bounds_list) else None
             self.param_configs.append(
-                {"idx": param_idx, "init_val": init_val, "parsed": parsed}
+                {"idx": param_idx, "init_val": init_val, "parsed": parsed, "bounds": bounds}
             )
 
             if parsed["is_fixed"]:
@@ -74,9 +93,20 @@ class TMDPDFFlexible(nn.Module):
                 self.fixed_params.append((param_idx, init_val))
             elif parsed["type"] == "boolean" and parsed["value"]:
                 # Independent free parameter
-                param = nn.Parameter(torch.tensor([init_val], dtype=torch.float32))
+                if bounds is not None:
+                    lo, hi = bounds
+                    u = (init_val - lo) / (hi - lo)
+                    u = max(1e-6, min(1 - 1e-6, u))
+                    theta = torch.tensor(
+                        float(torch.logit(torch.tensor(u)).item()), dtype=torch.float32
+                    )
+                    param = nn.Parameter(theta.unsqueeze(0))
+                else:
+                    param = nn.Parameter(torch.tensor([init_val], dtype=torch.float32))
                 self.free_params_list.append((param_idx, param))
-                registry.register_parameter(param_type, flavor, param_idx, param)
+                registry.register_parameter(
+                    param_type, flavor, param_idx, param, bounds=bounds
+                )
             elif parsed["type"] == "reference":
                 # Linked parameter - use shared parameter
                 ref = parsed["value"]
@@ -91,13 +121,16 @@ class TMDPDFFlexible(nn.Module):
                     param_idx,
                     shared_param,
                     source=(ref_type, ref["flavor"], ref["param_idx"]),
+                    bounds=bounds,
                 )
             elif parsed["type"] == "expression":
                 # Expression-based parameter - will be evaluated dynamically
                 # Store expression and create a placeholder parameter for gradient flow
                 param = nn.Parameter(torch.tensor([init_val], dtype=torch.float32))
                 self.free_params_list.append((param_idx, param))
-                registry.register_parameter(param_type, flavor, param_idx, param)
+                registry.register_parameter(
+                    param_type, flavor, param_idx, param, bounds=bounds
+                )
                 # Store expression for dynamic evaluation
                 parsed["expression"] = parsed["value"]
 
@@ -112,36 +145,54 @@ class TMDPDFFlexible(nn.Module):
             self.register_parameter(f"free_param_{param_idx}", param)
 
     def get_params_tensor(self) -> torch.Tensor:
-        """Return the full parameter tensor, evaluating expressions dynamically."""
-        params = [0.0] * self.n_params
+        """Return parameter tensor while preserving gradients for trainable params."""
+        try:
+            dev = next(self.parameters()).device
+        except StopIteration:
+            try:
+                dev = next(self.buffers()).device
+            except StopIteration:
+                dev = torch.device("cpu")
 
-        # Set fixed parameters
+        param_vals = [None] * self.n_params
+
         for param_idx, val in self.fixed_params:
-            params[param_idx] = val
+            param_vals[param_idx] = torch.tensor([float(val)], dtype=torch.float32, device=dev)
 
-        # Set free parameters (including linked and expression-based)
         for param_idx, param in self.free_params_list:
             config = self.param_configs[param_idx]
             parsed = config["parsed"]
 
             if parsed["type"] == "boolean" or parsed["type"] == "reference":
-                # Direct or linked parameter
-                if param.numel() == 1:
-                    params[param_idx] = param.item()
+                bounds = config.get("bounds")
+                if bounds is None and parsed["type"] == "reference":
+                    ref = parsed["value"]
+                    ref_type = ref["type"] if ref["type"] else self.param_type
+                    key = (ref_type, ref["flavor"], ref["param_idx"])
+                    bounds = self.param_bounds_map.get(key)
+                if bounds is not None:
+                    lo, hi = bounds
+                    raw = torch.sigmoid(param)
+                    val_t = lo + (hi - lo) * raw.flatten()[0]
+                    param_vals[param_idx] = val_t.unsqueeze(0)
                 else:
-                    params[param_idx] = (
-                        param[0].item() if len(param.shape) > 0 else param.item()
-                    )
+                    p = param.flatten()[0]
+                    param_vals[param_idx] = p.unsqueeze(0)
             elif parsed["type"] == "expression":
                 # Evaluate expression dynamically
                 expr_value = self.evaluator.evaluate(
                     parsed["expression"], self.param_type, self.flavor
                 )
-                params[param_idx] = expr_value.item()
-                # Update the parameter for gradient tracking
-                param.data = expr_value
+                param_vals[param_idx] = expr_value
+                param.data = expr_value.detach()
 
-        return torch.tensor(params, dtype=torch.float32)
+        vals = [
+            param_vals[i]
+            if param_vals[i] is not None
+            else torch.tensor([0.0], dtype=torch.float32, device=dev)
+            for i in range(self.n_params)
+        ]
+        return torch.cat([v.flatten()[:1] for v in vals])
 
     def forward(
         self,
@@ -258,7 +309,13 @@ class TMDPDFSimple(nn.Module):
         bounds_list = []
         if param_bounds is not None:
             try:
-                for idx in range(min(len(param_bounds), 2)):
+                if len(param_bounds) != self.n_params:
+                    print(
+                        f"{tcolors.WARNING}[tmdpdf.py] {self.param_type}.{self.flavor}: "
+                        f"param_bounds has {len(param_bounds)} entries for {self.n_params} parameters. "
+                        f"Missing entries are treated as unbounded; extra entries are ignored.{tcolors.ENDC}"
+                    )
+                for idx in range(min(len(param_bounds), self.n_params)):
                     b = parse_bound(param_bounds[idx] if idx < len(param_bounds) else None)
                     bounds_list.append(b)
             except (TypeError, KeyError):
@@ -291,7 +348,9 @@ class TMDPDFSimple(nn.Module):
                 else:
                     param = nn.Parameter(torch.tensor([init_val], dtype=torch.float32))
                 self.free_params_list.append((param_idx, param))
-                registry.register_parameter(param_type, flavor, param_idx, param)
+                registry.register_parameter(
+                    param_type, flavor, param_idx, param, bounds=bounds
+                )
             elif parsed["type"] == "reference":
                 ref = parsed["value"]
                 ref_type = ref["type"] if ref["type"] else param_type
@@ -305,11 +364,14 @@ class TMDPDFSimple(nn.Module):
                     param_idx,
                     shared_param,
                     source=(ref_type, ref["flavor"], ref["param_idx"]),
+                    bounds=bounds,
                 )
             elif parsed["type"] == "expression":
                 param = nn.Parameter(torch.tensor([init_val], dtype=torch.float32))
                 self.free_params_list.append((param_idx, param))
-                registry.register_parameter(param_type, flavor, param_idx, param)
+                registry.register_parameter(
+                    param_type, flavor, param_idx, param, bounds=bounds
+                )
                 parsed["expression"] = parsed["value"]
 
         for param_idx, val in self.fixed_params:
