@@ -326,6 +326,24 @@ if __name__ == "__main__":
             result[f"ffs.{flavor}"] = [p[i].item() for i in range(p.numel())]
 
         # -------------------------------------------------------------
+        # Sivers modules (if present)
+        # -------------------------------------------------------------
+        if hasattr(fnp_mgr, "sivers_modules") and fnp_mgr.sivers_modules is not None:
+            for flavor, mod in fnp_mgr.sivers_modules.items():
+                with torch.no_grad():
+                    p = mod.get_params_tensor()
+                result[f"sivers.{flavor}"] = [p[i].item() for i in range(p.numel())]
+
+        # -------------------------------------------------------------
+        # Qiu-Sterman modules (if present)
+        # -------------------------------------------------------------
+        if hasattr(fnp_mgr, "qiu_sterman_modules") and fnp_mgr.qiu_sterman_modules is not None:
+            for flavor, mod in fnp_mgr.qiu_sterman_modules.items():
+                with torch.no_grad():
+                    p = mod.get_params_tensor()
+                result[f"qiu_sterman.{flavor}"] = [p[i].item() for i in range(p.numel())]
+
+        # -------------------------------------------------------------
         # Evolution
         # -------------------------------------------------------------
         # Get the evolution module from the fNP manager.
@@ -341,6 +359,7 @@ if __name__ == "__main__":
         result["evolution"] = [g2_val]  # Single value: strong coupling g2
 
         # Return the result dictionary.
+        # The dictionary should look something like {"pdfs.u": [p0, p1, p2, ...], "ffs.u": [p0, p1, p2, ...], "evolution": [g2_val], ...}
         return result
 
     def build_param_table_rows(truth: dict, current: dict) -> List[Dict[str, Any]]:
@@ -451,6 +470,10 @@ if __name__ == "__main__":
 
         _append_module_records("pdfs", fnp_mgr_local.pdf_modules)
         _append_module_records("ffs", fnp_mgr_local.ff_modules)
+        if hasattr(fnp_mgr_local, "sivers_modules") and fnp_mgr_local.sivers_modules is not None:
+            _append_module_records("sivers", fnp_mgr_local.sivers_modules)
+        if hasattr(fnp_mgr_local, "qiu_sterman_modules") and fnp_mgr_local.qiu_sterman_modules is not None:
+            _append_module_records("qiu_sterman", fnp_mgr_local.qiu_sterman_modules)
         return records
 
     # -------------------------------------------------------------------------
