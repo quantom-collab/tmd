@@ -192,7 +192,7 @@ class fNPManager(nn.Module):
                 class_map=sivers_param_classes,
                 default_cfg=DEFAULT_SIVERS_PARAMS,
                 default_parametrization=default_parametrization,
-                include_bounds=False,
+                include_bounds=True,
             )
         else:
             self.sivers_modules = None
@@ -205,7 +205,7 @@ class fNPManager(nn.Module):
                 class_map=qiu_sterman_param_classes,
                 default_cfg=DEFAULT_QIU_STERMAN_PARAMS,
                 default_parametrization=default_parametrization,
-                include_bounds=False,
+                include_bounds=True,
             )
         else:
             self.qiu_sterman_modules = None

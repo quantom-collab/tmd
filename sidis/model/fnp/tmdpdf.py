@@ -49,6 +49,9 @@ class TMDPDFFlexible(nn.Module):
                 f"{tcolors.FAIL}[fnp/tmdpdf.py] free_mask length ({len(free_mask)}) must match init_params length ({len(init_params)}){tcolors.ENDC}"
             )
 
+        
+        self.param_bounds_map = param_bounds_map or {}
+
         self.flavor = flavor
         self.param_type = param_type
         self.n_params = len(init_params)
@@ -82,6 +85,7 @@ class TMDPDFFlexible(nn.Module):
             bounds_list.append(None)
 
         for param_idx, (init_val, entry) in enumerate(zip(init_params, free_mask)):
+            # parse_entry returns a 
             parsed = self.parser.parse_entry(entry, param_type, flavor)
             bounds = bounds_list[param_idx] if param_idx < len(bounds_list) else None
             self.param_configs.append(
@@ -111,8 +115,14 @@ class TMDPDFFlexible(nn.Module):
                 # Linked parameter - use shared parameter
                 ref = parsed["value"]
                 ref_type = ref["type"] if ref["type"] else param_type
+                shared_init = init_val
+                if bounds is not None:
+                    lo, hi = bounds
+                    u = (init_val - lo) / (hi - lo)
+                    u = max(1e-6, min(1 - 1e-6, u))
+                    shared_init = float(torch.logit(torch.tensor(u)).item())
                 shared_param = registry.create_shared_parameter(
-                    ref_type, ref["flavor"], ref["param_idx"], init_val
+                    ref_type, ref["flavor"], ref["param_idx"], shared_init
                 )
                 self.free_params_list.append((param_idx, shared_param))
                 registry.register_parameter(
@@ -155,14 +165,12 @@ class TMDPDFFlexible(nn.Module):
                 dev = torch.device("cpu")
 
         param_vals = [None] * self.n_params
-
         for param_idx, val in self.fixed_params:
             param_vals[param_idx] = torch.tensor([float(val)], dtype=torch.float32, device=dev)
 
         for param_idx, param in self.free_params_list:
             config = self.param_configs[param_idx]
             parsed = config["parsed"]
-
             if parsed["type"] == "boolean" or parsed["type"] == "reference":
                 bounds = config.get("bounds")
                 if bounds is None and parsed["type"] == "reference":
@@ -179,7 +187,6 @@ class TMDPDFFlexible(nn.Module):
                     p = param.flatten()[0]
                     param_vals[param_idx] = p.unsqueeze(0)
             elif parsed["type"] == "expression":
-                # Evaluate expression dynamically
                 expr_value = self.evaluator.evaluate(
                     parsed["expression"], self.param_type, self.flavor
                 )
@@ -301,7 +308,7 @@ class TMDPDFSimple(nn.Module):
 
         self.flavor = flavor
         self.param_type = param_type
-        self.n_params = 2
+        self.n_params = len(init_params)
         self.registry = registry
         self.evaluator = evaluator
         self.parser = ParameterLinkParser()
@@ -328,6 +335,7 @@ class TMDPDFSimple(nn.Module):
         self.free_params_list = []
 
         for param_idx, (init_val, entry) in enumerate(zip(init_params, free_mask)):
+            # parse_entry returns a dict with keys: is_fixed, type, value
             parsed = self.parser.parse_entry(entry, param_type, flavor)
             bounds = bounds_list[param_idx] if param_idx < len(bounds_list) else None
             self.param_configs.append(
@@ -336,6 +344,8 @@ class TMDPDFSimple(nn.Module):
 
             if parsed["is_fixed"]:
                 self.fixed_params.append((param_idx, init_val))
+                
+            # make sure that we are using a free parameter.
             elif parsed["type"] == "boolean" and parsed["value"]:
                 if bounds is not None:
                     lo, hi = bounds
@@ -354,8 +364,14 @@ class TMDPDFSimple(nn.Module):
             elif parsed["type"] == "reference":
                 ref = parsed["value"]
                 ref_type = ref["type"] if ref["type"] else param_type
+                shared_init = init_val
+                if bounds is not None:
+                    lo, hi = bounds
+                    u = (init_val - lo) / (hi - lo)
+                    u = max(1e-6, min(1 - 1e-6, u))
+                    shared_init = float(torch.logit(torch.tensor(u)).item())
                 shared_param = registry.create_shared_parameter(
-                    ref_type, ref["flavor"], ref["param_idx"], init_val
+                    ref_type, ref["flavor"], ref["param_idx"], shared_init
                 )
                 self.free_params_list.append((param_idx, shared_param))
                 registry.register_parameter(

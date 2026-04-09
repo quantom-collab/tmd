@@ -39,7 +39,6 @@ class TMDFFFlexible(nn.Module):
         param_bounds_map: Optional[Dict[Tuple[str, str, int], Tuple[float, float]]] = None,
     ):
         super().__init__()
-        self.param_bounds_map = param_bounds_map or {}
 
         if len(init_params) != 9:
             raise ValueError(
@@ -49,6 +48,7 @@ class TMDFFFlexible(nn.Module):
             raise ValueError(
                 f"{tcolors.FAIL}[fnp/tmdff.py] free_mask length ({len(free_mask)}) must match init_params length ({len(init_params)}){tcolors.ENDC}"
             )
+        self.param_bounds_map = param_bounds_map or {}
 
         self.flavor = flavor
         self.param_type = param_type
@@ -64,7 +64,6 @@ class TMDFFFlexible(nn.Module):
         self.param_configs = []
         self.fixed_params = []
         self.free_params_list = []
-
         bounds_list = []
         if param_bounds is not None:
             try:
@@ -109,8 +108,14 @@ class TMDFFFlexible(nn.Module):
             elif parsed["type"] == "reference":
                 ref = parsed["value"]
                 ref_type = ref["type"] if ref["type"] else param_type
+                shared_init = init_val
+                if bounds is not None:
+                    lo, hi = bounds
+                    u = (init_val - lo) / (hi - lo)
+                    u = max(1e-6, min(1 - 1e-6, u))
+                    shared_init = float(torch.logit(torch.tensor(u)).item())
                 shared_param = registry.create_shared_parameter(
-                    ref_type, ref["flavor"], ref["param_idx"], init_val
+                    ref_type, ref["flavor"], ref["param_idx"], shared_init
                 )
                 self.free_params_list.append((param_idx, shared_param))
                 registry.register_parameter(
@@ -157,7 +162,6 @@ class TMDFFFlexible(nn.Module):
         for param_idx, param in self.free_params_list:
             config = self.param_configs[param_idx]
             parsed = config["parsed"]
-
             if parsed["type"] == "boolean" or parsed["type"] == "reference":
                 bounds = config.get("bounds")
                 if bounds is None and parsed["type"] == "reference":
@@ -341,8 +345,14 @@ class TMDFFSimple(nn.Module):
             elif parsed["type"] == "reference":
                 ref = parsed["value"]
                 ref_type = ref["type"] if ref["type"] else param_type
+                shared_init = init_val
+                if bounds is not None:
+                    lo, hi = bounds
+                    u = (init_val - lo) / (hi - lo)
+                    u = max(1e-6, min(1 - 1e-6, u))
+                    shared_init = float(torch.logit(torch.tensor(u)).item())
                 shared_param = registry.create_shared_parameter(
-                    ref_type, ref["flavor"], ref["param_idx"], init_val
+                    ref_type, ref["flavor"], ref["param_idx"], shared_init
                 )
                 self.free_params_list.append((param_idx, shared_param))
                 registry.register_parameter(
