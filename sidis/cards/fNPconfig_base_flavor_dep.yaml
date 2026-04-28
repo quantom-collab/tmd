@@ -6,7 +6,6 @@
 hadron: proton
 
 # Combo selection: specifies which fNP combo implementation to use
-# Available combos: "standard" (flavor-dependent), "flavor_blind" (shared parameters)
 combo: flavor_dep
 
 # Shared evolution factor (applies to both PDFs and FFs)

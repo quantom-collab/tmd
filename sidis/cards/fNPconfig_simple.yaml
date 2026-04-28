@@ -19,21 +19,23 @@ evolution:
   free_mask: [true]
   param_bounds: [[0.01, 0.5]]
 
+# The parameters are [lambda_f^2, alpha]
 pdfs:
-  # lambda_f^2, alpha
   u:
     init_params: [0.5, 0.3]
     free_mask: [true, true]
     param_bounds: [[0.1, 1], [0.1, 1]]
   d:
     init_params: [0.25, 0.15]
-    free_mask: [true, true]
+    free_mask: ["0.5*u[0]", "0.5*u[1]"]
     param_bounds: [[0.1, 1], [0.1, 1]]
-    # free_mask: ["0.5*u[0]", "0.5*u[1]"]
   s:
     init_params: [0.5, 0.3]
     free_mask: [false, false]
     param_bounds: [[0.1, 1], [0.1, 1]]
+  c:
+    init_params: [0.3, 0.2]
+    free_mask: [false, false]  
   ub:
     init_params: [0.4, 0.25]
     free_mask: [false, false]
@@ -43,12 +45,9 @@ pdfs:
   sb:
     init_params: [0.35, 0.2]
     free_mask: [false, false]
-  c:
-    init_params: [0.3, 0.2]
-    free_mask: [false, false]
   cb:
     init_params: [0.3, 0.2]
-    free_mask: [false, false]
+    free_mask: [false, false]  
 
 ffs:
   u:
@@ -64,6 +63,9 @@ ffs:
   s:
     init_params: [0.5, 0.3]
     free_mask: [false, false]
+  c:
+    init_params: [0.3, 0.2]
+    free_mask: [false, false]
   ub:
     init_params: [0.4, 0.25]
     free_mask: [false, false]
@@ -72,9 +74,6 @@ ffs:
     free_mask: [false, false]
   sb:
     init_params: [0.35, 0.2]
-    free_mask: [false, false]
-  c:
-    init_params: [0.3, 0.2]
     free_mask: [false, false]
   cb:
     init_params: [0.3, 0.2]

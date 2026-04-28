@@ -30,11 +30,20 @@ from .fnp_config import (
     parse_bound,
     FLAVORS,
 )
+
 from .fnp.tmdpdf import TMDPDFFlexible, TMDPDFSimple
 from .fnp.tmdff import TMDFFFlexible, TMDFFSimple
 from .fnp.sivers import Sivers, SiversAV
 from .fnp.qiu_sterman import QiuSterman, QiuStermanAV
-SUPPORTED_COMBOS = {"simple", "flavor_dep", "flavor_blind", "flexible", "flexible_new", "flexible AV"}
+
+SUPPORTED_COMBOS = {
+    "simple",
+    "flavor_dep",
+    "flavor_blind",
+    "flexible",
+    "flexible_new",
+    "flexible AV",
+}
 
 
 class fNP_evolution(nn.Module):
@@ -63,7 +72,9 @@ class fNP_evolution(nn.Module):
     def forward(self, b: torch.Tensor, zeta: torch.Tensor) -> torch.Tensor:
         if b.dim() > zeta.dim():
             zeta = zeta.unsqueeze(-1)
-        return torch.exp(-(self.g2**2) * (b**2) * torch.log(zeta / self.Q0_squared) / 4.0)
+        return torch.exp(
+            -(self.g2**2) * (b**2) * torch.log(zeta / self.Q0_squared) / 4.0
+        )
 
 
 MAP22_DEFAULT_PDF_PARAMS = {
@@ -157,14 +168,27 @@ class fNPManager(nn.Module):
             )
             DependencyResolver.resolve_circular_dependencies(qiu_graph)
 
-        pdf_param_classes = {"flexible": TMDPDFFlexible, "simple": TMDPDFSimple, "flexible AV": TMDPDFFlexible}
-        ff_param_classes = {"flexible": TMDFFFlexible, "simple": TMDFFSimple, "flexible AV": TMDFFFlexible}
+        pdf_param_classes = {
+            "flexible": TMDPDFFlexible,
+            "simple": TMDPDFSimple,
+            "flexible AV": TMDPDFFlexible,
+        }
+        ff_param_classes = {
+            "flexible": TMDFFFlexible,
+            "simple": TMDFFSimple,
+            "flexible AV": TMDFFFlexible,
+        }
         if self.sivers_flag:
             sivers_param_classes = {"flexible": Sivers, "flexible AV": SiversAV}
         if self.qiu_sterman_flag:
-            qiu_sterman_param_classes = {"flexible": QiuSterman, "flexible AV": QiuStermanAV}
-        default_parametrization = self.combo if "flavor" not in self.combo else "flexible"
- 
+            qiu_sterman_param_classes = {
+                "flexible": QiuSterman,
+                "flexible AV": QiuStermanAV,
+            }
+        default_parametrization = (
+            self.combo if "flavor" not in self.combo else "flexible"
+        )
+
         # Build modules first.
         self.pdf_modules = self._build_module(
             np_type="pdfs",
@@ -251,7 +275,9 @@ class fNPManager(nn.Module):
             modules[flavor] = cls(**kwargs)
         return nn.ModuleDict(modules)
 
-    def _collect_param_bounds(self, config: Dict[str, Any]) -> Dict[Tuple[str, str, int], Tuple[float, float]]:
+    def _collect_param_bounds(
+        self, config: Dict[str, Any]
+    ) -> Dict[Tuple[str, str, int], Tuple[float, float]]:
         out: Dict[Tuple[str, str, int], Tuple[float, float]] = {}
         param_types = ["pdfs", "ffs"]
         if self.sivers_flag:
@@ -263,17 +289,25 @@ class fNPManager(nn.Module):
             flavor_keys = (
                 self.pdf_flavor_keys
                 if param_type == "pdfs"
-                else self.ff_flavor_keys
-                if param_type == "ffs"
-                else self.sivers_flavor_keys
-                if param_type == "sivers"
-                else self.qiu_sterman_flavor_keys
+                else (
+                    self.ff_flavor_keys
+                    if param_type == "ffs"
+                    else (
+                        self.sivers_flavor_keys
+                        if param_type == "sivers"
+                        else self.qiu_sterman_flavor_keys
+                    )
+                )
             )
             for flavor in flavor_keys:
                 flavor_cfg = type_config.get(flavor, {})
                 if flavor_cfg is None:
                     continue
-                bounds_list = flavor_cfg.get("param_bounds") if hasattr(flavor_cfg, "get") else None
+                bounds_list = (
+                    flavor_cfg.get("param_bounds")
+                    if hasattr(flavor_cfg, "get")
+                    else None
+                )
                 if bounds_list is None:
                     continue
                 n_params = len(flavor_cfg.get("init_params", []))
@@ -296,7 +330,9 @@ class fNPManager(nn.Module):
                         out[key] = parsed
         return out
 
-    def _collect_evolution_bounds(self, config: Dict[str, Any]) -> List[Tuple[float, float]]:
+    def _collect_evolution_bounds(
+        self, config: Dict[str, Any]
+    ) -> List[Tuple[float, float]]:
         out: List[Tuple[float, float]] = []
         ev_bounds = config.get("evolution", {}).get("param_bounds")
         if ev_bounds is None:
@@ -312,7 +348,10 @@ class fNPManager(nn.Module):
 
     def _propagate_param_bounds_map(self) -> None:
         """Attach global bounds map to all modules that can use linked bounds."""
-        module_groups: List[nn.Module] = [*self.pdf_modules.values(), *self.ff_modules.values()]
+        module_groups: List[nn.Module] = [
+            *self.pdf_modules.values(),
+            *self.ff_modules.values(),
+        ]
         if self.sivers_modules is not None:
             module_groups.extend(self.sivers_modules.values())
         if self.qiu_sterman_modules is not None:
@@ -364,14 +403,19 @@ class fNPManager(nn.Module):
         seen: set = set()
 
         # Include polarized modules when enabled.
-        module_groups: List[nn.Module] = [*self.pdf_modules.values(), *self.ff_modules.values()]
+        module_groups: List[nn.Module] = [
+            *self.pdf_modules.values(),
+            *self.ff_modules.values(),
+        ]
         if self.sivers_modules is not None:
             module_groups.extend(self.sivers_modules.values())
         if self.qiu_sterman_modules is not None:
             module_groups.extend(self.qiu_sterman_modules.values())
 
         for module in module_groups:
-            if not hasattr(module, "free_params_list") or not hasattr(module, "param_configs"):
+            if not hasattr(module, "free_params_list") or not hasattr(
+                module, "param_configs"
+            ):
                 continue
             for param_idx, param in module.free_params_list:
                 if id(param) in seen:
@@ -383,13 +427,19 @@ class fNPManager(nn.Module):
                 # Reference params may inherit bounds from their source.
                 if bounds is None and parsed.get("type") == "reference":
                     ref = parsed["value"]
-                    ref_type = ref["type"] if ref["type"] else getattr(module, "param_type", None)
+                    ref_type = (
+                        ref["type"]
+                        if ref["type"]
+                        else getattr(module, "param_type", None)
+                    )
                     ref_key = (ref_type, ref["flavor"], ref["param_idx"])
                     bounds = self.param_bounds.get(ref_key)
 
                 if bounds is not None:
                     seen.add(id(param))
-                    u = torch.rand(1, generator=gen, device=param.device, dtype=param.dtype)
+                    u = torch.rand(
+                        1, generator=gen, device=param.device, dtype=param.dtype
+                    )
                     u = u.clamp(1e-6, 1 - 1e-6)
                     theta = torch.logit(u)
                     with torch.no_grad():
@@ -460,14 +510,20 @@ class fNPManager(nn.Module):
             "ffs": self.forward_ff(z, b, ff_flavors),
             "evolution": self.forward_evolution(b, Q),
         }
-        out["sivers"] = self.forward_sivers(x, b, sivers_flavors) if self.sivers_flag else None
+        out["sivers"] = (
+            self.forward_sivers(x, b, sivers_flavors) if self.sivers_flag else None
+        )
         out["qiu_sterman"] = (
-            self.forward_qiu_sterman(x, b, qiu_sterman_flavors) if self.qiu_sterman_flag else None
+            self.forward_qiu_sterman(x, b, qiu_sterman_flavors)
+            if self.qiu_sterman_flag
+            else None
         )
         return out
 
 
-def _load_config(config_path: str = None, config_dict: Dict[str, Any] = None) -> Dict[str, Any]:
+def _load_config(
+    config_path: str = None, config_dict: Dict[str, Any] = None
+) -> Dict[str, Any]:
     if config_dict is not None:
         return config_dict
     if config_path is None:

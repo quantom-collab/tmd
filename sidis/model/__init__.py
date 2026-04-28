@@ -168,6 +168,28 @@ class TruthModel(torch.nn.Module):
 
         return self.stf['FUTS'](x, Q2, z, qT, initial_hadron, fragmented_hadron)
 
+    def get_FUUT(
+        self,
+        events_tensor: torch.Tensor,
+        expt_setup: List[str] = ["p", "pi_plus"],
+    ) -> torch.Tensor:
+        """
+        Unpolarized structure function F_UU^T at the event kinematics (no prefactors).
+
+        Same kinematic map as ``forward`` / ``get_FUT_sin_phih_minus_phis``: columns are
+        ``x, PhT, Q, z`` (angles optional and ignored here). Used by fits that optimize
+        against FUUT directly instead of the full differential cross section.
+        """
+        x = events_tensor[:, 0]
+        PhT = events_tensor[:, 1]
+        Q = events_tensor[:, 2]
+        z = events_tensor[:, 3]
+        qT = PhT / z
+        Q2 = Q**2
+        initial_hadron = expt_setup[0]
+        fragmented_hadron = expt_setup[1]
+        return self.stf["FUUT"](x, Q2, z, qT, initial_hadron, fragmented_hadron)
+
     def forward(self, events_tensor: torch.Tensor, expt_setup: List[str] = ["p", "pi_plus"], rs: float = 140.0) -> torch.Tensor:
         x = events_tensor[:, 0]
         PhT = events_tensor[:, 1]

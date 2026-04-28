@@ -34,6 +34,7 @@ except Exception as err:
         f"(Import error: {err})",
     )
 
+# Import tcolors from the correct module for printing unified error messages.
 try:
     from ..utilities.colors import tcolors
 except ImportError:
@@ -46,11 +47,15 @@ except ImportError:
 ###############################################################################
 # 1. Canonical flavors
 ###############################################################################
-# Canonical flavor ordering used across manager, OPE, TMD builder, and structure
-# functions.
+# Canonical flavor ordering. 
+# FLAVORS defines the single iteration order used when the code loops over "all
+# flavors" (fNPManager module construction, dependency-graph walks, TMDBuilder,
+# OPE setup in TruthModel, etc.). YAML cards under pdfs/ffs/etc. are keyed by
+# flavor name; their key order in the file does not matter.
 FLAVORS: Tuple[str, ...] = ("u", "d", "s", "c", "cb", "sb", "db", "ub")
 
-# Electric charge squared for each canonical flavor.
+# Electric charge squared e_q^2 for each canonical flavor. Keys must cover every 
+# name in FLAVORS; dict key order is unused.
 QUARK_CHARGES_SQUARED: Dict[str, float] = {
     "u": 4 / 9,
     "d": 1 / 9,
@@ -387,9 +392,7 @@ class DependencyResolver:
     # No 'self' argument is automatically passed; can be called as DependencyResolver.build_dependency_graph(...)
     @staticmethod
     def build_dependency_graph(
-        config: Dict[str, Any], 
-        param_type: str, 
-        flavor_keys: List[str]
+        config: Dict[str, Any], param_type: str, flavor_keys: List[str]
     ) -> Dict[Tuple[str, str, int], List[Tuple[str, str, int]]]:
         """
         Build dependency graph from configuration.
