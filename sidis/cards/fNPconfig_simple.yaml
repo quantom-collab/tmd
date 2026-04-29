@@ -15,7 +15,7 @@ hadron: proton
 combo: simple
 
 evolution:
-  init_g2: 0.12840
+  init_params: [0.12840]
   free_mask: [true]
   param_bounds: [[0.01, 0.5]]
 
