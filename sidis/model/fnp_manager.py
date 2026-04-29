@@ -35,6 +35,8 @@ from .fnp.tmdpdf import TMDPDFFlexible, TMDPDFSimple
 from .fnp.tmdff import TMDFFFlexible, TMDFFSimple
 from .fnp.sivers import Sivers, SiversAV
 from .fnp.qiu_sterman import QiuSterman, QiuStermanAV
+from .fnp.fnp_evolution import fNP_evolution
+from .fnp_linked_params import build_bounds_list
 
 SUPPORTED_COMBOS = {
     "simple",
@@ -44,37 +46,6 @@ SUPPORTED_COMBOS = {
     "flexible_new",
     "flexible AV",
 }
-
-
-class fNP_evolution(nn.Module):
-    """Shared non-perturbative evolution factor."""
-
-    def __init__(self, init_g2: float, free_mask: List[bool]):
-        super().__init__()
-        if len(free_mask) != 1:
-            raise ValueError(
-                f"[fnp_manager.py] {tcolors.FAIL}Evolution free_mask must have exactly 1 element, got {len(free_mask)}{tcolors.ENDC}"
-            )
-
-        self.register_buffer("Q0_squared", torch.tensor(1.0, dtype=torch.float32))
-        mask = torch.tensor(free_mask, dtype=torch.float32)
-        self.register_buffer("g2_mask", mask)
-
-        init_tensor = torch.tensor([init_g2], dtype=torch.float32)
-        self.register_buffer("fixed_g2", init_tensor * (1 - mask))
-        self.free_g2 = nn.Parameter(init_tensor * mask)
-        self.free_g2.register_hook(lambda grad: grad * self.g2_mask)
-
-    @property
-    def g2(self):
-        return self.fixed_g2 + self.free_g2
-
-    def forward(self, b: torch.Tensor, zeta: torch.Tensor) -> torch.Tensor:
-        if b.dim() > zeta.dim():
-            zeta = zeta.unsqueeze(-1)
-        return torch.exp(
-            -(self.g2**2) * (b**2) * torch.log(zeta / self.Q0_squared) / 4.0
-        )
 
 
 MAP22_DEFAULT_PDF_PARAMS = {
@@ -137,10 +108,24 @@ class fNPManager(nn.Module):
             f"  flavors: {len(self.flavor_keys)}\n{tcolors.ENDC}"
         )
 
-        evolution_config = config.get("evolution", {})
+        evolution_config = config.get("evolution", {}) or {}
+        ev_init = evolution_config.get("init_params")
+        if ev_init is None:
+            ev_init = [float(evolution_config.get("init_g2", 0.12840))]
+        else:
+            ev_init = [float(x) for x in list(ev_init)]
+        ev_bounds_raw = evolution_config.get("param_bounds")
+        evolution_bounds_list = build_bounds_list(
+            ev_bounds_raw,
+            n_params=len(ev_init),
+            param_type="evolution",
+            flavor="g2",
+            warn_tag="[fNPManager]",
+        )
         self.evolution = fNP_evolution(
-            init_g2=evolution_config.get("init_g2", 0.12840),
-            free_mask=evolution_config.get("free_mask", [True]),
+            init_params=ev_init,
+            free_mask=list(evolution_config.get("free_mask", [True])),
+            bounds_list=evolution_bounds_list,
         )
 
         self.registry = ParameterRegistry()
@@ -364,15 +349,9 @@ class fNPManager(nn.Module):
         self,
     ) -> List[Tuple[nn.Parameter, Optional[float], Optional[float]]]:
         result: List[Tuple[nn.Parameter, Optional[float], Optional[float]]] = []
-        # PDF/FF bounded parameters are optimized in theta-space and mapped through
-        # sigmoid to physical bounds inside each module. Clamping theta to physical
-        # bounds is incorrect and hurts fit quality. Keep post-step clamping only for
-        # evolution parameters that are represented directly in physical space.
-        if self.evolution_bounds and hasattr(self.evolution, "free_g2"):
-            p = self.evolution.free_g2
-            if p.requires_grad and len(self.evolution_bounds) > 0:
-                lo, hi = self.evolution_bounds[0]
-                result.append((p, lo, hi))
+        # Bounded PDF/FF and evolution ``g₂`` use logit/sigmoid inside the module.
+        # Post-step physical clamps on those internal tensors are wrong; unbounded
+        # trainable ``g₂`` needs no interval clamp either. This list is therefore empty.
         return result
 
     def clamp_parameters_to_bounds(self) -> None:
@@ -389,7 +368,8 @@ class fNPManager(nn.Module):
           physical values through ``sigmoid(theta)``. We therefore sample
           ``u ~ Uniform(0, 1)`` and set ``theta = logit(u)``.
         - For unbounded params, no randomization is applied.
-        - Evolution g2 is randomized directly in physical space using its bounds.
+        - Bounded evolution g₂ uses the same logit draw as bounded PDF/FF (uniform in
+          interior mapped through ``logit``), not a uniform draw in ``[lo, hi]``.
         """
         try:
             dev = next(self.parameters()).device
@@ -445,14 +425,20 @@ class fNPManager(nn.Module):
                     with torch.no_grad():
                         param.data.copy_(theta)
 
-        # Evolution g2 is not sigmoid-reparameterized; randomize directly.
-        if self.evolution_bounds and hasattr(self.evolution, "free_g2"):
-            p = self.evolution.free_g2
-            if p.requires_grad and len(self.evolution_bounds) > 0:
-                lo, hi = self.evolution_bounds[0]
-                u = torch.rand(1, generator=gen, device=p.device, dtype=p.dtype)
-                with torch.no_grad():
-                    p.data.copy_(lo + (hi - lo) * u)
+        # Bounded trainable evolution g₂: ``free_g2`` is logit θ; sample like PDF/FF.
+        evo = self.evolution
+        p_e = getattr(evo, "free_g2", None)
+        if (
+            p_e is not None
+            and p_e.requires_grad
+            and evo.uses_logit_reparam()
+        ):
+            u = torch.rand(
+                1, generator=gen, device=p_e.device, dtype=p_e.dtype
+            ).clamp(1e-6, 1 - 1e-6)
+            theta = torch.logit(u)
+            with torch.no_grad():
+                p_e.data.copy_(theta)
 
     def _compute_zeta(self, Q: torch.Tensor) -> torch.Tensor:
         return Q**2

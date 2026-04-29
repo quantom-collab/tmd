@@ -7,7 +7,7 @@ hadron: proton
 combo: flavor_blind
 
 evolution:
-  init_g2: 0.12840
+  init_params: [0.12840]
   g1_T: 0.045
   free_mask: [true]
 

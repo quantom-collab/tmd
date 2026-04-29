@@ -451,9 +451,9 @@ if __name__ == "__main__":
         records: List[Dict[str, Any]] = []
         fnp_mgr_local = _get_fnp_manager(mdl)
 
-        # Evolution parameter g2
+        # Evolution parameter g2. When g₂ is fixed, `free_g2` is ``None``.
         evo_param = fnp_mgr_local.evolution.free_g2
-        evo_is_trainable = bool(evo_param.requires_grad)
+        evo_is_trainable = evo_param is not None and bool(evo_param.requires_grad)
         records.append(
             {
                 "name": "evolution.g2",

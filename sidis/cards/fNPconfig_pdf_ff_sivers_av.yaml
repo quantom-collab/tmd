@@ -24,8 +24,8 @@ polarization: transverse
 # Shared evolution factor (applies to both PDFs and FFs)
 # Evolution parameter remains independent (no linking supported)
 evolution:
-  init_g2: 0.12840      # Evolution parameter g₂ (from MAP22)
-  free_mask: [true]     # g2 is trainable
+  init_params: [0.12840]  # Evolution parameter g₂ (from MAP22)
+  free_mask: [true]      # g2 is trainable
   # Allowed interval(s) for minimizer: one [low, high] per evolution parameter; use null for no bound
   param_bounds: [[0.01, 0.5]]
 

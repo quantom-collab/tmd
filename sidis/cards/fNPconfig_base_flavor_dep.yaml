@@ -11,8 +11,8 @@ combo: flavor_dep
 # Shared evolution factor (applies to both PDFs and FFs)
 # S_NP(ζ, b_T) = exp[-g₂² b_T²/4 × ln(ζ/Q₀²)]
 evolution:
-  init_g2: 0.12840      # Evolution parameter g₂ (from MAP22)
-  free_mask: [true]     # g2 is trainable
+  init_params: [0.12840]  # Evolution parameter g₂ (from MAP22)
+  free_mask: [true]      # g2 is trainable
 
 # TMD PDF parameterizations (MAP22 implementation)
 # Parameters: [N₁, α₁, σ₁, λ, N₁ᵦ, N₁ᶜ, λ₂, α₂, α₃, σ₂, σ₃] (11 params)
