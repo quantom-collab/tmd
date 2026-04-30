@@ -25,6 +25,7 @@ except ImportError:
 
 from .fnp_config import (
     ParameterRegistry,
+    ParameterLinkParser,
     ExpressionEvaluator,
     DependencyResolver,
     parse_bound,
@@ -46,6 +47,41 @@ SUPPORTED_COMBOS = {
     "flexible_new",
     "flexible AV",
 }
+SUPPORTED_COMBOS = {"simple", "flavor_dep", "flavor_blind","flexible", "flexible_new", "flexible AV", "simple AV"}
+
+
+class fNP_evolution(nn.Module):
+    """Shared non-perturbative evolution factor."""
+
+    def __init__(self, init_g2: float, free_mask: List[bool]):
+        super().__init__()
+        if len(free_mask) != 1:
+            raise ValueError(
+                f"[fnp_manager.py] {tcolors.FAIL}Evolution free_mask must have exactly 1 element, got {len(free_mask)}{tcolors.ENDC}"
+            )
+
+        # register_buffer defines a tensor that is part of the model's state but not a learnable parameter. 
+        self.register_buffer("Q0_squared", torch.tensor(1.0, dtype=torch.float32))
+        mask = torch.tensor(free_mask, dtype=torch.float32)
+        self.register_buffer("g2_mask", mask)
+
+        init_tensor = torch.tensor([init_g2], dtype=torch.float32)
+        self.register_buffer("fixed_g2", init_tensor * (1 - mask))
+        self.free_g2 = nn.Parameter(init_tensor * mask)
+
+        # register_hook is usd to register a backgward hook on a specific tensor. It allows modify the gradient of the tensor during the backward pass. Here, we use it to apply the g2_mask to the gradient of free_g2, ensuring that only the trainable part of g2 is updated during optimization.
+        
+        self.free_g2.register_hook(lambda grad: grad * self.g2_mask)
+        #self.free_g2 = torch.tensor([0.0])
+
+    @property
+    def g2(self):
+        return self.fixed_g2 + self.free_g2
+        
+    def forward(self, b: torch.Tensor, zeta: torch.Tensor) -> torch.Tensor:
+        if b.dim() > zeta.dim():
+            zeta = zeta.unsqueeze(-1)
+        return torch.exp(-(self.g2**2) * (b**2) * torch.log(zeta / self.Q0_squared) / 4.0)
 
 
 MAP22_DEFAULT_PDF_PARAMS = {
@@ -129,6 +165,7 @@ class fNPManager(nn.Module):
         )
 
         self.registry = ParameterRegistry()
+        self.link_parser = ParameterLinkParser()
         self.evaluator = ExpressionEvaluator(self.registry)
         self.sivers_flag = config.get("polarization", "unpolarized") == "transverse"
         self.qiu_sterman_flag = self.sivers_flag
@@ -163,8 +200,9 @@ class fNPManager(nn.Module):
             "simple": TMDFFSimple,
             "flexible AV": TMDFFFlexible,
         }
+
         if self.sivers_flag:
-            sivers_param_classes = {"flexible": Sivers, "flexible AV": SiversAV}
+            sivers_param_classes = {"flexible": Sivers, "flexible AV": SiversAV, "simple AV": SiversAV}
         if self.qiu_sterman_flag:
             qiu_sterman_param_classes = {
                 "flexible": QiuSterman,
@@ -183,7 +221,11 @@ class fNPManager(nn.Module):
             default_cfg=MAP22_DEFAULT_PDF_PARAMS,
             default_parametrization=default_parametrization,
             include_bounds=True,
+            all_modules = {}
         )
+
+        
+
         self.ff_modules = self._build_module(
             np_type="ffs",
             config=config,
@@ -192,7 +234,10 @@ class fNPManager(nn.Module):
             default_cfg=MAP22_DEFAULT_FF_PARAMS,
             default_parametrization=default_parametrization,
             include_bounds=True,
+            all_modules = {"pdfs": self.pdf_modules}
         )
+
+
         if self.sivers_flag:
             self.sivers_modules = self._build_module(
                 np_type="sivers",
@@ -202,6 +247,7 @@ class fNPManager(nn.Module):
                 default_cfg=DEFAULT_SIVERS_PARAMS,
                 default_parametrization=default_parametrization,
                 include_bounds=True,
+                all_modules={"pdfs": self.pdf_modules, "ffs": self.ff_modules}
             )
         else:
             self.sivers_modules = None
@@ -215,6 +261,7 @@ class fNPManager(nn.Module):
                 default_cfg=DEFAULT_QIU_STERMAN_PARAMS,
                 default_parametrization=default_parametrization,
                 include_bounds=True,
+                all_modules={"pdfs": self.pdf_modules, "ffs": self.ff_modules, "sivers": self.sivers_modules}
             )
         else:
             self.qiu_sterman_modules = None
@@ -223,6 +270,111 @@ class fNPManager(nn.Module):
         self.param_bounds = self._collect_param_bounds(config)
         self.evolution_bounds = self._collect_evolution_bounds(config)
         self._propagate_param_bounds_map()
+
+    def _build_flavor_module(
+        self,
+        flavor: str,
+        flavor_cfg,
+        free_mask,
+        np_type: str,
+        config: Dict[str, Any],
+        flavor_keys: List[str],
+        class_map: Dict[str, type],
+        default_cfg: Dict[str, Any],
+        default_parametrization: str,
+        include_bounds: bool):
+
+        parametrization = flavor_cfg.get("parametrization", default_parametrization)
+        if parametrization not in class_map:
+            available = ", ".join(sorted(class_map.keys()))
+            raise ValueError(
+                f"Unknown {np_type} parametrization '{parametrization}' for flavor '{flavor}'. "
+                f"Available: {available}"
+            )
+        cls = class_map[parametrization]
+        kwargs = dict(
+            flavor=flavor,
+            init_params=flavor_cfg.get("init_params", default_cfg["init_params"]),
+            free_mask=flavor_cfg.get("free_mask", default_cfg["free_mask"]),
+            registry=self.registry,
+            evaluator=self.evaluator,
+            param_type=np_type,
+        )
+        if include_bounds:
+            kwargs["param_bounds"] = flavor_cfg.get("param_bounds")
+            kwargs["param_bounds_map"] = {}
+        
+        return cls(**kwargs)
+
+
+    def _dependencies_met(self, free_mask: List[any], np_type: str, flavor: str, modules: dict, all_modules):
+
+        #print(f"    Checking deps for {flavor}, modules built so far: {list(modules.keys())}")
+
+        # if all entries are bools, we are good
+        for entry in free_mask:
+            if not isinstance(entry, str):
+                #print(f"entry={entry!r} -> skipped (not a string)")
+                continue
+            
+            parsed = self.link_parser.parse_entry(entry, np_type, flavor)
+
+            #print(f"entry={entry!r} -> parsed type={parsed['type']}, value={parsed['value']}")
+
+            # if we have a reference we need to go through its parent parameters and see if we built them
+            if parsed["type"] == "reference":
+                ref_type = parsed["value"]["type"] or np_type
+                ref_flavor = parsed["value"]["flavor"]
+
+                #print(f"ref_flavor={ref_flavor!r}, in modules={ref_flavor in modules}")
+
+
+                # if the reference type and the current type we are processing are different then we need to check if the reference has been built. If it hasn't we throw an error. 
+                if ref_type != np_type:
+                    if ref_flavor not in all_modules.get(ref_type, {}):
+                        raise ValueError(
+                            f"[{np_type}.{flavor}] expression '{entry}' references "
+                            f"found in all_modules. Make sure '{ref_type}' is built before '{np_type}'."
+                            )
+
+             # if the reference type is the same as the current type then we carry on like normal 
+                else:
+                    # same type just not ready yet return false to try again later. 
+                    if ref_flavor not in modules:
+                        return False
+               
+
+            # if it's an expression, we need to extract the references and see if we built them. extract_references returns a list of dictionaries for a given expression with keys: "type", "flavor", "param_idx", "full_match". 
+
+            elif parsed["type"] == 'expression':
+                refs = self.link_parser.extract_references(parsed["value"]) # returns all references in an expression like 2*pdfs.u[0]
+                #print(f"expression refs={refs}")
+
+                for ref in refs:
+                    ref_flavor = ref["flavor"]
+                    ref_type = ref["type"] or np_type
+
+       
+                # if the expression type(s) and the current type we are processing are different then we need to check if the reference has been built. If it hasn't we throw an error. 
+
+                    if ref_type != np_type:
+                        if ref_flavor not in all_modules.get(ref_type, {}):
+                            raise ValueError(
+                                f"[{np_type}.{flavor}] expression '{entry}' references "
+                                f"'{ref['full_match']}' but '{ref_type}.{ref_flavor}' was not "
+                                f"found in all_modules. Make sure '{ref_type}' is built before '{np_type}'."
+                            )
+                    else:
+                        # same type just not ready yet return false to try again later. 
+                        if ref_flavor not in modules:
+                            return False
+            
+            else:
+                print(f"entry={entry!r} -> parsed as {parsed['type']}, treated as no dependency")
+
+        
+        return True 
+
 
     def _build_module(
         self,
@@ -233,31 +385,50 @@ class fNPManager(nn.Module):
         default_cfg: Dict[str, Any],
         default_parametrization: str,
         include_bounds: bool,
+        all_modules: dict,
     ) -> nn.ModuleDict:
+
         modules = {}
         type_config = config.get(np_type, {})
-        for flavor in flavor_keys:
-            flavor_cfg = type_config.get(flavor, None) or default_cfg.copy()
-            parametrization = flavor_cfg.get("parametrization", default_parametrization)
-            if parametrization not in class_map:
-                available = ", ".join(sorted(class_map.keys()))
-                raise ValueError(
-                    f"Unknown {np_type} parametrization '{parametrization}' for flavor '{flavor}'. "
-                    f"Available: {available}"
-                )
-            cls = class_map[parametrization]
-            kwargs = dict(
-                flavor=flavor,
-                init_params=flavor_cfg.get("init_params", default_cfg["init_params"]),
-                free_mask=flavor_cfg.get("free_mask", default_cfg["free_mask"]),
-                registry=self.registry,
-                evaluator=self.evaluator,
-                param_type=np_type,
-            )
-            if include_bounds:
-                kwargs["param_bounds"] = flavor_cfg.get("param_bounds")
-                kwargs["param_bounds_map"] = {}
-            modules[flavor] = cls(**kwargs)
+        remaining = list(flavor_keys)  # Start with all flavors needing build
+        build_order = []
+        all_modules = all_modules or {}
+
+        while remaining:
+            made_progress = False
+
+            for flavor in list(remaining):  # Iterate over a copy since we may modify the list
+
+                flavor_cfg = type_config.get(flavor, None) or default_cfg.copy()
+                free_mask = flavor_cfg.get("free_mask", default_cfg["free_mask"])
+  
+
+                if self._dependencies_met(free_mask, np_type, flavor, modules, all_modules):
+
+                    modules[flavor] = self._build_flavor_module(
+                        flavor=flavor,
+                        flavor_cfg=flavor_cfg,
+                        free_mask=free_mask,
+                        np_type=np_type,
+                        config=config,
+                        flavor_keys=flavor_keys,
+                        class_map=class_map,
+                        default_cfg=default_cfg,
+                        default_parametrization=default_parametrization,
+                        include_bounds=include_bounds,
+                    )
+
+                    print(f"Built {flavor} module for {np_type}")
+
+                    remaining.remove(flavor)
+                    build_order.append(flavor)
+                    made_progress = True
+            
+            if not made_progress:
+                raise ValueError(f"{np_type} could not be built for flavors {remaining}. ")
+        
+        print(f'{np_type} build order: {build_order}')
+    
         return nn.ModuleDict(modules)
 
     def _collect_param_bounds(
@@ -403,6 +574,9 @@ class fNPManager(nn.Module):
                 config = module.param_configs[param_idx]
                 parsed = config.get("parsed", {})
                 bounds = config.get("bounds")
+
+                #if not getattr(param, "requires_grad", False):
+                    #continue # Skip non-trainable params, even if bounds are specified. This allows users to fix parameters at specific values without randomization.
 
                 # Reference params may inherit bounds from their source.
                 if bounds is None and parsed.get("type") == "reference":

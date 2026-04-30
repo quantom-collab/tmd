@@ -353,7 +353,7 @@ class QiuStermanAV(nn.Module):
             parsed = config["parsed"]
             if parsed["type"] == "boolean" or parsed["type"] == "reference":
                 bounds = config.get("bounds")
-                if bounds is None and parsed["type"] == "reference":
+                if parsed["type"] == "reference":
                     ref = parsed["value"]
                     ref_type = ref["type"] if ref["type"] else self.param_type
                     key = (ref_type, ref["flavor"], ref["param_idx"])
@@ -407,21 +407,6 @@ class QiuStermanAV(nn.Module):
         beta = p[1]
         epsilon = p[2]
 
-        
-        def n(beta, epsilon):
-            # Keep normalization away from singular points where the prefactor can
-            # cross zero during optimization; this avoids inf/nan in AV fits.
-            norm = (3 + beta + epsilon + epsilon * beta) * torch.exp(
-                torch.lgamma(beta + 1) - torch.lgamma(beta + 4)
-            )
-            eps_norm = torch.tensor(1e-12, dtype=norm.dtype, device=norm.device)
-            sign = torch.where(norm >= 0, torch.ones_like(norm), -torch.ones_like(norm))
-            norm = torch.where(norm.abs() < eps_norm, sign * eps_norm, norm)
-            return torch.where(torch.isfinite(norm), norm, sign * eps_norm)
-
-
-
-        out = (N * (1 - x) * x**beta * (1 + epsilon * x)) / n(beta, epsilon)
+        out = (N * (1 - x) * x**beta * (1 + epsilon * x))
         out = torch.nan_to_num(out, nan=0.0, posinf=0.0, neginf=0.0)
         return out * mask_val
-    

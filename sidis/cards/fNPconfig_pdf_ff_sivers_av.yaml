@@ -171,34 +171,43 @@ sivers:
 qiu_sterman:
   u:
     # Up quark
-    init_params: [-0.013, -0.35 , -3.9]
+    init_params: [-0.3213, -0.35 , -3.9] 
     free_mask: [true, true, true]
     # Allowed intervals for minimizer: one [low, high] per parameter; use null for no bound
+    param_bounds: [[-1.0, 1.0], [-1.0, 1.0], [-5.0, 5.0]]
     
   d:
     # Down quark
-    init_params: [0.34, -0.77, 1.8]
+    init_params: [0.0811, -0.77, 1.8]
     free_mask: [true, true, true]
-    
+    param_bounds: [[0.00, 1.0], [-1.0, 1.0], [0.0, 5.0]]
+
   s:
     # Strange quark (All sea quarks share the same beta and epsilon=0. There is an N for sea and N for strange.)
 
-    init_params: [0.43, 2.3, 0.0]
+    init_params: [6.102, 2.3, 0.0]
     free_mask: [true, true, false]
+    param_bounds: [[0.0, 10.0], [0.0, 5.0], [-1.0, 1.0]]
+    
     
   ub:
     
-    init_params: [-0.23, 0.967, 5.129]
+    init_params: [-3.2637, 2.3, 0.0]
     free_mask: [true, "s[1]", "s[2]"]
+    param_bounds: [[-5.0, 5.0], [0.0, 5.0], [-1.0, 1.0]]
+
     
   db:
     
-    init_params: [-0.069, 1.188, 5.129]
+    init_params: [-3.2637, 2.3, 0.0]
     free_mask: ["ub[0]", "s[1]", "s[2]"]
+    param_bounds: [[-5.0, 10.0], [0.0, 5.0], [-1.0, 1.0]]
 
   sb:
-    init_params: [-0.002, 0.936, 5.129]
+    init_params: [-3.2637, 2.3, 0.0]
     free_mask: ["ub[0]", "s[1]", "s[2]"]
+    param_bounds: [[-5.0, 10.0], [0.0, 5.0], [-1.0, 1.0]]
+ 
   
   # TODO: the paper says, 'We nullify the Sivers function for b and c flavors.' Does this mean we should not inlcude charm?
 
@@ -206,11 +215,14 @@ qiu_sterman:
     # Charm quark - link to strange quark
     init_params: [0.0, 1.0, 5.129]
     free_mask: [False, False, False]
+    param_bounds: [[0.0, 10.0], [0.0, 5.0], [0.0, 10.0]]
+
     
   cb:
     # Charm antiquark - link to strange quark
-    init_params: [0.0, 0.936, 5.129]
+    init_params: [-3.2637, 2.3, 0.0]
     free_mask: ["c[0]", "c[1]", "c[2]"]
+    param_bounds: [[-5.0, 5.0], [0.0, 5.0], [-1.0, 1.0]]
 
 # =================
 # Parameter Summary:
