@@ -271,7 +271,7 @@ class fNPManager(nn.Module):
         return cls(**kwargs)
 
 
-    def _dependencies_met(self, free_mask: List[any], np_type: str, flavor: str, modules: dict, all_modules):
+    def _dependencies_met(self, free_mask: List[any], np_type: str, flavor: str, modules: dict, all_modules: dict):
 
         #print(f"    Checking deps for {flavor}, modules built so far: {list(modules.keys())}")
 
