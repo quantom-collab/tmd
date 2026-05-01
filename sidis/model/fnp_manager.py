@@ -47,42 +47,6 @@ SUPPORTED_COMBOS = {
     "flexible_new",
     "flexible AV",
 }
-SUPPORTED_COMBOS = {"simple", "flavor_dep", "flavor_blind","flexible", "flexible_new", "flexible AV", "simple AV"}
-
-
-class fNP_evolution(nn.Module):
-    """Shared non-perturbative evolution factor."""
-
-    def __init__(self, init_g2: float, free_mask: List[bool]):
-        super().__init__()
-        if len(free_mask) != 1:
-            raise ValueError(
-                f"[fnp_manager.py] {tcolors.FAIL}Evolution free_mask must have exactly 1 element, got {len(free_mask)}{tcolors.ENDC}"
-            )
-
-        # register_buffer defines a tensor that is part of the model's state but not a learnable parameter. 
-        self.register_buffer("Q0_squared", torch.tensor(1.0, dtype=torch.float32))
-        mask = torch.tensor(free_mask, dtype=torch.float32)
-        self.register_buffer("g2_mask", mask)
-
-        init_tensor = torch.tensor([init_g2], dtype=torch.float32)
-        self.register_buffer("fixed_g2", init_tensor * (1 - mask))
-        self.free_g2 = nn.Parameter(init_tensor * mask)
-
-        # register_hook is usd to register a backgward hook on a specific tensor. It allows modify the gradient of the tensor during the backward pass. Here, we use it to apply the g2_mask to the gradient of free_g2, ensuring that only the trainable part of g2 is updated during optimization.
-        
-        self.free_g2.register_hook(lambda grad: grad * self.g2_mask)
-        #self.free_g2 = torch.tensor([0.0])
-
-    @property
-    def g2(self):
-        return self.fixed_g2 + self.free_g2
-        
-    def forward(self, b: torch.Tensor, zeta: torch.Tensor) -> torch.Tensor:
-        if b.dim() > zeta.dim():
-            zeta = zeta.unsqueeze(-1)
-        return torch.exp(-(self.g2**2) * (b**2) * torch.log(zeta / self.Q0_squared) / 4.0)
-
 
 MAP22_DEFAULT_PDF_PARAMS = {
     "init_params": [
