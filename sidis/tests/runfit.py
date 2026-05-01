@@ -621,7 +621,7 @@ if __name__ == "__main__":
         if model.qcf0.sivers_flag:
             pred = model.get_FUT_sin_phih_minus_phis(events_tensor)
         else:
-            pred = model.get_FUUT(events_tensor)
+            pred = model(events_tensor)
         if not torch.isfinite(pred).all():
             bad = int((~torch.isfinite(pred)).sum().item())
             print(
