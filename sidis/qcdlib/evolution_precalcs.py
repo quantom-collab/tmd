@@ -1,15 +1,32 @@
 import mpmath
+import numpy as np
 import torch
 
 from . import params
-from . import config_loader as cfg
-from .alphaS import ALPHAS
 
 from scipy.special import zeta
 
-alphaS = ALPHAS()
+
+def _qcd_beta_coefficients() -> np.ndarray:
+    """
+    QCD beta-function coefficients (same formulas as ``ALPHAS.__init__``).
+
+    Kept free of ``ALPHAS()`` so this module does not read ``cfg.Q20`` at import
+    time; ``TruthModel`` can call ``config_loader.apply_physics`` before any
+    ``ALPHAS`` instance is constructed.
+    """
+    beta = np.zeros((7, 4))
+    for Nf in range(3, 7):
+        beta[Nf, 0] = 11.0 - 2.0 / 3.0 * Nf
+        beta[Nf, 1] = 102.0 - 38.0 / 3.0 * Nf
+        beta[Nf, 2] = 2857.0 / 2.0 - 5033.0 / 18.0 * Nf + 325.0 / 54.0 * Nf**2
+        beta[Nf, 3] = (
+            29243.0 - 6946.30 * Nf + 405.089 * Nf**2 + 1093 / 729 * Nf**3
+        )
+    return beta
 
 
+_BETA_STATIC = _qcd_beta_coefficients()
 
 CF=params.CF
 CA=params.CA
@@ -21,14 +38,14 @@ zeta4 = zeta(4)
 zeta5 = zeta(5)
 
 def get_betas():
-    beta0 = lambda Nf: alphaS.beta[Nf,0]
-    beta1 = lambda Nf: alphaS.beta[Nf,1]
-    beta2 = lambda Nf: alphaS.beta[Nf,2]
-    beta3 = lambda Nf: alphaS.beta[Nf,3]
+    beta0 = lambda Nf: _BETA_STATIC[Nf, 0]
+    beta1 = lambda Nf: _BETA_STATIC[Nf, 1]
+    beta2 = lambda Nf: _BETA_STATIC[Nf, 2]
+    beta3 = lambda Nf: _BETA_STATIC[Nf, 3]
 
-    beta = torch.zeros((7,4))
-    for Nf in range(3,7):
-        beta[Nf] = torch.tensor([beta0(Nf),beta1(Nf),beta2(Nf),beta3(Nf)])
+    beta = torch.zeros((7, 4))
+    for Nf in range(3, 7):
+        beta[Nf] = torch.tensor([beta0(Nf), beta1(Nf), beta2(Nf), beta3(Nf)])
     return beta
 
 betas=get_betas()

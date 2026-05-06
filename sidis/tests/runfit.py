@@ -37,7 +37,7 @@ if __name__ == "__main__":
     if str(_repo_root) not in sys.path:
         sys.path.insert(0, str(_repo_root))
 
-    from sidis.model import TrainableModel
+    from sidis.model import TrainableModel, resolve_card_path
     from sidis.utilities.colors import tcolors
 
     torch.set_default_dtype(torch.float64)
@@ -156,7 +156,8 @@ if __name__ == "__main__":
     #  Check if the path exists. If it doesn't, exit with an error.
     cs_path = pathlib.Path(args.cross_section)
     if not cs_path.is_absolute():
-        cs_path = script_dir / cs_path.resolve()
+        # Join first so paths are relative to sidis/tests/, not the shell cwd.
+        cs_path = (script_dir / cs_path).resolve()
 
     # Fit results directory path. If it's not absolute, make it absolute,
     # with the same criteria as the cross section file path
@@ -164,7 +165,7 @@ if __name__ == "__main__":
     # Check if it exists. If it doesn't, create it.
     fitresults_dir = pathlib.Path(args.fitresults_dir)
     if not fitresults_dir.is_absolute():
-        fitresults_dir = script_dir / fitresults_dir
+        fitresults_dir = (script_dir / fitresults_dir).resolve()
 
     # -------------------------------------------------------------------------
     # Load cross sections
@@ -256,13 +257,13 @@ if __name__ == "__main__":
         )
         exit(1)
 
-    # Once established which configuration card to call, resolve its path.
-    # It's assumed to be in the cards/ directory.
-    # Check if it exists. If it doesn't, exit with an error.
-    config_path = cards_dir / effective_config
-    if not config_path.exists():
+    # Resolve the unified card the same way as TrainableModel (cards/ or absolute path).
+    try:
+        config_path = resolve_card_path(effective_config, rootdir)
+    except FileNotFoundError:
         print(
-            f"{tcolors.FAIL}Error: config file not found: {config_path}{tcolors.ENDC}"
+            f"{tcolors.FAIL}Error: config card not found for {effective_config!r} "
+            f"(expected under {cards_dir} or as an absolute path).{tcolors.ENDC}"
         )
         exit(1)
 
@@ -544,9 +545,8 @@ if __name__ == "__main__":
     )
 
     # Print the truth parameters. Those are the physical parameter values at
-    # the config's init_params (before randomization). It assumes that the config.yaml file
-    # was not changes between the config used to generate the cross sections and the
-    # config used to run the fit.
+    # the card's init_params (before randomization). The closure test assumes the
+    # same unified card was used to generate the cross sections and to run the fit.
     for key, vals in sorted(truth_params.items()):
         vstr = ", ".join(f"{v:.6f}" for v in vals)
         print(f"  {key:<32} [{vstr}]")

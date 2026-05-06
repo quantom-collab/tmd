@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import pathlib
 import sys
-from omegaconf import OmegaConf
+from typing import Optional
 
 from scipy.special import jn_zeros
 
@@ -14,14 +14,15 @@ if str(sidis_dir) not in sys.path:
 
 class OGATA(torch.nn.Module):
 
-    def __init__(self, nu: int = 0):
+    def __init__(self, nu: int = 0, *, Nb: Optional[int] = None):
         super().__init__()
 
-        # self.Nmax = 200
-        # Load config
-        current_dir = pathlib.Path(__file__).parent
-        config_file = current_dir / "../config.yaml"
-        conf = OmegaConf.load(config_file)
+        # ``Nb`` quadrature points; when omitted, use ``config_loader`` (import-time
+        # defaults or values set by ``TruthModel`` via ``apply_physics``).
+        from qcdlib import config_loader as cfg
+
+        if Nb is None:
+            Nb = int(cfg.config["bgrid"]["Nb"])
 
         self.nu = nu
         self.bTmin = 1e-3
@@ -44,7 +45,7 @@ class OGATA(torch.nn.Module):
         For nu = 1, we use J1.
         """
         if self.nu == 0:
-            self.besselj0 = torch.tensor(jn_zeros(0,conf.bgrid.Nb), dtype=torch.get_default_dtype()).unsqueeze(0) #-- (1, Nb)
+            self.besselj0 = torch.tensor(jn_zeros(0, Nb), dtype=torch.get_default_dtype()).unsqueeze(0) #-- (1, Nb)
             self.xi = self.besselj0 / torch.pi #-- (1, Nb)
             x = torch.pi * self.xi
             J1 = torch.special.bessel_j1(x)
@@ -53,7 +54,7 @@ class OGATA(torch.nn.Module):
             self.get_h_dynamic = lambda qT: get_h_dynamic_func(self.besselj0[:, 0], qT)
             self.BesselJ_for_Hankel = lambda x: torch.special.bessel_j0(x)
         elif self.nu == 1:
-            self.besselj1 = torch.tensor(jn_zeros(1,conf.bgrid.Nb), dtype=torch.get_default_dtype()).unsqueeze(0) #-- (1, Nb)
+            self.besselj1 = torch.tensor(jn_zeros(1, Nb), dtype=torch.get_default_dtype()).unsqueeze(0) #-- (1, Nb)
             self.xi = self.besselj1 / torch.pi #-- (1, Nb)
             # ---- Compute J2 using recurrence (Torch-native) ----
             # J2(x) = 2 J1(x) / x - J0(x)
@@ -93,7 +94,7 @@ class OGATA(torch.nn.Module):
         return bTs
 
     def eval_ogata_func_var_h(self, integrand: torch.Tensor, bT: torch.Tensor, qT: torch.Tensor) -> torch.Tensor:
-        """
+        r"""
         It should be understood that the integrand here is defined according to the Ogata quadrature. 
         Namely, Ogata should integrate \int_0^\infty dy f(y) J_v(y).
         "integrand" here is f(y).

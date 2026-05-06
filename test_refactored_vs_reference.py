@@ -5,7 +5,8 @@ import torch
 import pickle
 import numpy as np
 
-# NOTE: torch.set_default_dtype is now automatically set by the model from config.yaml
+# NOTE: torch.set_default_dtype is set by TrainableModel from the unified card's
+# default_dtype (sidis/cards/*.yaml).
 from sidis.model import TrainableModel
 
 print("="*70)

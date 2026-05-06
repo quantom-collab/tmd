@@ -14,8 +14,7 @@ if __name__ == "__main__":
     if str(parent_dir) not in sys.path:
         sys.path.insert(0, str(parent_dir))
 
-    from omegaconf import OmegaConf
-    from sidis.model import TrainableModel
+    from sidis.model import TrainableModel, resolve_card_path
     from sidis.utilities.colors import tcolors
 
     # Set default tensor dtype to float64 for high precision calculations
@@ -32,9 +31,11 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
         Examples:
-        python3 sidis/main.py -c fNPconfig_base_flavor_dep.yaml
-        python3 sidis/main.py -c fNPconfig_base_flavor_blind.yaml
+        python3 sidis/main.py -c fNPconfig_simple.yaml
         python3 sidis/main.py  # Uses default: fNPconfig_base_flavor_blind.yaml
+
+        Each card under cards/ lists perturbative settings (formerly sidis/config.yaml)
+        and fNP parameters in one file.
 
         Available config files in cards/:
         {chr(10).join(f'  - {f.name}' for f in sorted(cards_dir.glob('*.yaml')) if cards_dir.exists())}
@@ -42,25 +43,31 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--fnp_config",
         "-c",
+        "--config",
+        "--fnp_config",
+        dest="unified_config",
         type=str,
         default="fNPconfig_base_flavor_blind.yaml",
-        help="fNP configuration file name (looked up in cards/ directory). "
-        "Default: fNPconfig_base_flavor_blind.yaml",
+        help=(
+            "Unified SIDIS YAML under sidis/cards/ (QCD settings + fNP). "
+            "Also accepted: absolute path to a card file. "
+            "Default: fNPconfig_base_flavor_blind.yaml"
+        ),
     )
 
     args = parser.parse_args()
 
-    # Check if config file exists in cards/ directory
-    config_path = cards_dir.joinpath(args.fnp_config)
-
-    if not config_path.exists():
+    # Resolve the card the same way as TrainableModel (path or cards/<name>).
+    try:
+        resolve_card_path(args.unified_config, rootdir)
+    except FileNotFoundError:
         print(
-            f"{tcolors.FAIL}Error: Configuration file not found: {config_path}{tcolors.ENDC}"
+            f"{tcolors.FAIL}Error: Configuration card not found "
+            f"(tried sidis/cards/{args.unified_config} or path).{tcolors.ENDC}"
         )
         print(
-            f"\n{tcolors.WARNING}Please ensure the config file exists in the cards/ directory.{tcolors.ENDC}"
+            f"\n{tcolors.WARNING}Place the YAML in the cards/ directory or pass an absolute path.{tcolors.ENDC}"
         )
         print(f"Available config files in {cards_dir}:")
         if cards_dir.exists():
@@ -72,19 +79,19 @@ if __name__ == "__main__":
         exit(1)
 
     # Show warning if using default
-    if args.fnp_config == "fNPconfig_base_flavor_blind.yaml":
+    if args.unified_config == "fNPconfig_base_flavor_blind.yaml":
         print(
-            f"{tcolors.WARNING}Warning: Using default fNP config: {args.fnp_config}{tcolors.ENDC}"
+            f"{tcolors.WARNING}Warning: Using default unified card: {args.unified_config}{tcolors.ENDC}"
         )
         print(
             f"{tcolors.WARNING}Specify -c <config_file> to use a different configuration.{tcolors.ENDC}\n"
         )
     else:
-        print(f"{tcolors.GREEN}Using fNP config: {args.fnp_config}{tcolors.ENDC}\n")
+        print(f"{tcolors.GREEN}Using unified SIDIS card: {args.unified_config}{tcolors.ENDC}\n")
 
     # Initialize the trainable model for TMD
     # parton distribution functions and fragmentation functions
-    model = TrainableModel(fnp_config=args.fnp_config)
+    model = TrainableModel(fnp_config=args.unified_config)
 
     # Load event data from file as a tensor
     events_file = rootdir.joinpath("toy_polarized_events.dat")

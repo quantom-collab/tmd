@@ -11,9 +11,6 @@ from ..qcdlib.alphaS import ALPHAS
 from ..qcdlib.tmdmodel import MODEL_TORCH
 from ..qcdlib.evolution_precalcs import r_Gamma, r_gamma, rbar, rbar0prime, delta
 
-alphaS = ALPHAS()
-tmdmodel = MODEL_TORCH()
-
 
 class PERTURBATIVE_EVOLUTION(torch.nn.Module):
     """
@@ -25,15 +22,17 @@ class PERTURBATIVE_EVOLUTION(torch.nn.Module):
         self.order = order
         self.aux = params
 
+        # Construct after any ``config_loader.apply_physics`` so ``cfg.Q20`` /
+        # ``cfg.alphaS_order`` match the unified card loaded by ``TruthModel``.
+        self.alphaS = ALPHAS()
+        self.tmdmodel = MODEL_TORCH()
+
         # --Pre-computed coefficients (these are computed once)
         self.r_Gamma = r_Gamma[self.order]
         self.r_gamma = r_gamma[self.order]
         self.rbar = rbar[self.order]
         self.rbar0prime = rbar0prime  # --note that this is a tensor of shape (7,)
         self.delta = delta[self.order]
-
-        self.alphaS = alphaS
-        self.tmdmodel = tmdmodel
 
         # --threshold values
         self.mc2 = params.mc2

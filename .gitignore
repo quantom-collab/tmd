@@ -13,6 +13,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .Python
+.pytest_cache/
 
 # C extensions
 *.so
@@ -40,7 +41,8 @@ venv/
 tmd-env/
 
 # Other files
-2024-11-14-Collaboration_Meeting.pdf
+.prettierrc
+.pylintrc
 
 # C++ executables
 GridTMDbT
@@ -49,7 +51,5 @@ CollinsSoperKernel
 # Chiara
 output/
 build/
-outs/
 plots/
-_results/
 fitresults/
