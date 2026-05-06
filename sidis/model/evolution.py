@@ -22,7 +22,7 @@ class PERTURBATIVE_EVOLUTION(torch.nn.Module):
         self.order = order
         self.aux = params
 
-        # Construct after any ``config_loader.apply_physics`` so ``cfg.Q20`` /
+        # Construct after any ``config_loader.apply_physics`` so ``cfg.Q02`` /
         # ``cfg.alphaS_order`` match the unified card loaded by ``TruthModel``.
         self.alphaS = ALPHAS()
         self.tmdmodel = MODEL_TORCH()
@@ -449,7 +449,7 @@ class PERTURBATIVE_EVOLUTION(torch.nn.Module):
         return eta_Gamma, K_gamma, K_Gamma
 
     def get_S_rapidity(
-        self, bT: torch.Tensor, Q20: torch.Tensor, Q2: torch.Tensor
+        self, bT: torch.Tensor, Q02: torch.Tensor, Q2: torch.Tensor
     ) -> torch.Tensor:
 
         mub = self.tmdmodel.get_mub(bT)
@@ -457,9 +457,9 @@ class PERTURBATIVE_EVOLUTION(torch.nn.Module):
         Ktilde = self.get_Ktilde(bstar, mub)  # .unsqueeze(-1)
 
         alphaS_mub = self.alphaS.get_alphaS(mub**2)
-        alphaS_i = self.alphaS.get_alphaS(Q20)
+        alphaS_i = self.alphaS.get_alphaS(Q02)
         Nf = self.alphaS.get_Nf(Q2)
-        Nf0 = self.alphaS.get_Nf(Q20)
+        Nf0 = self.alphaS.get_Nf(Q02)
 
         mc2 = params.mc2
         mb2 = params.mb2
@@ -492,7 +492,7 @@ class PERTURBATIVE_EVOLUTION(torch.nn.Module):
             eta_Gamma += self.get_eta_Gamma(alphaS_mub, alphaS_mb, Nf)
 
         # eta_Gamma = eta_Gamma.unsqueeze(-1)
-        log_ratio = torch.log(Q2 / Q20).unsqueeze(-1)
+        log_ratio = torch.log(Q2 / Q02).unsqueeze(-1)
         # print('log_ratio.shape', log_ratio.shape)
         # print('Ktilde.shape', Ktilde.shape)
         # print('eta_Gamma.shape', eta_Gamma.shape)
@@ -500,21 +500,21 @@ class PERTURBATIVE_EVOLUTION(torch.nn.Module):
         return torch.exp(0.5 * log_ratio * (Ktilde + eta_Gamma))
 
     def forward(
-        self, bT: torch.Tensor, Q20: torch.Tensor, Q2: torch.Tensor
+        self, bT: torch.Tensor, Q02: torch.Tensor, Q2: torch.Tensor
     ) -> torch.Tensor:
         """
         Complete forward pass of the perturbative evolution.
         """
 
         alphaS_f = self.alphaS.get_alphaS(Q2)
-        alphaS_i = self.alphaS.get_alphaS(Q20)
+        alphaS_i = self.alphaS.get_alphaS(Q02)
         Nf = self.alphaS.get_Nf(Q2)
-        Nf0 = self.alphaS.get_Nf(Q20)
+        Nf0 = self.alphaS.get_Nf(Q02)
 
         # mc2 = params.mc2
         # mb2 = params.mb2
 
-        """
+        r"""
         Here, we describe the pieces of the evolution factor for the RGE evolution:
         1. 
             eta_Gamma = \int_{\mu_0}^{\mu} \frac{d\mu^\prime}{mu^\prime} \Gamma(\alpha_S(mu^\prime))
@@ -534,7 +534,7 @@ class PERTURBATIVE_EVOLUTION(torch.nn.Module):
         )
         # print('eta_Gamma.shape', eta_Gamma.shape)
 
-        """
+        r"""
         Here, we describe the pieces of the evolution factor for the rapidity evolution:
         1. 
             S_rapidity = \exp(0.5 * \log(\frac{Q^2}{Q^2_0}) * (Ktilde(bstar, mub) + eta_Gamma(Q_0 -> mub)))
@@ -542,15 +542,15 @@ class PERTURBATIVE_EVOLUTION(torch.nn.Module):
             eta_Gamma is the integral of the cusp anomalous dimension over the range of alphaS, but instead of Q0 to Q as above, it is from Q0 to mub.
         """
         # --get rapidity evolution factor
-        S_rapidity = self.get_S_rapidity(bT, Q20, Q2)
+        S_rapidity = self.get_S_rapidity(bT, Q02, Q2)
         # print('S_rapidity.shape', S_rapidity.shape)
 
         eta_Gamma_2d = eta_Gamma.unsqueeze(-1)
         K_gamma_2d = K_gamma.unsqueeze(-1)
         K_Gamma_2d = K_Gamma.unsqueeze(-1)
-        log_ratio_2d = torch.log(Q2 / Q20).unsqueeze(-1)
+        log_ratio_2d = torch.log(Q2 / Q02).unsqueeze(-1)
 
-        """
+        r"""
         Note the difference in the sign when computing the RGE factor of eta_Gamma_2d and K_Gamma_2d with Ebert 2110.11360 as \Gamma(mu) = -\gamma_K(mu)
         Because the \gamma(\alpha_S(mu)) is the same as the \gamma_F(\alpha_S(mu);1) in the Ebert 2110.11360 paper, we do not need to invert the sign of K_Gamma_2d.
         """
@@ -576,8 +576,8 @@ if __name__ == "__main__":
     t0 = time.time()
     pert_evo = PERTURBATIVE_EVOLUTION(order=3)
     bT = torch.linspace(0.01, 10, 100)
-    Q20 = torch.tensor([1.28**2])
+    Q02 = torch.tensor([1.28**2])
     Q2 = torch.linspace(1.28**2, 100, 1000000)
-    sudakov = pert_evo.forward(bT, Q20, Q2)
+    sudakov = pert_evo.forward(bT, Q02, Q2)
     t1 = time.time()
     print(f"Time taken for evolution of shape {sudakov.shape}: {t1-t0} seconds")

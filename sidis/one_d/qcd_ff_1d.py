@@ -19,7 +19,7 @@ class FF_PIP:
     def __init__(self,mellin,alphaS):
   
         self.spl='upol_ff'
-        self.Q20=cfg.Q20
+        self.Q02=cfg.Q02
         self.mc2=par.mc2
         self.mb2=par.mb2
   
@@ -277,7 +277,7 @@ class FF_PIP:
   
         ###############################################
         # BC for Nf=4
-        BC4=self.dglap.evolve(self.BC3,self.Q20,self.mc2,3)
+        BC4=self.dglap.evolve(self.BC3,self.Q02,self.mc2,3)
         g =BC4['g']
         up=BC4['up']
         dp=BC4['dp']
@@ -319,7 +319,7 @@ class FF_PIP:
         #     elif self.mc2<=Q2 and Q2<=self.mb2: 
         #         self.storage[Q2]=self.dglap.evolve(self.BC4,self.mc2,Q2,4)
         #     elif Q2<self.mc2: 
-        #         self.storage[Q2]=self.dglap.evolve(self.BC3,self.Q20,Q2,3)
+        #         self.storage[Q2]=self.dglap.evolve(self.BC3,self.Q02,Q2,3)
         Q2 = float(Q2) #--avoid errors in Python 3
         self.storage={} #--this is to avoid huge memory allocation to the storages of these dictionaries.
         if Q2 not in self.storage:
@@ -328,7 +328,7 @@ class FF_PIP:
             # elif self.mc2<=Q2 and Q2<=self.mb2: 
             #     self.storage[Q2]=self.dglap.evolve(self.BC4,self.mc2,Q2,4)
             # elif Q2<self.mc2: 
-            #     self.storage[Q2]=self.dglap.evolve(self.BC3,self.Q20,Q2,3)
+            #     self.storage[Q2]=self.dglap.evolve(self.BC3,self.Q02,Q2,3)
             self.storage[Q2] = self.dglap.evolve(self.BC4,self.mc2,Q2,4)
     
     def get_xF(self,x,Q2,flav,evolve=True):

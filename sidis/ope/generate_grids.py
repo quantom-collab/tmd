@@ -110,7 +110,7 @@ def main():
     print("🚀 OPE Grid Generation")
     print("=" * 60)
 
-    Q0 = torch.sqrt(torch.tensor(cfg.Q20))
+    Q0 = torch.sqrt(torch.tensor(cfg.Q02))
     
     # 1. Define x and bT grids (load from existing grid to match format)
     # reference_grid = '/Users/barry/work/QuantOm/workspace/tmd/grids/grids/tmdpdf_u_Q_1.txt'
@@ -142,7 +142,7 @@ def main():
     rap_evo = torch.exp(evo.get_Ktilde(bstar, mubstar) * torch.log(Q0/mubstar))
 
     # -- build the pieces of the evolution factor for the RGE evolution
-    """
+    r"""
     In going from mub* to Q0 scale, we have the following pieces of the RGE evolution factor:
     exp(\int_{mub*}^{Q0} d\mu^\prime [\gamma_F(\alpha_S(mu^\prime);1) + \gamma_K(\alpha_S(mu^\prime)) * log(\sqrt{\frac{\mu^\prime^2}{Q^2}})])).
 

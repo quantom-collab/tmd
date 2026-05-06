@@ -197,7 +197,7 @@ The script will:
 
 All physics parameters are stored in `../config.yaml` (the main SIDIS configuration file). To generate grids with different settings:
 
-1. Edit `../config.yaml` (adjust Q20, perturbative orders, etc.)
+1. Edit `../config.yaml` (adjust Q02, perturbative orders, etc.)
 2. Run `generate_grids.py`
 3. Grids will be saved with Q₀ value in filename
 

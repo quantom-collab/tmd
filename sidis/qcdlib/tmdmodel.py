@@ -9,7 +9,7 @@ class MODEL_TORCH:
         #--params
         euler=special.euler
 
-        self.Q0 = torch.sqrt(torch.tensor(cfg.Q20))
+        self.Q0 = torch.sqrt(torch.tensor(cfg.Q02))
         self.C1=2*torch.exp(torch.tensor(-euler))
         self.C2=1
         

@@ -17,10 +17,10 @@ idis_order: 1                # DIS coefficient functions: 0=LO, 1=NLO
 tmd_order: 1                 # OPE matching: 0=LO, 1=NLO
 tmd_resummation_order: 2     # TMD evolution: 0=LL, 1=NLL, 2=NNLL, 3=NNNLL
 
-# Initial scale for evolution (GeV^2)
-# Q20 = mc^2 = (1.28 GeV)^2 = 1.6384 GeV^2
+# Reference scale Q0² for evolution (GeV²)
+# Q02 = mc² = (1.28 GeV)² = 1.6384 GeV²
 # This sets the reference scale at the charm quark mass (Nf=4 region)
-Q20: 1.6384
+Q02: 1.6384
 
 # OPE grid file paths
 ope:

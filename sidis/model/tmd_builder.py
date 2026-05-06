@@ -45,18 +45,18 @@ class TMDBuilder(torch.nn.Module):
         ope_dict: Nested dict of OPE interpolators [type][hadron][flav]
         evo: PERTURBATIVE_EVOLUTION instance
         fnp: fNP wrapper/manager with trainable flag; includes non-perturbative evolution (CS kernel)
-        Q20: Initial scale squared
+        Q02: Reference scale Q₀² (GeV²); must match card key ``Q02`` and OPE grids.
         flavs: List of flavor strings ['u', 'd', 's', 'c', 'cb', 'sb', 'db', 'ub']
     """
 
-    def __init__(self, ope_dict, evo, fnp, Q20, flavs: List[str]):
+    def __init__(self, ope_dict, evo, fnp, Q02, flavs: List[str]):
         super().__init__()
 
         self.ope = ope_dict  # Pre-loaded OPE grids
         self.evo = evo  # PERTURBATIVE_EVOLUTION instance
         self.fnp = fnp  # fNP manager (truth or trainable); this includes the non-perturbative evolution factor (CS kernel)
 
-        self.Q20 = Q20  # Initial scale squared
+        self.Q02 = Q02  # Reference scale squared (card ``Q02``)
         self.flavs = flavs  # List of flavor strings
 
     def get_tmd_bT_all_flavors(
@@ -87,7 +87,7 @@ class TMDBuilder(torch.nn.Module):
             TMD[flav] = OPE[flav](xi, bT) × fNP[flav](xi, bT, Q) × evolution(bT, Q₀→Q) × non_perturbative_evolution(bT, Q)
         """
         # Compute evolution factor (no caching - see class docstring)
-        evolution = self.evo(bT, self.Q20, Q2)
+        evolution = self.evo(bT, self.Q02, Q2)
         non_perturbative_evolution = self.fnp.forward_evolution(bT, Q2**0.5) #should be found in get_evolution in something flavor-specific in the fnp_x_flavor_x.py files.
 
         # Compute fNP once for all flavors (this is the key optimization!)

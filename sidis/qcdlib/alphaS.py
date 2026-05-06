@@ -28,10 +28,10 @@ class ALPHAS:
             )
 
             self.aZ = par.alphaSMZ / (4 * np.pi)
-            self.a0 = self.evolve_a(par.mZ2, self.aZ, cfg.Q20, 4)
+            self.a0 = self.evolve_a(par.mZ2, self.aZ, cfg.Q02, 4)
             # self.ab=self.evolve_a(par.mZ2,self.aZ,par.mb2,5)
             # self.ac=self.evolve_a(par.mb2,self.ab,par.mc2,4)
-            # self.a0=self.evolve_a(par.mc2,self.ac,cfg.Q20,3)
+            # self.a0=self.evolve_a(par.mc2,self.ac,cfg.Q02,3)
 
         # --can be stored because there are no free parameters in this calculation
         self.storage = {}
@@ -58,11 +58,11 @@ class ALPHAS:
             betaf += -(a**3) * self.beta[Nf, 3]
         return betaf * a**2
 
-    def evolve_a(self, Q20, a, Q2, Nf):
+    def evolve_a(self, mu0_sq, a, Q2, Nf):
         # Runge-Kutta implemented in pegasus
         # Handle both numpy arrays and torch tensors
         if hasattr(Q2, "device") and torch.is_tensor(Q2) :  # Check if it's a torch tensor
-            LR = torch.log(Q2 / Q20) / 20.0
+            LR = torch.log(Q2 / mu0_sq) / 20.0
             for k in range(20):
                 XK0 = LR * self.beta_func(a, Nf)
                 XK1 = LR * self.beta_func(a + 0.5 * XK0, Nf)
@@ -70,7 +70,7 @@ class ALPHAS:
                 XK3 = LR * self.beta_func(a + XK2, Nf)
                 a += (XK0 + 2.0 * XK1 + 2.0 * XK2 + XK3) * 0.166666666666666
         else:  # Original numpy implementation
-            LR = np.log(Q2 / Q20) / 20.0
+            LR = np.log(Q2 / mu0_sq) / 20.0
             for k in range(20):
                 XK0 = LR * self.beta_func(a, Nf)
                 XK1 = LR * self.beta_func(a + 0.5 * XK0, Nf)
@@ -86,20 +86,20 @@ class ALPHAS:
         # Do not cache tensor inputs: using tensors as dict keys creates
         # one cache entry per forward pass and causes unbounded memory growth.
         if hasattr(Q2, "device"):
-            Q20, a0, Nf = cfg.Q20, self.a0, 4
-            return self.evolve_a(Q20, a0, Q2, Nf)
+            mu0_sq, a0, Nf = cfg.Q02, self.a0, 4
+            return self.evolve_a(mu0_sq, a0, Q2, Nf)
 
         # Keep cache only for scalar-like inputs.
         cache_key = float(Q2)
         if cache_key not in self.storage:
-            Q20, a0, Nf = cfg.Q20, self.a0, 4
+            mu0_sq, a0, Nf = cfg.Q02, self.a0, 4
             # if par.mb2<=Q2:
-            #     Q20,a0,Nf=par.mb2,self.ab,4
+            #     mu0_sq,a0,Nf=par.mb2,self.ab,4
             # elif par.mc2<=Q2 and Q2<par.mb2:
-            #     Q20,a0,Nf=par.mc2,self.ac,4
+            #     mu0_sq,a0,Nf=par.mc2,self.ac,4
             # elif Q2<par.mc2:
-            #     Q20,a0,Nf=cfg.Q20,self.a0,4
-            self.storage[cache_key] = self.evolve_a(Q20, a0, Q2, Nf)
+            #     mu0_sq,a0,Nf=cfg.Q02,self.a0,4
+            self.storage[cache_key] = self.evolve_a(mu0_sq, a0, Q2, Nf)
         return self.storage[cache_key]
 
     def get_alphaS(self, Q2):

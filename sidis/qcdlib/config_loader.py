@@ -28,7 +28,7 @@ _PHYSICS_KEYS: FrozenSet[str] = frozenset(
         "idis_order",
         "tmd_order",
         "tmd_resummation_order",
-        "Q20",
+        "Q02",
         "ope",
         "qToQcut",
         "bgrid",
@@ -43,7 +43,7 @@ DEFAULT_PHYSICS: Dict[str, Any] = {
     "idis_order": 1,
     "tmd_order": 1,
     "tmd_resummation_order": 2,
-    "Q20": 1.6384,
+    "Q02": 1.6384,
     "ope": {
         "grid_files": {
             "pdf": {
@@ -85,6 +85,9 @@ def _load_initial_config() -> Dict[str, Any]:
         with open(_config_path, "r") as f:
             loaded = yaml.safe_load(f)
         assert isinstance(loaded, dict)
+        # Historical YAML used ``Q20`` for Q₀²; unified cards use ``Q02``.
+        if "Q02" not in loaded and "Q20" in loaded:
+            loaded["Q02"] = loaded["Q20"]
         return loaded
     except FileNotFoundError:
         return copy.deepcopy(DEFAULT_PHYSICS)
@@ -98,14 +101,14 @@ _config = _load_initial_config()
 def _publish_config(c: Dict[str, Any]) -> None:
     """Assign module-level exports from a full physics config dict."""
     global alphaS_order, dglap_order, idis_order, tmd_order, tmd_resummation_order
-    global Q20, config
+    global Q02, config
     required = (
         "alphaS_order",
         "dglap_order",
         "idis_order",
         "tmd_order",
         "tmd_resummation_order",
-        "Q20",
+        "Q02",
         "ope",
     )
     for k in required:
@@ -115,7 +118,7 @@ def _publish_config(c: Dict[str, Any]) -> None:
     idis_order = c["idis_order"]
     tmd_order = c["tmd_order"]
     tmd_resummation_order = c["tmd_resummation_order"]
-    Q20 = c["Q20"]
+    Q02 = c["Q02"]
     config = copy.deepcopy(c)
 
 

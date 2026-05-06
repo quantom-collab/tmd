@@ -78,7 +78,7 @@ class TruthModel(torch.nn.Module):
             # self.setup_ope(rootdir=rootdir, type="Collins", hadron=expt_setup[1])
 
         self.expt_setup = experimental_target_fragmented_hadron
-        self.Q20 = self.conf.Q20
+        self.Q02 = self.conf.Q02
 
         self.evo = PERTURBATIVE_EVOLUTION(order=self.conf.tmd_resummation_order)
 
@@ -93,7 +93,7 @@ class TruthModel(torch.nn.Module):
             )
 
         # self.tmd is a class that takes in OPE, evolution, and fNP to compute TMDs.
-        self.tmd = TMDBuilder(self.ope, self.evo, self.qcf0, self.Q20, self.flavs)
+        self.tmd = TMDBuilder(self.ope, self.evo, self.qcf0, self.Q02, self.flavs)
 
         _og_nb = int(self.conf.bgrid.Nb)
         self.ogata_J0 = OGATA(nu=0, Nb=_og_nb)

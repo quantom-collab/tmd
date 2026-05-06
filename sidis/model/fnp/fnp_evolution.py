@@ -39,15 +39,32 @@ class fNP_evolution(nn.Module):
     # logit ``θ`` when bounded (sigmoid map). ``None`` when ``g2`` is fixed (buffer).
     free_g2: Optional[nn.Parameter]
 
+    # Parameters before the bare ``*`` stay positional; everything after ``*`` is
+    # keyword-only (PEP 3102). Callers must pass ``q0_squared=...`` by name so the
+    # reference scale is explicit at the callsite, and future optional positional
+    # parameters can be added without shifting the meaning of ``q0_squared``.
     def __init__(
         self,
         init_params: List[float],
         free_mask: List[Any],
         bounds_list: List[Optional[Tuple[float, float]]],
+        *,
+        q0_squared: float,
     ) -> None:
-
+        """
+        Args:
+            q0_squared: Q₀² (GeV²) in ``ln(ζ / Q₀²)`` for the Collins–Soper-style NP
+                factor. Must match the unified card's top-level ``Q02`` (the same value
+                ``fNPManager`` passes through from the YAML).
+        """
         # Initialize the parent class (nn.Module)constructor
         super().__init__()
+
+        # The forward uses ``torch.log(zeta / self.Q0_squared)``. A non-positive Q₀²
+        # would make that logarithm mathematically undefined (or systematically wrong
+        # if a zero sneaks through as a limit), so we reject it up front rather than
+        # emitting NaNs deep in a TMD pipeline.
+        assert q0_squared > 0.0, f"q0_squared must be positive, got {q0_squared}"
 
         # Validate the input parameters
         if len(init_params) != 1 or len(free_mask) != 1:
@@ -72,8 +89,10 @@ class fNP_evolution(nn.Module):
 
         init_val = float(init_params[0])
         bound = bounds_list[0]
-        # Q₀² for ln(ζ/Q₀²); kept as a buffer so `.to(device)` moves it with the module.
-        self.register_buffer("Q0_squared", torch.tensor(1.0, dtype=torch.float32))
+        # Q₀² for ln(ζ/Q₀²); buffer follows dtype used elsewhere in fNP (float32 on GPU/CPU).
+        self.register_buffer(
+            "Q0_squared", torch.tensor(float(q0_squared), dtype=torch.float32)
+        )
         self.free_g2 = None
         # When True, ``free_g2`` holds logit θ and physical g₂ uses sigmoid.
         self._logit_reparam = False

@@ -124,10 +124,21 @@ class fNPManager(nn.Module):
             flavor="g2",
             warn_tag="[fNPManager]",
         )
+        # Reference scale Q₀² (GeV²) in ln(ζ/Q₀²) for the NP Collins–Soper factor.
+        # Single card key ``Q02`` (same as collinear TMD / ``apply_physics`` allowlist).
+        q0_sq_raw = config.get("Q02")
+        if q0_sq_raw is None:
+            raise ValueError(
+                f"{tcolors.FAIL}[fNPManager] Missing required top-level Q02 (GeV²) "
+                f"for NP evolution.{tcolors.ENDC}"
+            )
+        q0_squared = float(q0_sq_raw)
+        assert q0_squared > 0.0, f"[fNPManager] Q₀² must be positive, got {q0_squared}"
         self.evolution = fNP_evolution(
             init_params=ev_init,
             free_mask=list(evolution_config.get("free_mask", [True])),
             bounds_list=evolution_bounds_list,
+            q0_squared=q0_squared,
         )
 
         self.registry = ParameterRegistry()

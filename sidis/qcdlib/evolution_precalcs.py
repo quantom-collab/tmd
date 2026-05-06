@@ -11,7 +11,7 @@ def _qcd_beta_coefficients() -> np.ndarray:
     """
     QCD beta-function coefficients (same formulas as ``ALPHAS.__init__``).
 
-    Kept free of ``ALPHAS()`` so this module does not read ``cfg.Q20`` at import
+    Kept free of ``ALPHAS()`` so this module does not read ``cfg.Q02`` at import
     time; ``TruthModel`` can call ``config_loader.apply_physics`` before any
     ``ALPHAS`` instance is constructed.
     """
@@ -53,7 +53,7 @@ betas=get_betas()
 #=================================================================================
 #--Setting up the roots of the beta function to evaluate the Sudakov analytically
 #=================================================================================
-"""
+r"""
 These are the setup of the deltas as in https://inspirehep.net/literature/1950250, Eqs. 3.11, 3.12, A.4, A.5, A.9, A.10.
 This is how artemide performs the calculation.
 Namely, we have the shape of the roots according to (Order of resummation (iorder), Order of summation trucation (n_sum), Nf)
@@ -131,14 +131,14 @@ beta_prime = setup_beta_prime()
 #============================================================
 #--Setting up gamma_K
 #============================================================
-"""
-\$\Gamma\$-cusp
+r"""
+$\Gamma$-cusp
 
     notice the following correspondence from https://arxiv.org/pdf/1803.11089.pdf 
 
     Rogers17_PhysRevD.96.054011.pdf uses gamma_K = 2 gamma_Cusp
     - Cusp anomalous dimension expanded in alphaS, Eq. (59) of PhysRevD.96.054011
-    https://inspirehep.net/literature/1452696 Appendix D notice that one should use \$\Gamma^{(n-1)}\$ in other parts 
+    https://inspirehep.net/literature/1452696 Appendix D notice that one should use $\Gamma^{(n-1)}$ in other parts 
 
 
 the 4-loop expression is taken from [2001.11377] (appendix C)
@@ -213,8 +213,8 @@ Gammas = get_Gammas()
 #--Setting up gamma_F
 #  https://inspirehep.net/literature/1452696 Appendix D
 #============================================================
-"""
-Here we calculate the \$\gamma_{V}\$ https://inspirehep.net/literature/1452696 Appendix D
+r"""
+Here we calculate the $\gamma_{V}$ https://inspirehep.net/literature/1452696 Appendix D
 """
 def get_gammaV1(Nf):
     """
