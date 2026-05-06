@@ -24,6 +24,9 @@ from ..fnp_linked_params import (
 class TMDFFFlexible(nn.Module):
     """
     Flexible TMD FF class with parameter linking support.
+    it implements the MAP22 parameterization of the TMD FF.
+    Parameters:
+      [N₃, β₁, δ₁, γ₁, λ_F, N₃_B, β₂, δ₂, γ₂] (9 params)
     """
 
     def __init__(
@@ -213,5 +216,7 @@ class TMDFFSimple(nn.Module):
         p = self.get_params_tensor()
         lam_D, beta = p[0], p[1]
         z_safe = torch.clamp(z, min=1e-10)
-        exponent = -((b / 2.0) ** 2) * (lam_D**2) * torch.pow(z_safe, beta) * ((1 - z) ** 2)
+        exponent = (
+            -((b / 2.0) ** 2) * (lam_D**2) * torch.pow(z_safe, beta) * ((1 - z) ** 2)
+        )
         return torch.exp(exponent) * mask_val

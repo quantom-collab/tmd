@@ -25,6 +25,9 @@ from ..fnp_linked_params import (
 class TMDPDFFlexible(nn.Module):
     """
     Flexible TMD PDF class with parameter linking support.
+    it implements the MAP22 parameterization of the TMD PDF.
+    Parameters:
+      [N₁, α₁, σ₁, λ, N₁ᵦ, N₁ᶜ, λ₂, α₂, α₃, σ₂, σ₃] (11 params)
     """
 
     def __init__(
@@ -142,7 +145,7 @@ class TMDPDFFlexible(nn.Module):
 
 
 ###############################################################################
-# 2. Simple Exponential PDF with linking
+# 2. Simple Exponential PDF
 ###############################################################################
 class TMDPDFSimple(nn.Module):
     """

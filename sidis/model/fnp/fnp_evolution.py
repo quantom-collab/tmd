@@ -1,20 +1,16 @@
 """
 Non-perturbative TMD evolution factor shared by PDF and FF f_NP pieces.
 
-Implements the Collins–Soper style factor
-  S_NP(ζ, b) ∝ exp(−g₂² b²/4 · ln(ζ/Q₀²))
-with a single width parameter ``g₂`` that can be fixed or trainable per card.
+Implements the Collins-Soper style factor
+  S_NP(ζ, b) ∝ exp(-g2^2 * b^2/4 * ln(ζ/Q₀²))
+with a single width parameter ``g2`` that can be fixed or trainable per card.
 
-Configuration mirrors PDF/FF blocks: ``init_params``, ``free_mask`` (booleans
-only), and optional ``param_bounds``. Trainable ``g₂`` with bounds is stored in
-**logit space** and mapped with the same sigmoid reparametrization as bounded
-TMD parameters (``g₂ = lo + (hi−lo) σ(θ)``), so the optimizer never leaves the
-open interval and ``fNPManager`` does **not** apply a separate physical clamp.
+Configuration mirrors PDF/FF blocks. Trainable ``g2`` with bounds is stored in
+*logit space* and mapped with the same sigmoid reparametrization as bounded
+TMD parameters (``g2 = lo + (hi - lo) σ(θ)``), so the optimizer never leaves the
+open interval.
 
-Legacy cards may still use ``init_g2`` instead of ``init_params``; ``fNPManager``
-normalizes that before construction.
-
-Consumed by ``fNPManager`` as ``self.evolution``; ``TMDBuilder`` calls
+``TMDBuilder`` calls
 ``forward_evolution`` on the manager, which delegates here.
 """
 
@@ -37,10 +33,10 @@ from ..fnp_config import ParameterLinkParser
 
 
 class fNP_evolution(nn.Module):
-    """Shared non-perturbative evolution factor (trainable or fixed ``g₂``)."""
+    """Shared non-perturbative evolution factor (trainable or fixed ``g2``)."""
 
-    # ``free_g2`` is the raw trainable tensor: physical ``g₂`` when unbounded,
-    # logit ``θ`` when bounded (sigmoid map). ``None`` when ``g₂`` is fixed (buffer).
+    # ``free_g2`` is the raw trainable tensor: physical ``g2`` when unbounded,
+    # logit ``θ`` when bounded (sigmoid map). ``None`` when ``g2`` is fixed (buffer).
     free_g2: Optional[nn.Parameter]
 
     def __init__(
@@ -49,7 +45,11 @@ class fNP_evolution(nn.Module):
         free_mask: List[Any],
         bounds_list: List[Optional[Tuple[float, float]]],
     ) -> None:
+
+        # Initialize the parent class (nn.Module)constructor
         super().__init__()
+
+        # Validate the input parameters
         if len(init_params) != 1 or len(free_mask) != 1:
             raise ValueError(
                 f"[fnp/fnp_evolution.py] {tcolors.FAIL}Evolution expects exactly "
@@ -73,9 +73,7 @@ class fNP_evolution(nn.Module):
         init_val = float(init_params[0])
         bound = bounds_list[0]
         # Q₀² for ln(ζ/Q₀²); kept as a buffer so `.to(device)` moves it with the module.
-        self.register_buffer(
-            "Q0_squared", torch.tensor(1.0, dtype=torch.float32)
-        )
+        self.register_buffer("Q0_squared", torch.tensor(1.0, dtype=torch.float32))
         self.free_g2 = None
         # When True, ``free_g2`` holds logit θ and physical g₂ uses sigmoid.
         self._logit_reparam = False
@@ -105,6 +103,7 @@ class fNP_evolution(nn.Module):
             self._logit_reparam = True
             self._g2_lo.copy_(torch.tensor([lo], dtype=torch.float32))
             self._g2_hi.copy_(torch.tensor([hi], dtype=torch.float32))
+
             # Match PDF/FF: map initial physical value to interior-uniform in u then logit( u ).
             u = (init_val - lo) / (hi - lo)
             u_t = torch.tensor(u, dtype=torch.float32).clamp(1e-6, 1.0 - 1e-6)
@@ -114,9 +113,7 @@ class fNP_evolution(nn.Module):
 
         # Trainable and unbounded: optimize ``g₂`` directly in physical space.
         self._logit_reparam = False
-        self.free_g2 = nn.Parameter(
-            torch.tensor([init_val], dtype=torch.float32)
-        )
+        self.free_g2 = nn.Parameter(torch.tensor([init_val], dtype=torch.float32))
 
     def uses_logit_reparam(self) -> bool:
         """True iff the trainable tensor is logit θ with sigmoid mapping to ``g₂``."""
