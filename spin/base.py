@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from Spin2 import params
+from spin import params
 
 
 class EvolutionGrid:

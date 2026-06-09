@@ -5,8 +5,8 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from Spin2.validation.validate_qiu_sterman_evolution import run_validation
-from Spin2.validation.validate_transversity_collins_physics import run_physics_validation
+from spin.validation.validate_qiu_sterman_evolution import run_validation
+from spin.validation.validate_transversity_collins_physics import run_physics_validation
 
 
 def test_qs_validation_toy_smoke():

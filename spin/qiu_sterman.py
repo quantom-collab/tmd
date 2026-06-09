@@ -6,7 +6,7 @@ Initial condition at mu0:
     T_F^q(x, x; mu0) = N_q(x) * f_q(x, mu0)
 
 with the paper parameterization for N_q(x). The full T_F is then evolved by
-:class:`Spin2.dglap.NonSingletDGLAP`, not N_q alone.
+:class:`spin.dglap.NonSingletDGLAP`, not N_q alone.
 
 The parameter ``g1T`` (default 0.180 GeV^2) is the nonperturbative transverse-
 momentum width of the b-space Sivers factor. It is recorded here for downstream
@@ -20,7 +20,7 @@ from typing import Mapping
 
 import torch
 
-from Spin2 import params
+from spin import params
 
 FLAVORS = ("u", "d", "s", "ubar", "dbar", "sbar")
 
@@ -42,7 +42,7 @@ class QiuStermanParams:
     g1T : float
         Nonperturbative Sivers width in GeV^2 for the **b-space** Gaussian (or
         related) transversity/Sivers factor. Stored for TMD pipelines only; collinear
-        DGLAP in :mod:`Spin2.dglap` does not read this field.
+        DGLAP in :mod:`spin.dglap` does not read this field.
     """
 
     N_u: float = 0.077
@@ -109,7 +109,7 @@ def build_TF_initial(
     Build collinear Qiu-Sterman initial data T_F^q(x, x; mu0) = N_q(x) f_q(x, mu0).
 
     Uses :class:`QiuStermanParams` for N_q only; ``g1T`` is not involved. Evolve
-    the returned tensor with :class:`Spin2.dglap.NonSingletDGLAP` / :class:`Spin2.evolution.QiuStermanEvolution`.
+    the returned tensor with :class:`spin.dglap.NonSingletDGLAP` / :class:`spin.evolution.QiuStermanEvolution`.
 
     Parameters
     ----------

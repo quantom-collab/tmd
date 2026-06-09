@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import torch
 
-from Spin2.collins import (
+from spin.collins import (
     COLLINS_CHANNELS,
     build_collins_hhat_initial,
     hhat_from_trento_moment,
     trento_moment_from_hhat,
 )
-from Spin2.qiu_sterman import FLAVORS, QiuStermanParams, build_TF_initial
-from Spin2.transversity import TransversityParams, build_h1_initial
-from Spin2.validation.inputs import load_pion_ff, load_transversity_inputs
-from Spin2.validation.validate_transversity_collins_physics import soffer_ratio_at_ic
+from spin.qiu_sterman import FLAVORS, QiuStermanParams, build_TF_initial
+from spin.transversity import TransversityParams, build_h1_initial
+from spin.validation.inputs import load_pion_ff, load_transversity_inputs
+from spin.validation.validate_transversity_collins_physics import soffer_ratio_at_ic
 
 
 def test_qs_ic_signs():

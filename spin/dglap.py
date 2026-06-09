@@ -13,10 +13,10 @@ import time
 
 import torch
 
-from Spin2 import params
-from Spin2.base import EvolutionGrid
-from Spin2.kernels import NonSingletKernels
-from Spin2.tools import checkdir, interpolate
+from spin import params
+from spin.base import EvolutionGrid
+from spin.kernels import NonSingletKernels
+from spin.tools import checkdir, interpolate
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def cache_filename(
     eta: float = 0.0,
 ) -> str:
     base = (
-        f"spin2_nonsinglet_kernel_{_CACHE_VERSION}_{kernel_type}_order{order}_nx{nx}_"
+        f"spin_nonsinglet_kernel_{_CACHE_VERSION}_{kernel_type}_order{order}_nx{nx}_"
         f"xmin{xmin}_xmax{xmax}_nQ2{nQ2}_Q20{Q20}_LQ2max{LQ2max}"
     )
     if kernel_type == "qiu_sterman":

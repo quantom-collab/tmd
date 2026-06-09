@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import torch
 
-from Spin2.qiu_sterman import FLAVORS
+from spin.qiu_sterman import FLAVORS
 
 # Stacked tensor order: slot k holds PDG index PDG_INDICES[k]
 PDG_INDICES: tuple[int, ...] = (-3, -2, -1, 0, 1, 2, 3)
@@ -63,7 +63,7 @@ def pack_TF_by_pdg(TF: torch.Tensor) -> torch.Tensor:
     Parameters
     ----------
     TF : Tensor
-        Shape ``(6, nx)`` or ``(6, nx, nQ2)`` in :data:`~Spin2.qiu_sterman.FLAVORS` order.
+        Shape ``(6, nx)`` or ``(6, nx, nQ2)`` in :data:`~spin.qiu_sterman.FLAVORS` order.
 
     Returns
     -------

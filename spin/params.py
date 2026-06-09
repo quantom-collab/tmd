@@ -22,6 +22,6 @@ TF = 0.5
 alphaS_order = 1
 alphaS_mu20 = 1.0
 
-# Nonperturbative Sivers width (GeV^2) for b-space TMD factors (see Spin2.qiu_sterman).
-# Not used by collinear x-space DGLAP in Spin2.dglap / Spin2.kernels.
+# Nonperturbative Sivers width (GeV^2) for b-space TMD factors (see spin.qiu_sterman).
+# Not used by collinear x-space DGLAP in spin.dglap / spin.kernels.
 g1T_default = 0.180

@@ -36,8 +36,8 @@ All loaders divide `xfxQ` by \(x\) or \(z\) to return \(f\) or \(D\).
 ## Validation
 
 ```bash
-python3 -m Spin2.validation.validate_transversity_collins_physics --toy --no-cache
-mamba run -n base python -m Spin2.validation.compare_to_transversity_collins_paper
+python3 -m spin.validation.validate_transversity_collins_physics --toy --no-cache
+mamba run -n base python -m spin.validation.compare_to_transversity_collins_paper
 ```
 
 ## Caveats

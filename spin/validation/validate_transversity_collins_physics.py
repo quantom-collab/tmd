@@ -3,8 +3,8 @@ Physics initial-condition validation for transversity and homogeneous Collins Hh
 
 Run from repository root::
 
-    python -m Spin2.validation.validate_transversity_collins_physics --toy --no-cache
-    python -m Spin2.validation.validate_transversity_collins_physics
+    python -m spin.validation.validate_transversity_collins_physics --toy --no-cache
+    python -m spin.validation.validate_transversity_collins_physics
 
 Uses paper-style IC ansätze with LHAPDF inputs when available. Toy mode is for
 structural/sign/convention checks only — not paper comparison.
@@ -23,22 +23,22 @@ from typing import Any
 import numpy as np
 import torch
 
-from Spin2.collins import (
+from spin.collins import (
     COLLINS_CHANNELS,
     build_collins_hhat_initial,
     trento_moment_from_hhat,
 )
-from Spin2.dglap import NonSingletDGLAP
-from Spin2.evolution import (
+from spin.dglap import NonSingletDGLAP
+from spin.evolution import (
     CollinsHhatEvolution,
     TransversityEvolution,
     evolve_collins_hhat,
     evolve_transversity,
 )
-from Spin2.flavors import NAME_TO_PDG, pack_TF_by_pdg, pdg_to_slot
-from Spin2.qiu_sterman import FLAVORS
-from Spin2.transversity import TransversityParams, build_h1_initial
-from Spin2.validation.inputs import (
+from spin.flavors import NAME_TO_PDG, pack_TF_by_pdg, pdg_to_slot
+from spin.qiu_sterman import FLAVORS
+from spin.transversity import TransversityParams, build_h1_initial
+from spin.validation.inputs import (
     TC_FF_SET_PION as FF_SET_PION,
     TC_MU0_SQ as Q0_SQ_DEFAULT,
     TC_PDF_SET_F1 as PDF_SET_F1,

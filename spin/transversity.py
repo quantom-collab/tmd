@@ -7,7 +7,7 @@ Initial condition (paper ansatz at Q0):
 
 Only u and d are nonzero by default; sea and strange are zero unless supplied.
 There is no gluon transversity for a spin-1/2 nucleon; quarks evolve as a
-non-singlet LO distribution with P_h1 (see :mod:`Spin2.kernels`).
+non-singlet LO distribution with P_h1 (see :mod:`spin.kernels`).
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import Mapping
 
 import torch
 
-from Spin2.qiu_sterman import FLAVORS, beta_binomial_norm
+from spin.qiu_sterman import FLAVORS, beta_binomial_norm
 
 
 @dataclass

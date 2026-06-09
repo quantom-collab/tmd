@@ -13,7 +13,7 @@ from typing import Callable, Sequence
 import numpy as np
 import torch
 
-from Spin2.flavors import NAME_TO_PDG  # noqa: F401 — used by loaders
+from spin.flavors import NAME_TO_PDG  # noqa: F401 — used by loaders
 
 
 def _safe_divide(xfx: np.ndarray, x: np.ndarray) -> np.ndarray:

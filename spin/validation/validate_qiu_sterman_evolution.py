@@ -3,11 +3,11 @@ Numerical validation and plots for LO Qiu-Sterman DGLAP evolution (eta = N_C).
 
 Run from the repository root::
 
-    python -m Spin2.validation.validate_qiu_sterman_evolution
-    python -m Spin2.validation.validate_qiu_sterman_evolution --with-evolution
+    python -m spin.validation.validate_qiu_sterman_evolution
+    python -m spin.validation.validate_qiu_sterman_evolution --with-evolution
 
 Uses NNPDF40_nnlo_pch_as_01180 at mu0 = sqrt(1.9) GeV for the Fig. 7 initial condition.
-Evolution uses :class:`Spin2.dglap.NonSingletDGLAP` with ``order=0``, ``eta=params.N_C``.
+Evolution uses :class:`spin.dglap.NonSingletDGLAP` with ``order=0``, ``eta=params.N_C``.
 """
 
 from __future__ import annotations
@@ -21,12 +21,12 @@ from typing import Any
 
 import torch
 
-from Spin2 import params
-from Spin2.dglap import NonSingletDGLAP
-from Spin2.evolution import EvolvedT_F, QiuStermanEvolution, evolve_TF
-from Spin2.flavors import NAME_TO_PDG, pack_TF_by_pdg, pdg_to_slot
-from Spin2.qiu_sterman import FLAVORS, QiuStermanParams, build_TF_initial
-from Spin2.validation.inputs import (
+from spin import params
+from spin.dglap import NonSingletDGLAP
+from spin.evolution import EvolvedT_F, QiuStermanEvolution, evolve_TF
+from spin.flavors import NAME_TO_PDG, pack_TF_by_pdg, pdg_to_slot
+from spin.qiu_sterman import FLAVORS, QiuStermanParams, build_TF_initial
+from spin.validation.inputs import (
     QS_MU0_GEV as MU0_GEV,
     QS_MU0_SQ as MU0_SQ,
     QS_PDF_SET as PDF_SET,
@@ -455,7 +455,7 @@ def main(argv: list[str] | None = None) -> int:
         "--output-dir",
         type=Path,
         default=None,
-        help="Plot output directory (default: Spin/validation/outputs)",
+        help="Plot output directory (default: spin/validation/outputs)",
     )
     args = parser.parse_args(argv)
 

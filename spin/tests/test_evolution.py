@@ -7,10 +7,10 @@ import tempfile
 import pytest
 import torch
 
-from Spin2 import params
-from Spin2.collins import COLLINS_CHANNELS, build_collins_hhat_initial
-from Spin2.dglap import NonSingletDGLAP
-from Spin2.evolution import (
+from spin import params
+from spin.collins import COLLINS_CHANNELS, build_collins_hhat_initial
+from spin.dglap import NonSingletDGLAP
+from spin.evolution import (
     CollinsHhatEvolution,
     QiuStermanEvolution,
     TransversityEvolution,
@@ -18,10 +18,10 @@ from Spin2.evolution import (
     evolve_flavors,
     evolve_transversity,
 )
-from Spin2.flavors import pack_TF_by_pdg, pdg_to_slot
-from Spin2.qiu_sterman import FLAVORS, QiuStermanParams, build_TF_initial
-from Spin2.transversity import TransversityParams, build_h1_initial
-from Spin2.validation.inputs import load_pion_ff, load_transversity_inputs
+from spin.flavors import pack_TF_by_pdg, pdg_to_slot
+from spin.qiu_sterman import FLAVORS, QiuStermanParams, build_TF_initial
+from spin.transversity import TransversityParams, build_h1_initial
+from spin.validation.inputs import load_pion_ff, load_transversity_inputs
 
 
 @pytest.fixture

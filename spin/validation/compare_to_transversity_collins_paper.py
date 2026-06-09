@@ -7,7 +7,7 @@ reproduction (inputs are NNPDF40 / NNPDFpol20 / JAM20, not CT10 / DSSV / DSS).
 
 Run from repository root::
 
-    mamba run -n base python -m Spin2.validation.compare_to_transversity_collins_paper
+    mamba run -n base python -m spin.validation.compare_to_transversity_collins_paper
 """
 
 from __future__ import annotations
@@ -21,24 +21,24 @@ from typing import Iterable
 import numpy as np
 import torch
 
-from Spin2.collins import COLLINS_CHANNELS, build_collins_hhat_initial
-from Spin2.dglap import NonSingletDGLAP
-from Spin2.evolution import (
+from spin.collins import COLLINS_CHANNELS, build_collins_hhat_initial
+from spin.dglap import NonSingletDGLAP
+from spin.evolution import (
     CollinsHhatEvolution,
     TransversityEvolution,
     evolve_collins_hhat,
     evolve_transversity,
 )
-from Spin2.flavors import NAME_TO_PDG, pdg_to_slot
-from Spin2.transversity import TransversityParams, build_h1_initial
-from Spin2.validation.inputs import (
+from spin.flavors import NAME_TO_PDG, pdg_to_slot
+from spin.transversity import TransversityParams, build_h1_initial
+from spin.validation.inputs import (
     TC_FF_SET_PION as FF_SET_PION,
     TC_PDF_SET_F1 as PDF_SET_F1,
     TC_PDF_SET_G1 as HELICITY_SET_G1,
     load_pion_ff as load_collins_inputs,
     load_transversity_inputs,
 )
-from Spin2.validation.lhapdf_io import try_import_lhapdf
+from spin.validation.lhapdf_io import try_import_lhapdf
 
 Q0_SQ = 2.4
 PAPER_Q2_SCALES: tuple[tuple[str, float], ...] = (
@@ -121,7 +121,7 @@ def _require_lhapdf() -> None:
     if try_import_lhapdf() is None:
         raise ImportError(
             "LHAPDF is required for paper comparison. "
-            "Run with: mamba run -n base python -m Spin2.validation.compare_to_transversity_collins_paper"
+            "Run with: mamba run -n base python -m spin.validation.compare_to_transversity_collins_paper"
         )
 
 

@@ -18,7 +18,7 @@ from typing import Mapping
 
 import torch
 
-from Spin2.qiu_sterman import beta_binomial_norm
+from spin.qiu_sterman import beta_binomial_norm
 
 COLLINS_CHANNELS = ("fav", "unf", "unf_s")
 

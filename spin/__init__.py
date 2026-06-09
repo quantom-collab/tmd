@@ -1,15 +1,15 @@
-"""Spin2: LO x-space evolution for Qiu–Sterman, transversity, and Collins Hhat."""
+"""spin: LO x-space evolution for Qiu–Sterman, transversity, and Collins Hhat."""
 
-from Spin2.alphaS import get_alphaS, get_Nf
-from Spin2.collins import (
+from spin.alphaS import get_alphaS, get_Nf
+from spin.collins import (
     COLLINS_CHANNELS,
     CollinsParams,
     build_collins_hhat_initial,
     hhat_from_trento_moment,
     trento_moment_from_hhat,
 )
-from Spin2.dglap import NonSingletDGLAP, cache_filename
-from Spin2.evolution import (
+from spin.dglap import NonSingletDGLAP, cache_filename
+from spin.evolution import (
     CollinsHhatEvolution,
     EvolvedCollinsHhat,
     EvolvedT_F,
@@ -21,10 +21,10 @@ from Spin2.evolution import (
     evolve_collins_hhat,
     evolve_transversity,
 )
-from Spin2.flavors import NAME_TO_PDG, PDG_INDICES, pack_TF_by_pdg, pdg_to_slot
-from Spin2.kernels import KERNEL_TYPES, NonSingletKernels
-from Spin2.qiu_sterman import FLAVORS, QiuStermanParams, build_TF_initial
-from Spin2.transversity import TransversityParams, build_h1_initial
+from spin.flavors import NAME_TO_PDG, PDG_INDICES, pack_TF_by_pdg, pdg_to_slot
+from spin.kernels import KERNEL_TYPES, NonSingletKernels
+from spin.qiu_sterman import FLAVORS, QiuStermanParams, build_TF_initial
+from spin.transversity import TransversityParams, build_h1_initial
 
 __all__ = [
     "COLLINS_CHANNELS",

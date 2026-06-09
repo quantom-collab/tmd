@@ -1,9 +1,9 @@
 """
-Unified LHAPDF input loaders for Spin2 validation.
+Unified LHAPDF input loaders for spin validation.
 
 LHAPDF ``xfxQ(pid, x, Q)`` returns ``x * f(x, Q)`` for PDFs and ``z * D(z, Q)``
 for fragmentation functions.  All loaders return ``f`` or ``D`` by dividing by
-``x`` or ``z`` via :func:`~Spin2.validation.lhapdf_io.load_flavor_densities`.
+``x`` or ``z`` via :func:`~spin.validation.lhapdf_io.load_flavor_densities`.
 """
 
 from __future__ import annotations
@@ -14,8 +14,8 @@ from typing import Dict, Tuple
 import numpy as np
 import torch
 
-from Spin2.qiu_sterman import FLAVORS
-from Spin2.validation.lhapdf_io import load_flavor_densities, try_import_lhapdf
+from spin.qiu_sterman import FLAVORS
+from spin.validation.lhapdf_io import load_flavor_densities, try_import_lhapdf
 
 # Qiu–Sterman paper IC scale
 QS_MU0_SQ = 1.9

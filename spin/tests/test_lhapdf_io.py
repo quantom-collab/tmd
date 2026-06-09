@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 import torch
 
-from Spin2.flavors import NAME_TO_PDG
-from Spin2.validation.inputs import (
+from spin.flavors import NAME_TO_PDG
+from spin.validation.inputs import (
     TC_FF_SET_PION,
     TC_PDF_SET_F1,
     TC_PDF_SET_G1,
@@ -15,7 +15,7 @@ from Spin2.validation.inputs import (
     load_proton_pdf_fq,
     load_unpolarized_f1,
 )
-from Spin2.validation.lhapdf_io import load_flavor_densities, sample_xfxQ, try_import_lhapdf
+from spin.validation.lhapdf_io import load_flavor_densities, sample_xfxQ, try_import_lhapdf
 
 Q2 = 2.4
 Q = Q2**0.5
@@ -56,7 +56,7 @@ def test_density_helper_divides_by_point(x_grid):
 
 
 def test_unpolarized_loader_mock(monkeypatch, x_grid):
-    monkeypatch.setattr("Spin2.validation.inputs.try_import_lhapdf", lambda: _FakeLHAPDF)
+    monkeypatch.setattr("spin.validation.inputs.try_import_lhapdf", lambda: _FakeLHAPDF)
     fake = _FakePDF()
     f1 = load_unpolarized_f1(x_grid, Q2, force_toy=False)
     pts = x_grid.numpy()
@@ -66,7 +66,7 @@ def test_unpolarized_loader_mock(monkeypatch, x_grid):
 
 
 def test_proton_pdf_mock(monkeypatch, x_grid):
-    monkeypatch.setattr("Spin2.validation.inputs.try_import_lhapdf", lambda: _FakeLHAPDF)
+    monkeypatch.setattr("spin.validation.inputs.try_import_lhapdf", lambda: _FakeLHAPDF)
     fake = _FakePDF()
     fq = load_proton_pdf_fq(x_grid, 1.9, backend="lhapdf")
     pts = x_grid.numpy()
@@ -76,7 +76,7 @@ def test_proton_pdf_mock(monkeypatch, x_grid):
 
 
 def test_pion_ff_mock(monkeypatch, z_grid):
-    monkeypatch.setattr("Spin2.validation.inputs.try_import_lhapdf", lambda: _FakeLHAPDF)
+    monkeypatch.setattr("spin.validation.inputs.try_import_lhapdf", lambda: _FakeLHAPDF)
     fake = _FakePDF()
     D = load_pion_ff(z_grid, Q2, force_toy=False)
     pts = z_grid.numpy()

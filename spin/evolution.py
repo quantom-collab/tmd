@@ -8,14 +8,14 @@ from typing import Iterator, Sequence
 import torch
 import torch.nn as nn
 
-from Spin2.flavors import (
+from spin.flavors import (
     N_PDG_SLOTS,
     PDG_INDICES,
     PDG_TO_NAME,
     pack_TF_by_pdg,
     pdg_to_slot,
 )
-from Spin2.tools import interpolate
+from spin.tools import interpolate
 
 
 def _interp_at_Q2(

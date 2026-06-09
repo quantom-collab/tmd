@@ -20,7 +20,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from Spin2 import alphaS, params
+from spin import alphaS, params
 
 KERNEL_TYPES = ("qiu_sterman", "unpolarized", "transversity")
 
@@ -39,7 +39,7 @@ class NonSingletKernels:
         order: int = 0,
     ) -> None:
         if order != 0:
-            raise ValueError("Spin2 evolution supports LO kernels only (order=0).")
+            raise ValueError("spin evolution supports LO kernels only (order=0).")
         if kernel_type not in KERNEL_TYPES:
             raise ValueError(
                 f"kernel_type must be one of {KERNEL_TYPES}, got {kernel_type!r}"

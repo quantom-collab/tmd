@@ -7,9 +7,9 @@ import tempfile
 import pytest
 import torch
 
-from Spin2 import alphaS, params
-from Spin2.dglap import NonSingletDGLAP
-from Spin2.kernels import NonSingletKernels
+from spin import alphaS, params
+from spin.dglap import NonSingletDGLAP
+from spin.kernels import NonSingletKernels
 
 
 @pytest.fixture

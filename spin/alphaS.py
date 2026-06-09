@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from Spin2 import params as par
+from spin import params as par
 
 _storage: dict[float, float] = {}
 _order: int = par.alphaS_order

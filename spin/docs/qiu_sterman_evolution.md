@@ -25,7 +25,7 @@ LO non-singlet DGLAP with \(P_{qq}^T = P_{qq} - N_C\,\delta(1-x)\) (`kernel_type
 ## Validation
 
 ```bash
-python3 -m Spin2.validation.validate_qiu_sterman_evolution --with-evolution
+python3 -m spin.validation.validate_qiu_sterman_evolution --with-evolution
 ```
 
 ## Caveats

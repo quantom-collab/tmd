@@ -14,8 +14,8 @@ from typing import Any
 
 import torch
 
-from Spin2 import alphaS, params
-from Spin2.dglap import NonSingletDGLAP
+from spin import alphaS, params
+from spin.dglap import NonSingletDGLAP
 
 _DEFAULT_GRID = dict(
     dev="cpu",
@@ -246,7 +246,7 @@ def make_evolution_comparison_plot(
     """
     import matplotlib.pyplot as plt
 
-    from Spin2.evolution import NonSingletEvolution
+    from spin.evolution import NonSingletEvolution
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
