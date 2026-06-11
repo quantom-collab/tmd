@@ -101,7 +101,7 @@ _config = _load_initial_config()
 def _publish_config(c: Dict[str, Any]) -> None:
     """Assign module-level exports from a full physics config dict."""
     global alphaS_order, dglap_order, idis_order, tmd_order, tmd_resummation_order
-    global Q02, config
+    global Q02, Q20, config
     required = (
         "alphaS_order",
         "dglap_order",
@@ -119,6 +119,8 @@ def _publish_config(c: Dict[str, Any]) -> None:
     tmd_order = c["tmd_order"]
     tmd_resummation_order = c["tmd_resummation_order"]
     Q02 = c["Q02"]
+    # Historical name from older YAML/notebooks (`Q20`); identical to ``Q02`` (the squared scale).
+    Q20 = Q02
     config = copy.deepcopy(c)
 
 
