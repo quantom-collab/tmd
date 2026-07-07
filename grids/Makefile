@@ -16,8 +16,12 @@ LHAPDFINCS = $(shell lhapdf-config --cppflags)
 LHAPDFLIBS = $(shell lhapdf-config --ldflags)
 
 # YAML
+ifeq ($(YAMLINCS), )
 YAMLINCS = $(shell pkg-config --cflags yaml-cpp)
+endif
+ifeq ($(YAMLLIBS), )
 YAMLLIBS = $(shell pkg-config --libs   yaml-cpp)
+endif
 
 # GSL
 GSLINCS = -I/opt/homebrew/opt/gsl/include
