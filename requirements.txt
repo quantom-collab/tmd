@@ -1,0 +1,11 @@
+#pyyaml
+torch
+omegaconf
+numpy
+scipy
+matplotlib
+jupyter
+pybind11
+simpleeval
+pandas
+tqdm
