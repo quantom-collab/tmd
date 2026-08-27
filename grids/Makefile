@@ -1,4 +1,4 @@
-CXX = clang++
+#CXX = clang++
 
 # Basic compiler flags
 CXXFLAGS = -O3 -fPIC -std=c++11
