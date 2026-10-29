@@ -24,8 +24,12 @@ YAMLLIBS = $(shell pkg-config --libs   yaml-cpp)
 endif
 
 # GSL
+ifeq ($(GSLINCS), )
 GSLINCS = -I/opt/homebrew/opt/gsl/include
+endif
+ifeq ($(GSLLIBS), )
 GSLLIBS = -L/opt/homebrew/opt/gsl/lib -lgsl -lgslcblas
+endif
 
 # Now set up the compiler and link flags and libs
 CXXFLAGS += $(NANGAPARBATINCS) $(APFELPPINCS) $(LHAPDFINCS) $(YAMLINCS) $(GSLINCS)
